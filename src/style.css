@@ -255,3 +255,12 @@ main.basemode{padding:0;overflow:hidden}
 .bhint{top:auto;bottom:calc(var(--sb) + 100px)}
 .bsheet.spop .shead{animation:pop .35s cubic-bezier(.3,1.6,.5,1) both}
 .bsheet .btn.big b{font-size:16px}
+.slist{display:flex;flex-direction:column;gap:6px}
+.trow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:linear-gradient(#4a3a7a,#35285c);border:2px solid #120a24;border-radius:14px;padding:6px 10px;color:#fff;box-shadow:0 3px 0 #120a24;font:600 13px Nunito;transition:transform .1s}
+.trow:active{transform:translateY(2px);box-shadow:0 1px 0 #120a24}
+.trow:disabled{opacity:.55}.trow.busy{background:#2a2048}
+.trow .ti{width:34px;height:34px;flex:none;display:grid;place-items:center}.trow .ti svg{width:32px;height:32px}
+.trow .tn{flex:1;display:flex;flex-direction:column;line-height:1.15}.trow .tn b{font:600 14px Fredoka}.trow .tn small{color:#b9adf0;font-size:11px}
+.trow .tc{display:flex;flex-direction:column;align-items:flex-end;font:700 14px Fredoka;color:#ffd23f}.trow .tc small{color:#cfc6ff;font-size:11px}.trow .tc svg{width:12px;height:12px}
+.trow .tc.go{background:#5cff9d;color:#120a24;padding:6px 10px;border-radius:10px;border:2px solid #120a24}
+.muted{color:#a99be0;font:600 13px Nunito;text-align:center;margin:4px 0}

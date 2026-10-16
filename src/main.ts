@@ -151,27 +151,29 @@ function baseTap(sl: Slot | null, x: number, y: number) {
   if (!sl) { closeSheet(); return; }
   $('#bhint')?.remove();
   if (sl.kind === 'mine' && visible(sl) === 'built') { const b = st().mines[sl.idx]; st().taps++; if (!b.run && !b.m) { b.run = true; sfx.drill(); buzz(10); burst(x, y, 10, 0, `hsl(${MINES[sl.idx].hue} 100% 65%)`); } else sfx.tap(); }
-  else sfx.tap();
+  else sfx.select();
   openSheet(sl.key);
 }
 const slotOf = (k: string) => SLOTS.find(s => s.key === k)!;
 function closeSheet() { sheetKey = null; if (bv) bv.sel = null; $('#sheet')?.classList.remove('open'); }
-function slotArt(sl: Slot) { return sl.kind === 'mine' ? art(MINES[sl.idx].id) : sl.kind === 'mach' ? art(mk(MACHINES[sl.idx].id)) : sl.kind === 'gen' ? art('gen') : sl.kind === 'yard' ? art('cruiser') : sl.kind === 'gate' ? art('hole') : art('p1'); }
-function slotName(sl: Slot) { return sl.kind === 'mine' ? MINES[sl.idx].name : sl.kind === 'mach' ? MACHINES[sl.idx].name : sl.kind === 'gen' ? GEN.name : sl.kind === 'yard' ? 'Shipyard' : sl.kind === 'gate' ? 'Warp Gate' : 'Command HQ'; }
+function slotArt(sl: Slot) { return sl.kind === 'mine' ? art(MINES[sl.idx].id) : sl.kind === 'mach' ? art(mk(MACHINES[sl.idx].id)) : sl.kind === 'gen' ? art('gen') : sl.kind === 'yard' ? art('cruiser') : sl.kind === 'gate' ? art('hole') : sl.kind === 'lab' ? art('quantum') : art('p1'); }
+function slotName(sl: Slot) { return sl.kind === 'mine' ? MINES[sl.idx].name : sl.kind === 'mach' ? MACHINES[sl.idx].name : sl.kind === 'gen' ? GEN.name : sl.kind === 'yard' ? 'Shipyard' : sl.kind === 'gate' ? 'Warp Gate' : sl.kind === 'lab' ? 'Research Lab' : 'Command HQ'; }
 function openSheet(key: string) {
-  const sh = $('#sheet'), sl = slotOf(key); sheetKey = key; if (bv) bv.sel = key;
+  const sh = $('#sheet'), sl = slotOf(key); const newKey = sheetKey !== key; sheetKey = key; if (bv) bv.sel = key;
   const v = visible(sl), s = st();
   let actions = '';
   if (sl.kind === 'mine') actions = `<button class="btn gold big" data-act="buy"></button>${s.mines[sl.idx].n && !s.mines[sl.idx].m ? `<button class="btn big" data-act="hire"></button>` : ''}<div class="row2">${multBtn()}<button class="btn ghost" data-act="list">All mines ›</button></div>`;
   else if (sl.kind === 'mach') actions = `<button class="btn gold big" data-act="buy"></button><div class="row2">${multBtn()}${s.mach[sl.idx] ? `<button class="btn ghost" data-act="tog"></button>` : ''}<button class="btn ghost" data-act="fac">Chain ›</button></div>`;
   else if (sl.kind === 'gen') actions = `<button class="btn gold big" data-act="buy"></button><div class="row2">${multBtn()}<button class="btn ghost" data-act="fac">Factory ›</button></div>`;
-  else if (sl.kind === 'yard') actions = `<button class="btn gold big" data-act="fleet">${v === 'built' ? 'Command fleet ›' : 'Locked'}</button>`;
-  else if (sl.kind === 'gate') actions = `<button class="btn gold big" data-act="warp">Open Warp Gate ›</button>`;
+  else if (sl.kind === 'yard') actions = v === 'built' ? `<div class="slist" id="ylist"></div><button class="btn ghost" data-act="fleet">Fleet &amp; ship builder ›</button>` : `<button class="btn big" disabled>Build a Chip Fab to unlock</button>`;
+  else if (sl.kind === 'gate') actions = `<button class="btn gold big" data-act="dowarp"></button><button class="btn ghost" data-act="warp">Perks &amp; stats ›</button>`;
+  else if (sl.kind === 'lab') actions = `<div class="slist" id="llist"></div>`;
   else actions = `<button class="btn gold big" data-act="buy"></button><button class="btn big" data-act="fac">Market &amp; Research ›</button><div class="row2"><button class="btn ghost" data-act="crew">Crew ›</button><button class="btn ghost" data-act="trophy">Trophies ›</button></div>`;
   sh.innerHTML = `<div class="grab"></div><button class="x" data-act="close">✕</button><div class="shead"><div class="sart">${slotArt(sl)}</div><div class="smid"><h3 class="h">${slotName(sl)}</h3><div class="slv"></div><div class="stier"></div></div></div><div class="sstats"></div><div class="sact">${actions}</div>`;
   sh.classList.add('open'); sh.classList.remove('spop'); void sh.offsetWidth; sh.classList.add('spop');
   sh.querySelectorAll<HTMLElement>('[data-act]').forEach(b => b.addEventListener('click', ev => sheetAct(b.dataset.act!, ev as MouseEvent, b)));
   setTimeout(() => sheetTxt.clear(), 0); updateSheet(true);
+  if (newKey && bv) { const top = sh.parentElement!.getBoundingClientRect().bottom - (innerHeight - sh.getBoundingClientRect().bottom + (sh.style.transform ? 0 : 0)) - sh.offsetHeight; const top2 = innerHeight - parseFloat(getComputedStyle(sh).bottom) - sh.offsetHeight; const y = bv.slotScreen(key)[1] + 40; void top; if (y > top2 - 10) bv.focus(key, bv.z, Math.max(.2, (top2 - 90) / innerHeight)); }
 }
 const sheetTxt = new Map<string, string>();
 function sheetAct(a: string, ev: MouseEvent, b: HTMLElement) {
@@ -180,18 +182,22 @@ function sheetAct(a: string, ev: MouseEvent, b: HTMLElement) {
   if (a === 'list' || a === 'fac' || a === 'crew' || a === 'fleet' || a === 'warp') { sfx.tap(); return setTab(a === 'list' ? 'mine' : a); }
   if (a === 'trophy') return $('#trophy').click();
   if (a === 'hire') { const i = sl.idx; if (s.cash < MINES[i].mgr) return deny(b); s.cash -= MINES[i].mgr; s.mines[i].m = true; celebrate(`${MINES[i].mname} hired!`, ev.clientX, ev.clientY); return openSheet(sheetKey!); }
+  if (a === 'dowarp') { if (!G.warpOpen() || G.dmGain() < 1) return deny(b); confirmModal(art('hole'), 'Engage warp?', `Reset this sector for +${fmt(G.dmGain(), 0)} Dark Matter and jump to Sector ${G.sector() + 1}.`, 'WARP', () => { closeSheet(); sfx.warp(); buzz([50, 50, 100, 50, 200]); bv!.warp(() => { G.doWarp(); G.save(); flash(); for (let k = 0; k < 5; k++) setTimeout(() => burst(Math.random() * innerWidth, Math.random() * innerHeight * .6, 40), k * 120); celebrate(`Welcome to Sector ${G.sector()}!`); renderGoal(); }); }); return; }
+  if (a.startsWith('tech:')) { const t = TECH.find(x => x.id === a.slice(5))!; if (s.cash < t.cash || s.res[t.res] < t.amt) return deny(b); s.cash -= t.cash; s.res[t.res] -= t.amt; s.tech.push(t.id); sfx.claim(); celebrate(`${t.name}!`, ev.clientX, ev.clientY); const t0 = tier(sl); if (tier(sl) > t0) bv!.construct('lab'); bv!.puff('lab', '#7affd1'); bv!.puff('m' + Math.max(0, t.tgt), '#ffe98a'); return openSheet(sheetKey!); }
+  if (a.startsWith('go:')) { const [, kind, id] = a.split(':'); const ms = G.launch(kind as 'run' | 'planet', id, 1.4); if (!ms) return deny(b); sfx.launch(); buzz([30, 30, 60]); bv!.launch(Object.values(ms.ships).reduce((x, y) => x + y, 0)); return openSheet(sheetKey!); }
   if (a === 'tog') { s.on[sl.idx] = !s.on[sl.idx]; sfx.tap(); buzz(8); return; }
   if (a === 'buy') {
-    const t0 = tier(sl);
+    const t0 = tier(sl), wasPlot = visible(sl) === 'plot';
     if (sl.kind === 'mine') { buyMine(sl.idx, ev); }
     else if (sl.kind === 'mach') { const j = sl.idx, k = G.machK(j), c = G.machCostK(j, k); if (s.cash < c) return deny(b); const lb = Math.floor(s.mach[j] / 10), first = !s.mach[j]; s.cash -= c; s.mach[j] += k; sfx.buy(); sfx.clank(); buzz(14); burst(ev.clientX, ev.clientY, 16, 0, RES[MACHINES[j].out].color); if (first) celebrate(MACHINES[j].id === 'fab' ? 'Shipyard unlocked!' : `${MACHINES[j].name} built!`); else if (Math.floor(s.mach[j] / 10) > lb) celebrate(`${MACHINES[j].name} Lv ${s.mach[j]}: output ×2!`); }
     else if (sl.kind === 'hq') { let v = 0; for (const r of RES_ORDER) if (G.sellable(r) >= 1) v += G.sell(r); if (v <= 0) { toast('Nothing spare – your factory needs it all'); return deny(b); } sfx.coin(); buzz(14); popup(ev.clientX, ev.clientY - 20, '+$' + fmt(v)); fly(ev.clientX, ev.clientY, ...center(cashEl), 10, 1, '#ffc94a', () => bump(cashEl)); }
     else if (sl.kind === 'gen') { const k = G.genK(), c = G.genCost(k); if (s.cash < c) return deny(b); s.cash -= c; s.gen += k; sfx.buy(); buzz(14); burst(ev.clientX, ev.clientY, 14, 0, '#ffe066'); }
-    bv?.puff(sl.key); bump(b);
-    if (tier(sl) > t0) { const [x, y] = bv!.slotScreen(sl.key); celebrate(`${slotName(sl)} evolved: ${TIER_NAMES[tier(sl)]}!`, x, y); bv!.puff(sl.key, '#ffe98a'); }
+    bv?.puff(sl.key); bump(b); if (wasPlot) { bv!.construct(sl.key); sfx.build(); }
+    if (tier(sl) > t0 && !wasPlot) { bv!.construct(sl.key); sfx.build(); const [x, y] = bv!.slotScreen(sl.key); celebrate(`${slotName(sl)} evolved: ${TIER_NAMES[tier(sl)]}!`, x, y); bv!.puff(sl.key, '#ffe98a'); }
     openSheet(sheetKey!); spotlight();
   }
 }
+function bindActs(sel: string) { document.querySelectorAll<HTMLElement>(`#sheet ${sel} [data-act]`).forEach(b => { if (b.dataset.bound) return; b.dataset.bound = '1'; b.addEventListener('click', ev => sheetAct(b.dataset.act!, ev as MouseEvent, b)); }); }
 function sset(sel: string, v: string) { const el = $('#sheet ' + sel); if (!el || sheetTxt.get(sel) === v) return; sheetTxt.set(sel, v); el.innerHTML = v; }
 function updateSheet(force = false) {
   if (!sheetKey) return; const sl = slotOf(sheetKey), s = st(), n = level(sl), v = visible(sl); void force;
@@ -204,12 +210,19 @@ function updateSheet(force = false) {
   else if (sl.kind === 'gen') stats = [['Supply', fmt(G.powerSupply()) + '⚡'], ['Demand', fmt(G.powerDemand()) + '⚡'], ['Efficiency', Math.round(G.powerEff() * 100) + '%']];
   else if (sl.kind === 'hq') stats = [['Income', '$' + fmt(G.perSec()) + '/s'], ['Earned this sector', '$' + fmt(s.life)], ['Dark Matter', fmt(s.dm, 0)]];
   else if (sl.kind === 'yard') stats = v === 'built' ? [['Docks', String(G.docks())], ['Fleet power', fmt(G.totalPower())]] : [['Unlock', 'Build a Chip Fab']];
+  else if (sl.kind === 'lab') stats = [['Researched', `${s.tech.length} / ${TECH.filter(t => G.techAvail(t)).length}`], ['Unlock tiers', 'more every warp']];
   else stats = [['Charge', G.warpOpen() ? 'READY' : `$${fmt(s.life)} / $${fmt(G.warpNeed())}`]];
   sset('.sstats', stats.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join(''));
   const buy = $<HTMLButtonElement>('#sheet [data-act="buy"]');
   if (buy && sl.kind === 'hq') { const v = RES_ORDER.reduce((a, r) => a + (G.sellable(r) >= 1 ? G.sellable(r) * G.price(r) : 0), 0); sset('[data-act="buy"]', `Export surplus<b>$${fmt(v)}</b>`); buy.disabled = v <= 0; }
   else if (buy) { const c = slotCost(sl)!, k = sl.kind === 'mine' ? (s.mines[sl.idx].n ? G.buyK(sl.idx) : 1) : sl.kind === 'mach' ? G.machK(sl.idx) : G.genK(); sset('[data-act="buy"]', `${v === 'plot' ? 'Build' : `Upgrade ×${k}`}<b>$${fmt(c)}</b>`); buy.disabled = s.cash < c; }
   if (sl.kind === 'mine') { const h = $<HTMLButtonElement>('#sheet [data-act="hire"]'); if (h) { sset('[data-act="hire"]', `Hire ${MINES[sl.idx].mname}<b>$${fmt(MINES[sl.idx].mgr)}</b>`); h.disabled = s.cash < MINES[sl.idx].mgr; h.classList.toggle('coach', /^Hire/.test(GOALS[s.goal]?.text || '')); } }
+  if (sl.kind === 'lab') { const list = TECH.filter(t => G.techAvail(t) && !s.tech.includes(t.id)).slice(0, 3); sset('#llist', list.length ? list.map(t => `<button class="trow" data-act="tech:${t.id}" ${s.cash >= t.cash && s.res[t.res] >= t.amt ? '' : 'disabled'}><span class="ti">${art(t.tgt < 0 ? 'star' : MINES[t.tgt].id)}</span><span class="tn"><b>${t.name}</b><small>${t.tgt < 0 ? 'All mines' : MINES[t.tgt].name} profit ×${t.x}</small></span><span class="tc">$${fmt(t.cash)}<small>${ri(t.res)}${fmt(t.amt)}</small></span></button>`).join('') : '<p class="muted">All research complete for this sector.</p>'); bindActs('#llist'); }
+  if (sl.kind === 'yard' && v === 'built') { const now = G.clock(); const busy = s.missions.map(m => { const d = m.kind === 'run' ? RUNS.find(r => r.id === m.target)! : PLANETS.find(p => p.id === m.target)!; return `<div class="trow busy"><span class="ti">${art(m.kind === 'run' ? d.id : d.id)}</span><span class="tn"><b>${d.name}</b><small>${Math.round(m.chance * 100)}% · ${m.power}⚔</small></span><span class="tc">${fmtT(Math.max(0, (m.end - now) / 1000))}</span></div>`; }).join('');
+    const opts = [...RUNS.filter(r => G.idlePower() >= r.need && !s.missions.some(m => m.target === r.id)).slice(-2).map(r => ['run', r] as const), ...PLANETS.filter(p => G.avail(p as never) && !s.conquered.includes(p.id) && !s.missions.some(m => m.target === p.id) && G.idlePower() >= p.need).slice(0, 1).map(p => ['planet', p] as const)];
+    const free = s.missions.length < G.docks();
+    sset('#ylist', busy + (free ? opts.map(([k, d]) => `<button class="trow" data-act="go:${k}:${d.id}"><span class="ti">${art(d.id)}</span><span class="tn"><b>${k === 'planet' ? 'Conquer ' : ''}${d.name}</b><small>needs ${d.need}⚔ · ${fmtT(G.missionTime(d.time))}</small></span><span class="tc go">LAUNCH</span></button>`).join('') : '') + (!busy && !opts.length ? '<p class="muted">Build more ships in the Fleet screen.</p>' : '')); bindActs('#ylist'); }
+  if (sl.kind === 'gate') { const ok = G.warpOpen() && G.dmGain() >= 1; const wb = $<HTMLButtonElement>('#sheet [data-act="dowarp"]'); if (wb) { sset('[data-act="dowarp"]', ok ? `ENGAGE WARP<b>+${fmt(G.dmGain(), 0)} DM</b>` : `Charging…<b>${Math.floor(Math.min(1, s.life / G.warpNeed()) * 100)}%</b>`); wb.disabled = !ok; } }
   if (sl.kind === 'mach') sset('[data-act="tog"]', s.on[sl.idx] ? '⏸ Pause' : '▶ Resume');
 }
 
@@ -348,6 +361,7 @@ function updateFleet() {
 }
 function missionsTick() {
   for (const o of G.resolveMissions()) {
+    if (bv && tab === 'base') sfx.land(), bv.land(Object.values(o.m.ships).reduce((a, b) => a + b, 0) - Object.values(o.lost).reduce((a, b) => a + b, 0));
     const def = o.m.kind === 'run' ? RUNS.find(r => r.id === o.m.target)! : PLANETS.find(p => p.id === o.m.target)!;
     const lostN = Object.values(o.lost).reduce((a, b) => a + b, 0);
     if (o.ok && o.m.kind === 'planet') { flash(); sfx.warp(); celebrate(`🏳️ ${def.name} conquered! Profit ×${(def as typeof PLANETS[number]).bonus}`); }

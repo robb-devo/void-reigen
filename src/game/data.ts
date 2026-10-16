@@ -68,8 +68,8 @@ export const PLANETS: PlanetDef[] = [
   { id: 'p5', name: 'Gaseous Rex', e: '🪐', need: 700, time: 1200, bonus: 2.5, desc: 'Ring-mining heaven.' },
   { id: 'p6', name: 'Nyx Throne', e: '🌌', need: 3000, time: 1200, bonus: 3, desc: 'Seat of the old empire.' },
   { id: 'p7', name: 'Abyssal Reach', e: '🌑', need: 12000, time: 1500, bonus: 2, desc: 'A world orbiting nothing at all.', sector: 2 },
-  { id: 'p8', name: 'Chronos Belt', e: '⏳', need: 40000, time: 1800, bonus: 2.5, desc: 'Time runs sideways here.', sector: 2 },
-  { id: 'p9', name: 'The Last Star', e: '✴️', need: 200000, time: 1500, bonus: 3, desc: 'Whoever holds it, holds the galaxy.', sector: 3 },
+  { id: 'p8', name: 'Chronos Belt', e: '⏳', need: 40000, time: 1200, bonus: 2.5, desc: 'Time runs sideways here.', sector: 2 },
+  { id: 'p9', name: 'The Last Star', e: '✴️', need: 200000, time: 900, bonus: 3, desc: 'Whoever holds it, holds the galaxy.', sector: 3 },
 ];
 // Repeatable salvage runs: goods rewards, risk scales with greed.
 export type RunDef = { id: string; name: string; e: string; need: number; time: number; loot: Partial<Record<Res, number>> };

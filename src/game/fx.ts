@@ -23,6 +23,9 @@ export const sfx = {
   launch: () => { noise(0.9, 0.06, 600); tone(120, 0.8, 'sawtooth', 0.03, 3); },
   warp: () => { tone(80, 1.6, 'sawtooth', 0.08, 12); noise(1.5, 0.08, 1200); [523, 784, 1047, 1568].forEach((f, k) => tone(f, 0.6, 'sine', 0.09, 1, 0.6 + k * 0.1)); },
   clank: () => { tone(300, 0.05, 'square', 0.04, 0.5); },
+  select: () => { tone(260, 0.07, 'triangle', 0.09, 0.6); tone(520, 0.05, 'sine', 0.04, 1.2, 0.02); },
+  build: () => { for (let k = 0; k < 3; k++) { tone(180 + k * 20, 0.06, 'square', 0.035, 0.4, k * 0.22); noise(0.04, 0.03, 3000); } [784, 988, 1319].forEach((f, k) => tone(f, 0.18, 'triangle', 0.07, 1, 0.9 + k * 0.06)); },
+  land: () => { tone(500, 0.9, 'sine', 0.03, 0.3); noise(0.5, 0.04, 500); tone(90, 0.15, 'triangle', 0.1, 0.6, 1.5); },
 };
 export const buzz = (p: number | number[]) => { try { if ((navigator as any).userActivation?.hasBeenActive === false) return; navigator.vibrate?.(p); } catch {} };
 

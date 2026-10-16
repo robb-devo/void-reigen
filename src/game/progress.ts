@@ -10,7 +10,7 @@ export const GOALS: Goal[] = [
   { text: 'Own 5 Pebble Drills', done: () => mine(0) >= 5, prog: () => [mine(0), 5], reward: 10, tab: 'base', focus: '@m0' },
   { text: 'Build a Smelter on the asteroid', done: () => mach('smelter') >= 1, reward: 15, tab: 'base', focus: '@f0' },
   { text: 'Drill ore – the Smelter makes 6 Ingots', done: () => S.made.ingot >= 6, prog: () => [S.made.ingot, 6], reward: 20, tab: 'base', focus: '@m0' },
-  { text: 'Research Reinforced Pebble Drill', done: () => S.tech.includes('t0_0'), reward: 40, tab: 'fac', focus: '[data-u="t0_0"]' },
+  { text: 'Research Reinforced Drill in the Lab', done: () => S.tech.includes('t0_0'), reward: 40, tab: 'base', focus: '@lab' },
   { text: 'Build a Quartz Comet Harvester', done: () => mine(1) >= 1, reward: 60, tab: 'base', focus: '@m1' },
   { text: 'Build a Glass Kiln', done: () => mach('kiln') >= 1, reward: 120, tab: 'base', focus: '@f1' },
   { text: 'Export surplus goods at Command HQ', done: () => S.sold >= 1, reward: 150, tab: 'base', focus: '@hq' },

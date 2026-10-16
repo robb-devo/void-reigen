@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 const URL='http://localhost:4173/', OUT='shots'; const errs=[];
 const b=await chromium.launch({args:['--use-gl=swiftshader','--enable-unsafe-swiftshader']});
-async function page(seed){ const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+let prevCtx=null; async function page(seed){ if(prevCtx) await prevCtx.close(); const ctx=prevCtx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
   if(seed) await ctx.addInitScript(s=>{if(!sessionStorage.seed){sessionStorage.seed=1;localStorage.setItem('starforge.v2',s)}},JSON.stringify(seed));
   const p=await ctx.newPage(); p.on('console',m=>m.type()==='error'&&errs.push(m.text())); p.on('pageerror',e=>errs.push(e.message)); await p.goto(URL); await p.waitForTimeout(1200); await p.$eval('#col',e=>e.click()).catch(()=>{}); await p.waitForTimeout(300); return p; }
 const F={force:true}, z={ore:0,quartz:0,ingot:0,glass:0,part:0,alloy:0,chip:0,hull:0,exotic:0};
@@ -14,6 +14,13 @@ p=await page(mid); await p.waitForTimeout(2000); console.log(await p.evaluate(()
 { const [x,y]=await p.evaluate(()=>window.bv.slotScreen('f0')); await p.mouse.click(x,y+30); } await p.waitForTimeout(700); await p.screenshot({path:`${OUT}/b04-sheet.png`});
 const late={...mid,cash:4e13,life:2e14,dm:108,warps:2,mines:M([[420,1],[300,1],[260,1],[220,1],[180,1],[150,1],[120,1],[80,1],[12,0]]),res:{...z,ore:9e9,quartz:5e9,ingot:2e8,glass:1e8,part:3e7,alloy:8e6,chip:4e5,hull:2e4,exotic:120},mach:[120,110,90,70,40,20,6],gen:180,ships:{scout:40,barge:30},conquered:['p1','p2'],goal:40};
 p=await page(late); await p.waitForTimeout(2000); await p.screenshot({path:`${OUT}/b05-late.png`});
-const fps=await p.evaluate(()=>new Promise(r=>{let n=0;const t0=performance.now();const f=()=>{n++; if(performance.now()-t0<3000) requestAnimationFrame(f); else r(n/3)}; requestAnimationFrame(f);}));
+await p.waitForTimeout(3000); const fps=await p.evaluate(()=>new Promise(r=>{let n=0;const t0=performance.now();const f=()=>{n++; if(performance.now()-t0<3000) requestAnimationFrame(f); else r(n/3)}; requestAnimationFrame(f);}));
 await p.evaluate(()=>{const c=document.querySelector('#base'); c.dispatchEvent(new WheelEvent('wheel',{deltaY:-400,clientX:195,clientY:400,bubbles:true}));}); await p.waitForTimeout(400); await p.screenshot({path:`${OUT}/b06-late-zoom.png`});
+const tap=async(p,k)=>{ await p.evaluate(k=>window.bv.focus(k),k); await p.waitForTimeout(900); const [x,y]=await p.evaluate(k=>window.bv.slotScreen(k),k); await p.touchscreen.tap(x,y+25); await p.waitForTimeout(500); };
+p=await page(mid); await p.waitForTimeout(800); await tap(p,'lab'); await p.screenshot({path:`${OUT}/b07-lab.png`});
+await tap(p,'m5'); await p.click('#sheet [data-act=buy]',{force:true}); await p.waitForTimeout(350); await p.screenshot({path:`${OUT}/b08-construct.png`}); await p.waitForTimeout(700); await p.screenshot({path:`${OUT}/b09-pop.png`});
+p=await page(late); await p.waitForTimeout(800); await tap(p,'yard'); await p.screenshot({path:`${OUT}/b10-yard.png`});
+const lb=await p.$('#sheet [data-act^="go:"]'); if(lb){ await lb.click({force:true}); await p.waitForTimeout(500); await p.screenshot({path:`${OUT}/b11-launch.png`}); }
+p=await page({...late,life:1e17,total:1e17}); await p.waitForTimeout(800); await tap(p,'gate'); await p.screenshot({path:`${OUT}/b12-gate.png`});
+await p.click('#sheet [data-act=dowarp]',{force:true}); await p.waitForTimeout(300); await p.click('.modal [data-ok]',{force:true}); await p.waitForTimeout(1600); await p.screenshot({path:`${OUT}/b13-warping.png`}); await p.waitForTimeout(2500); await p.screenshot({path:`${OUT}/b14-after-warp.png`});
 console.log('fps',fps.toFixed(1),'errors',JSON.stringify(errs)); await b.close();
