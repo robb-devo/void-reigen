@@ -15,8 +15,8 @@ export const RES: Record<Res, { name: string; e: string; color: string; price: n
 
 export type MineDef = { id: string; name: string; e: string; hue: number; cost: number; g: number; rev: number; t: number; ore: number; res: Res; mgr: number; mname: string; sector?: number };
 export const MINES: MineDef[] = [
-  { id: 'drill', name: 'Pebble Drill', e: '⛏️', hue: 30, cost: 4, g: 1.12, rev: 1, t: 0.6, ore: 0.25, res: 'ore', mgr: 1e3, mname: 'Rusty the Bot' },
-  { id: 'ice', name: 'Quartz Comet Harvester', e: '🧊', hue: 195, cost: 60, g: 1.18, rev: 60, t: 4, ore: 1, res: 'quartz', mgr: 25e3, mname: 'Frosty Vega' },
+  { id: 'drill', name: 'Pebble Drill', e: '⛏️', hue: 30, cost: 4, g: 1.12, rev: 1, t: 0.6, ore: 0.25, res: 'ore', mgr: 1.5e3, mname: 'Rusty the Bot' },
+  { id: 'ice', name: 'Quartz Comet Harvester', e: '🧊', hue: 195, cost: 150, g: 1.18, rev: 60, t: 4, ore: 1, res: 'quartz', mgr: 25e3, mname: 'Frosty Vega' },
   { id: 'iron', name: 'Iron Asteroid Rig', e: '🪨', hue: 15, cost: 720, g: 1.18, rev: 540, t: 10, ore: 5, res: 'ore', mgr: 3e5, mname: 'Ferro Max' },
   { id: 'crystal', name: 'Crystal Laser Array', e: '💎', hue: 280, cost: 8640, g: 1.175, rev: 4320, t: 30, ore: 18, res: 'quartz', mgr: 3e6, mname: 'Dr. Prism' },
   { id: 'plasma', name: 'Plasma Excavator', e: '🔥', hue: 340, cost: 103680, g: 1.17, rev: 51840, t: 75, ore: 70, res: 'ore', mgr: 4e7, mname: 'Blaze Kowalski' },
@@ -30,9 +30,9 @@ export const MILESTONES = [25, 50, 100, 150, 200, 300, 400, 500, 600, 800, 1000,
 // Production chain. Multi-input recipes create real branches (ingots feed both Press and Forge).
 export type MachineDef = { id: string; name: string; e: string; inp: Partial<Record<Res, number>>; out: Res; rate: number; power: number; cost: number; g: number; unlock: number; sector?: number };
 export const MACHINES: MachineDef[] = [
-  { id: 'smelter', name: 'Smelter', e: '🏭', inp: { ore: 3 }, out: 'ingot', rate: 1, power: 1, cost: 20, g: 1.28, unlock: 0 },
-  { id: 'kiln', name: 'Glass Kiln', e: '🔥', inp: { quartz: 3 }, out: 'glass', rate: 1, power: 1, cost: 250, g: 1.28, unlock: 150 },
-  { id: 'press', name: 'Parts Press', e: '🔩', inp: { ingot: 4 }, out: 'part', rate: 0.5, power: 2, cost: 2500, g: 1.3, unlock: 1500 },
+  { id: 'smelter', name: 'Smelter', e: '🏭', inp: { ore: 3 }, out: 'ingot', rate: 1, power: 1, cost: 30, g: 1.28, unlock: 0 },
+  { id: 'kiln', name: 'Glass Kiln', e: '🔥', inp: { quartz: 3 }, out: 'glass', rate: 1, power: 1, cost: 500, g: 1.28, unlock: 400 },
+  { id: 'press', name: 'Parts Press', e: '🔩', inp: { ingot: 4 }, out: 'part', rate: 0.5, power: 2, cost: 4000, g: 1.3, unlock: 3000 },
   { id: 'forge', name: 'Alloy Forge', e: '⚗️', inp: { ingot: 2, glass: 2 }, out: 'alloy', rate: 0.4, power: 3, cost: 3e4, g: 1.3, unlock: 2e4 },
   { id: 'fab', name: 'Chip Fab', e: '🖥️', inp: { part: 3, glass: 2 }, out: 'chip', rate: 0.2, power: 5, cost: 1.5e6, g: 1.32, unlock: 6e5 },
   { id: 'hull', name: 'Hull Works', e: '🛠️', inp: { alloy: 2, part: 3 }, out: 'hull', rate: 0.1, power: 8, cost: 4e7, g: 1.33, unlock: 2e7 },
@@ -44,7 +44,7 @@ export const GEN = { name: 'Fusion Generator', e: '⚡', cost: 15, g: 1.32, powe
 export type TechDef = { id: string; name: string; cash: number; res: Res; amt: number; tgt: number; x: number };
 export const TECH: TechDef[] = (() => {
   const out: TechDef[] = [];
-  const tiers: [number, Res, number, number, string][] = [[60, 'ingot', 6, 2, 'Reinforced'], [5e4, 'glass', 40, 2, 'Glass-lensed'], [1.5e6, 'ingot', 500, 2, 'Tempered'], [2e7, 'part', 80, 3, 'Precision'], [6e8, 'glass', 4000, 2, 'Prismatic'], [2e10, 'alloy', 300, 3, 'Alloy-framed'], [8e11, 'part', 6000, 2, 'Turbo'], [5e13, 'chip', 200, 3, 'Overclocked'], [1e17, 'hull', 150, 5, 'Armored'], [1e21, 'chip', 2e4, 5, 'Quantum'], [1e24, 'exotic', 60, 7, 'Exotic'], [1e28, 'exotic', 3000, 9, 'Void-forged'], [1e33, 'exotic', 2e5, 11, 'Reality-bent']];
+  const tiers: [number, Res, number, number, string][] = [[60, 'ingot', 6, 2, 'Reinforced'], [2.5e4, 'glass', 40, 2, 'Glass-lensed'], [1.5e6, 'ingot', 500, 2, 'Tempered'], [2e7, 'part', 80, 3, 'Precision'], [6e8, 'glass', 4000, 2, 'Prismatic'], [2e10, 'alloy', 300, 3, 'Alloy-framed'], [8e11, 'part', 6000, 2, 'Turbo'], [5e13, 'chip', 200, 3, 'Overclocked'], [1e17, 'hull', 150, 5, 'Armored'], [1e21, 'chip', 2e4, 5, 'Quantum'], [1e24, 'exotic', 60, 7, 'Exotic'], [1e28, 'exotic', 3000, 9, 'Void-forged'], [1e33, 'exotic', 2e5, 11, 'Reality-bent']];
   tiers.forEach(([c, r, a, x, n], ti) => MINES.forEach((m, i) => out.push({ id: `t${ti}_${i}`, name: `${n} ${m.name}`, cash: c * Math.pow(4, i), res: r, amt: Math.round(a * Math.pow(1.5, i)), tgt: i, x })));
   ([[2e6, 'ingot', 600, 2, 'Fusion Core'], [5e9, 'part', 3000, 2, 'Gravity Lens'], [5e12, 'alloy', 8000, 3, 'Dyson Mesh'], [5e15, 'chip', 8000, 3, 'Singularity Tap'], [5e19, 'hull', 2e4, 3, 'Hyperlane Grid'], [5e23, 'exotic', 500, 5, 'Entropy Engine'], [5e30, 'exotic', 5e4, 7, 'Big Crunch Loop']] as [number, Res, number, number, string][]).forEach(([c, r, a, x, n], k) => out.push({ id: `all${k}`, name: `${n} – ALL mines`, cash: c, res: r, amt: a, tgt: -1, x }));
   return out.sort((a, b) => a.cash - b.cash);
@@ -69,7 +69,7 @@ export const PLANETS: PlanetDef[] = [
   { id: 'p6', name: 'Nyx Throne', e: '🌌', need: 3000, time: 1200, bonus: 3, desc: 'Seat of the old empire.' },
   { id: 'p7', name: 'Abyssal Reach', e: '🌑', need: 12000, time: 1500, bonus: 2, desc: 'A world orbiting nothing at all.', sector: 2 },
   { id: 'p8', name: 'Chronos Belt', e: '⏳', need: 40000, time: 1200, bonus: 2.5, desc: 'Time runs sideways here.', sector: 2 },
-  { id: 'p9', name: 'The Last Star', e: '✴️', need: 200000, time: 900, bonus: 3, desc: 'Whoever holds it, holds the galaxy.', sector: 3 },
+  { id: 'p9', name: 'The Last Star', e: '✴️', need: 200000, time: 600, bonus: 3, desc: 'Whoever holds it, holds the galaxy.', sector: 3 },
 ];
 // Repeatable salvage runs: goods rewards, risk scales with greed.
 export type RunDef = { id: string; name: string; e: string; need: number; time: number; loot: Partial<Record<Res, number>> };

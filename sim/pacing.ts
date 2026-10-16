@@ -62,7 +62,7 @@ while (T < 30 * 3600 && runEnds.length < RUNS_N) {
     G.S.mines.forEach(m => { if (!m.m && !m.run && rand() < TAP_EFF) m.run = true; });
     G.tick(DT); T += DT;
   }
-  step(); if (Math.floor(T) % 300 === 0 && process.env.P) console.log(fmtT(T), 'cash/s', G.perSec().toExponential(2), 'all', G.allTime().toExponential(2), 'mines', S().mines.map(m=>m.n).join(','), 'tech', S().tech.length, 'dm', S().dm);
+  step(); if (Math.floor(T) % 300 === 0 && process.env.P) console.log(fmtT(T), 'cash/s', G.perSec().toExponential(2), 'life', S().life.toExponential(2), 'all', G.allTime().toExponential(2), 'mines', S().mines.map(m=>m.n).join(','), 'tech', S().tech.length, 'dm', S().dm);
   const gate = G.warpOpen();
   const planetsLeft = PLANETS.some(p => G.avail(p) && !S().conquered.includes(p.id));
   const want = !S().missions.some(m => m.kind === 'planet') && ((!planetsLeft && G.dmGain() >= Math.max(1, S().dm)) || T - runT0 > 75 * 60);

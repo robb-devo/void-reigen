@@ -20,6 +20,11 @@ export function box(c: C, x: number, y: number, hw: number, hh: number, h: numbe
   poly(c, [x - hw, y, x, y + hh, x, y + hh - h, x - hw, y - h], lg(c, x - hw, y - h, x, y + hh, hsl(hue, sat, lit - 4), hsl(hue, sat, lit - 18)));
   poly(c, [x + hw, y, x, y + hh, x, y + hh - h, x + hw, y - h], lg(c, x, y - h, x + hw, y, hsl(hue, sat, lit - 22), hsl(hue, sat + 5, lit - 34)));
   poly(c, [x - hw, y - h, x, y - hh - h, x + hw, y - h, x, y + hh - h], o.top || lg(c, x - hw, y - h - hh, x + hw, y - h + hh, hsl(hue, sat - 5, lit + 16), hsl(hue, sat, lit + 4)));
+  if (h > 12) { // grime band at the foot of each wall + speckle texture
+    poly(c, [x - hw, y, x, y + hh, x, y + hh - 7, x - hw, y - 7], 'rgba(20,6,40,.22)', null); poly(c, [x + hw, y, x, y + hh, x, y + hh - 7, x + hw, y - 7], 'rgba(20,6,40,.28)', null);
+    let sd = Math.abs(Math.floor(x * 7 + y * 13 + h * 3)) + 1; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    for (let k = 0; k < 10; k++) { const left = k % 2 === 0, f = r(), fh = r() * h * .9 + 3; const px = left ? x - hw + hw * f : x + hw * f, py = (left ? y + hh * f : y + hh - hh * f) - fh; c.fillStyle = r() < .5 ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.14)'; c.fillRect(px, py, 2, 2); }
+  }
   if (o.panels) { c.strokeStyle = 'rgba(0,0,0,.18)'; c.lineWidth = 1.5; for (let k = 1; k <= o.panels; k++) { const f = k / (o.panels + 1); c.beginPath(); c.moveTo(x - hw + hw * f, y + hh * f); c.lineTo(x - hw + hw * f, y + hh * f - h); c.moveTo(x + hw * f, y + hh - hh * f); c.lineTo(x + hw * f, y + hh - hh * f - h); c.stroke(); } }
   if (o.rivets) { c.fillStyle = 'rgba(255,255,255,.55)'; for (let k = 1; k < 6; k++) { const f = k / 6; c.beginPath(); c.arc(x - hw + hw * f, y + hh * f - h + 4, 1.3, 0, 7); c.fill(); } }
   c.lineCap = 'round'; c.beginPath(); c.moveTo(x - hw + 3, y - h); c.lineTo(x, y - hh - h + 2); c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 2; c.stroke();

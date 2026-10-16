@@ -21,6 +21,9 @@ p=await page(mid); await p.waitForTimeout(800); await tap(p,'lab'); await p.scre
 await tap(p,'m5'); await p.click('#sheet [data-act=buy]',{force:true}); await p.waitForTimeout(350); await p.screenshot({path:`${OUT}/b08-construct.png`}); await p.waitForTimeout(700); await p.screenshot({path:`${OUT}/b09-pop.png`});
 p=await page(late); await p.waitForTimeout(800); await tap(p,'yard'); await p.screenshot({path:`${OUT}/b10-yard.png`});
 const lb=await p.$('#sheet [data-act^="go:"]'); if(lb){ await lb.click({force:true}); await p.waitForTimeout(500); await p.screenshot({path:`${OUT}/b11-launch.png`}); }
+await p.click('#sheet [data-act="yseg:1"]',{force:true}); await p.waitForTimeout(400); await p.screenshot({path:`${OUT}/b15-yard-ships.png`});
+await p.evaluate(()=>{window.__night=1; document.querySelector('#sheet [data-act=close]')?.click();}); await p.waitForTimeout(1200); await p.screenshot({path:`${OUT}/b16-night.png`});
+await p.evaluate(()=>{window.__night=0.5}); await p.waitForTimeout(300); await p.screenshot({path:`${OUT}/b17-dusk.png`});
 p=await page({...late,life:1e17,total:1e17}); await p.waitForTimeout(800); await tap(p,'gate'); await p.screenshot({path:`${OUT}/b12-gate.png`});
 await p.click('#sheet [data-act=dowarp]',{force:true}); await p.waitForTimeout(300); await p.click('.modal [data-ok]',{force:true}); await p.waitForTimeout(1600); await p.screenshot({path:`${OUT}/b13-warping.png`}); await p.waitForTimeout(2500); await p.screenshot({path:`${OUT}/b14-after-warp.png`});
 console.log('fps',fps.toFixed(1),'errors',JSON.stringify(errs)); await b.close();

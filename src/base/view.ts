@@ -29,8 +29,11 @@ export function visible(sl: Slot): 'built' | 'plot' | 'hidden' {
   if (sl.kind === 'yard') return G.fleetOpen() ? 'built' : S.mach[4] ? 'plot' : 'hidden';
   if (sl.kind === 'lab') return S.mach[0] > 0 || S.tech.length ? 'built' : 'hidden';
   if (sl.kind === 'gate') return G.warpOpen() || S.warps ? 'built' : S.life > 1e9 ? 'plot' : 'hidden';
+  if (sl.kind === 'gen') return S.mach[0] > 0 || S.gen > 1 || S.warps ? 'built' : 'hidden';
   return 'built';
 }
+export let guideKey: string | null = null; export const setGuideKey = (k: string | null) => { guideKey = k; };
+function relevantPlot(sl: Slot) { if (sl.key === guideKey) return true; const k = cost(sl); return k !== null && G.S.cash >= k * .5; }
 export function cost(sl: Slot): number | null {
   if (sl.kind === 'mine') return G.costN(sl.idx, G.S.mines[sl.idx].n ? G.buyK(sl.idx) : 1);
   if (sl.kind === 'mach') return G.machCostK(sl.idx, G.machK(sl.idx));
@@ -51,6 +54,9 @@ export class BaseView {
   w = 0; h = 0; sel: string | null = null; guide: string | null = null; drones: Drone[] = []; puffs: Puff[] = []; t = 0;
   ships: Ship[] = []; cons = new Map<string, number>(); sprites = new Map<string, Sprite>(); cam: { x: number; y: number; z: number } | null = null; warpT = -1; warpCb: (() => void) | null = null; shake = 0;
   onTap: (sl: Slot | null, x: number, y: number) => void = () => {};
+  onConstruct: () => void = () => {};
+  private lastTier = new Map<string, number>(); private workers: { a: number; b: number; f: number; sp: number; c: string }[] = [];
+  night = 0;
   private ptrs = new Map<number, { x: number; y: number }>(); private moved = 0; private pinch0 = 0; private z0 = 1; private craters: number[][] = [];
   constructor(parent: HTMLElement) {
     this.cv = document.createElement('canvas'); this.cv.id = 'base'; parent.appendChild(this.cv); this.c = this.cv.getContext('2d')!;
@@ -117,6 +123,10 @@ export class BaseView {
   draw(dt: number) {
     this.t += dt; const { c, t } = this;
     if (this.cam) { const k = 1 - Math.pow(.0008, dt); this.ox += (this.cam.x - this.ox) * k; this.oy += (this.cam.y - this.oy) * k; this.z += (this.cam.z - this.z) * k; if (Math.abs(this.cam.x - this.ox) + Math.abs(this.cam.y - this.oy) < .5 && Math.abs(this.cam.z - this.z) < .002) { this.z = this.cam.z; this.cam = null; } }
+    for (const sl of SLOTS) { const v = visible(sl), tv = v === 'built' ? tier(sl) : -1, prev = this.lastTier.get(sl.key); if (prev !== undefined && tv > prev && this.t > 1 && this.warpT < 0) { this.cons.set(sl.key, this.t); this.onConstruct(); } this.lastTier.set(sl.key, tv); }
+    // day/night: 6-minute cycle, nights are short and pretty
+    const ph = (Date.now() / 360000) % 1; this.night = Math.max(0, Math.min(1, (Math.cos(ph * Math.PI * 2) * -1 - .1) * 1.6));
+    const fn = (window as unknown as { __night?: number }).__night; if (fn !== undefined) this.night = fn;
     let sx = 0, sy = 0; if (this.shake > 0) { this.shake -= dt; sx = (Math.random() - .5) * 8 * this.shake * 4; sy = (Math.random() - .5) * 8 * this.shake * 4; }
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); c.clearRect(0, 0, this.w, this.h);
     c.translate(this.ox + sx, this.oy + sy); c.scale(this.z, this.z);
@@ -124,8 +134,9 @@ export class BaseView {
     // conveyors
     const L = this.links();
     for (const [a, b, r, on] of L) this.belt(a, b, RES[r].color, on);
+    this.drawWorkers(dt);
     // buildings back-to-front
-    const order = SLOTS.filter(sl => visible(sl) !== 'hidden').sort((a, b) => a.gx + a.gy - (b.gx + b.gy));
+    guideKey = this.guide; const order = SLOTS.filter(sl => visible(sl) === 'built' || (visible(sl) === 'plot' && relevantPlot(sl))).sort((a, b) => a.gx + a.gy - (b.gx + b.gy));
     for (const sl of order) {
       const [x, y] = iso(sl.gx, sl.gy), v = visible(sl);
       if (sl.key === this.sel) { const hw = sl.s * TW / 2, hh = sl.s * TH / 2, p = 1 + Math.sin(t * 6) * .04; c.beginPath(); c.moveTo(x - hw * p, y); c.lineTo(x, y - hh * p); c.lineTo(x + hw * p, y); c.lineTo(x, y + hh * p); c.closePath(); c.fillStyle = 'rgba(255,255,255,.15)'; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 3; c.stroke(); }
@@ -155,6 +166,13 @@ export class BaseView {
     // warp sequence
     if (this.warpT >= 0) { this.warpT += dt; const [gx, gy] = iso(6, -3); const f = Math.min(1, this.warpT / 2.2); glow(c, gx, gy - 50, 120 + f * 900, '#b06bff', .4 + f * .6); c.save(); c.translate(gx, gy - 50); c.rotate(this.warpT * 4 * f); for (let k = 0; k < 6; k++) { c.rotate(1.047); c.beginPath(); c.ellipse(0, 0, 60 + f * 500, 20 + f * 160, 0, 0, Math.PI); c.strokeStyle = `hsla(${270 + k * 15},100%,75%,${.6 * f})`; c.lineWidth = 6 + f * 10; c.stroke(); } c.restore(); this.shake = Math.max(this.shake, f * .2); if (this.warpT > 2.2 && this.warpCb) { const cb = this.warpCb; this.warpCb = null; cb(); } if (this.warpT > 3.2) { this.warpT = -1; this.sprites.clear(); } }
     // labels on top
+    if (this.night > .01) {
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = `rgba(16,8,58,${.5 * this.night})`; c.fillRect(0, 0, this.cv.width, this.cv.height); c.restore();
+      c.globalCompositeOperation = 'lighter';
+      for (const sl of order) { if (visible(sl) !== 'built') continue; const [x, y] = iso(sl.gx, sl.gy), on = activeOf(sl); glow(c, x, y - 4, 70, on ? accentOf(sl) : '#5a6aff', this.night * (on ? .35 : .15)); glow(c, x - 10, y - 30 - tier(sl) * 6, 34, '#ffe9a0', this.night * .45); }
+      for (const [a, b, r, on] of L) if (on) { const [x1, y1] = iso(b.gx, a.gy); glow(c, x1, y1, 26, RES[r].color, this.night * .3); }
+      c.globalCompositeOperation = 'source-over';
+    }
     if (this.warpT < 0) for (const sl of order) this.label(sl);
     if (this.guide) { const sl = SLOTS.find(s => s.key === this.guide); if (sl && visible(sl) !== 'hidden') { const [x, y] = iso(sl.gx, sl.gy), b = Math.abs(Math.sin(t * 5)) * 14, ay = y - 120 - tier(sl) * 12 - b;
       c.beginPath(); c.moveTo(x, ay + 34); c.lineTo(x - 20, ay + 10); c.lineTo(x - 9, ay + 10); c.lineTo(x - 9, ay - 14); c.lineTo(x + 9, ay - 14); c.lineTo(x + 9, ay + 10); c.lineTo(x + 20, ay + 10); c.closePath(); c.fillStyle = '#ffd23f'; c.fill(); c.strokeStyle = '#24163a'; c.lineWidth = 4; c.stroke();
@@ -174,10 +192,27 @@ export class BaseView {
     }
     c.save(); c.scale(1 / k, 1 / k); c.drawImage(this.gcache, -W / 2 * k, -420 * k); c.restore();
   }
+  private drawWorkers(dt: number) {
+    const c = this.c, built = SLOTS.filter(s => visible(s) === 'built');
+    const want = Math.min(10, 2 + Math.floor(built.length / 2));
+    while (this.workers.length < want && built.length > 1) { const a = Math.floor(Math.random() * built.length); let b = Math.floor(Math.random() * built.length); if (b === a) b = (a + 1) % built.length; this.workers.push({ a: SLOTS.indexOf(built[a]), b: SLOTS.indexOf(built[b]), f: 0, sp: .12 + Math.random() * .1, c: ['#ffd23f', '#ff9f43', '#5cf2ff', '#ff7bd5'][Math.floor(Math.random() * 4)] }); }
+    this.workers = this.workers.filter(w => {
+      w.f += dt * w.sp; const A = SLOTS[w.a], B = SLOTS[w.b]; if (!A || !B) return false;
+      // walk an L path just off the building corners
+      const f = Math.min(1, w.f), mx = B.gx, my = A.gy, l1 = Math.abs(mx - A.gx), l2 = Math.abs(B.gy - my), L = l1 + l2 || 1, d = f * L;
+      const gx = d < l1 ? A.gx + Math.sign(mx - A.gx) * d : mx, gy = d < l1 ? A.gy : my + Math.sign(B.gy - my) * (d - l1);
+      const [x, y] = iso(gx + 1.15, gy + 1.15), bob = Math.abs(Math.sin(this.t * 10 + w.a)) * 2.5;
+      c.beginPath(); c.ellipse(x, y + 1, 5, 2.5, 0, 0, 7); c.fillStyle = 'rgba(20,8,40,.35)'; c.fill();
+      c.fillStyle = '#3a4a8a'; c.strokeStyle = INK; c.lineWidth = 1.5; c.beginPath(); c.roundRect(x - 3.5, y - 11 - bob, 7, 9, 2); c.fill(); c.stroke();
+      c.beginPath(); c.arc(x, y - 14 - bob, 3.6, 0, 7); c.fillStyle = w.c; c.fill(); c.stroke(); c.fillStyle = '#9af3ff'; c.fillRect(x - 2, y - 15 - bob, 4, 2);
+      if (this.night > .3) glow(c, x, y - 15 - bob, 10, '#fff3b0', this.night * .6);
+      return w.f < 1;
+    });
+  }
   private building(sl: Slot, x: number, y: number) {
     const c = this.c, tr = tier(sl), act = !!activeOf(sl), id = idOf(sl), k = Math.max(.5, Math.round(this.z * this.dpr * 4) / 4);
     const key = `${id}|${tr}|${k}`; let sp = this.sprites.get(key);
-    if (!sp) { const W = 240, H = 300, cv = document.createElement('canvas'); cv.width = Math.ceil(W * k); cv.height = Math.ceil(H * k); const g = cv.getContext('2d')!; g.setTransform(k, 0, 0, k, W / 2 * k, 240 * k); drawBuilding(g, 0, sl.kind, id, hueOf(sl), tr, 0, 0, sl.s, 0, act, accentOf(sl)); sp = { cv, k }; if (this.sprites.size > 120) this.sprites.clear(); this.sprites.set(key, sp); }
+    if (!sp) { const W = 240, H = 300, cv = document.createElement('canvas'); cv.width = Math.ceil(W * k); cv.height = Math.ceil(H * k); const g = cv.getContext('2d')!; g.setTransform(k, 0, 0, k, W / 2 * k, 240 * k); bakeShadow(g, sl.s); drawBuilding(g, 0, sl.kind, id, hueOf(sl), tr, 0, 0, sl.s, 0, act, accentOf(sl)); sp = { cv, k }; if (this.sprites.size > 120) this.sprites.clear(); this.sprites.set(key, sp); }
     c.drawImage(sp.cv, x - 120, y - 240, 240, 300);
     drawBuilding(c, 1, sl.kind, id, hueOf(sl), tr, x, y, sl.s, this.t + sl.gx * .37, act, accentOf(sl));
   }
@@ -226,13 +261,13 @@ export class BaseView {
     const c = this.c, [x, y0] = iso(sl.gx, sl.gy), y = y0 + sl.s * TH / 2 + 14, S = G.S;
     if (v === 'plot') { const k = cost(sl); if (k === null) return; this.pill(x, y, '$' + short(k), S.cash >= k ? '#5cff9d' : '#ffffff', 'rgba(36,22,58,.85)'); return; }
     const n = level(sl);
-    if (sl.kind === 'mine' || sl.kind === 'mach' || sl.kind === 'gen') this.pill(x, y, 'Lv ' + n, '#fff', 'rgba(36,22,58,.85)');
+    const showLv = sl.key === this.sel || sl.key === this.guide || this.z > .95; if (showLv && (sl.kind === 'mine' || sl.kind === 'mach' || sl.kind === 'gen')) this.pill(x, y, 'Lv ' + n, '#fff', 'rgba(36,22,58,.85)');
     if (sl.kind === 'mine') {
       const m = S.mines[sl.idx]; const p = m.m || m.run ? Math.min(1, m.p) : 0;
       c.fillStyle = '#24163a'; rr(c, x - 26, y + 11, 52, 8, 4); c.fill(); c.fillStyle = hsl(MINES[sl.idx].hue, 95, 60); if (p > 0) { rr(c, x - 25, y + 12, 50 * (G.cycle(sl.idx) < .3 ? 1 : p), 6, 3); c.fill(); }
       if (!m.m && !m.run && this.guide !== sl.key) { const b = Math.abs(Math.sin(this.t * 4)) * 8; this.bubble(x, y0 - 92 - tier(sl) * 12 - b, 'TAP!'); }
     }
-    if (sl.kind === 'mach') { const ms = G.machStats[sl.idx]; if (ms.reason === 'starved' || ms.reason === 'power') this.bubble(x, y0 - 90 - tier(sl) * 8, ms.reason === 'power' ? '⚡!' : 'NEED ' + (ms.need ? RES[ms.need].name.toUpperCase() : 'INPUT'), '#ff5b5b'); }
+    if (sl.kind === 'mach') { const ms = G.machStats[sl.idx]; if (ms.reason === 'starved' || ms.reason === 'power') this.bubble(x, y0 - 90 - tier(sl) * 8, ms.reason === 'power' ? '⚡' : '!', '#ff5b5b'); }
     const k = cost(sl); if (k !== null && S.cash >= k) { const b = Math.sin(this.t * 5) * 3; c.beginPath(); const ax = x + 34, ay = y - 2 + b; c.moveTo(ax, ay - 10); c.lineTo(ax + 8, ay); c.lineTo(ax + 3, ay); c.lineTo(ax + 3, ay + 7); c.lineTo(ax - 3, ay + 7); c.lineTo(ax - 3, ay); c.lineTo(ax - 8, ay); c.closePath(); c.fillStyle = '#5cff9d'; c.fill(); c.strokeStyle = '#24163a'; c.lineWidth = 2; c.stroke(); }
   }
   private pill(x: number, y: number, txt: string, fg: string, bg: string) {
@@ -246,6 +281,12 @@ export class BaseView {
     c.beginPath(); c.moveTo(x - 6, y + 10); c.lineTo(x, y + 18); c.lineTo(x + 6, y + 10); c.fill(); c.stroke(); c.fillRect(x - 5, y + 8, 10, 3);
     c.fillStyle = '#24163a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, x, y);
   }
+}
+function bakeShadow(g: CanvasRenderingContext2D, s: number) {
+  // soft cast shadow (toward bottom-right, away from the warm key light) + contact ambient occlusion
+  const hw = s * TW / 2, hh = s * TH / 2;
+  g.save(); g.filter = 'blur(7px)'; g.fillStyle = 'rgba(16,4,36,.42)'; g.beginPath(); g.ellipse(18, 14, hw * 1.05, hh * 1.1, 0, 0, 7); g.fill(); g.restore();
+  const ao = g.createRadialGradient(0, 0, hw * .5, 0, 0, hw * 1.15); ao.addColorStop(0, 'rgba(16,4,36,.35)'); ao.addColorStop(1, 'rgba(16,4,36,0)'); g.save(); g.scale(1, .5); g.fillStyle = ao; g.beginPath(); g.arc(0, 0, hw * 1.15, 0, 7); g.fill(); g.restore();
 }
 function rr(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) { c.beginPath(); c.roundRect(x, y, w, h, r); }
 function short(v: number) { const s = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx']; let e = 0; while (v >= 1000 && e < s.length - 1) { v /= 1000; e++; } return (v >= 100 || e === 0 ? Math.floor(v).toString() : v.toFixed(1)) + s[e]; }

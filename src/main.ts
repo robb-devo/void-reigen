@@ -7,9 +7,10 @@ import { GOALS, goalReward, ACHS } from './game/progress';
 import { art, ri } from './game/art';
 import { BaseView, SLOTS, Slot, level, tier, nextTierAt, visible, cost as slotCost } from './base/view';
 import { TIER_NAMES } from './base/render';
+import { say, talking } from './commander';
 import { sfx, buzz, initFx, stepFx, burst, fly, popup, toast, rocket, flash } from './game/fx';
 
-G.load();
+const rawSave = localStorage.getItem(G.KEY); G.load(); G.migrateSeen(rawSave);
 const st = () => G.S;
 
 // ---------- formatting ----------
@@ -33,7 +34,7 @@ app.innerHTML = `<canvas id="stars"></canvas>
 <div class="res" id="res">${RES_ORDER.map(r => `<div class="rc" data-r="${r}" style="--c:${RES[r].color}">${ri(r)}<span>0</span></div>`).join('')}</div></header>
 <div id="goal"></div>
 <main id="main"></main>
-<nav>${TABS.map(([t, e, n]) => `<button data-t="${t}"><em>${e}</em>${n}<i class="dot"></i></button>`).join('')}</nav>
+<nav>${TABS.filter(([t]) => t !== 'mine' && t !== 'crew' && t !== 'warp').map(([t, e, n]) => `<button data-t="${t}"><em>${e}</em>${n}<i class="dot"></i></button>`).join('')}</nav>
 <canvas id="fx"></canvas>`;
 const main = $('#main'), cashEl = $('#cash'), rateEl = $('#rate'), goalEl = $('#goal');
 initFx($<HTMLCanvasElement>('#fx'), $<HTMLCanvasElement>('#stars'));
@@ -136,9 +137,12 @@ function updateMine() {
 
 
 // ---------- BASE (isometric asteroid) ----------
+let ySeg = 0;
 let bv: BaseView | null = null; let bwrap: HTMLElement | null = null; let sheetKey: string | null = null; let lastDrone = 0;
 function renderBase() {
-  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); bv.onTap = baseTap; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`); }
+  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); bv.z = Math.max(.62, Math.min(.95, 1 - SLOTS.filter(x => visible(x) === 'built').length * .03)); bv.onTap = baseTap; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`);
+    bv.onConstruct = () => sfx.build();
+    const sh = $('#sheet'); let y0 = -1; sh.addEventListener('pointerdown', e => { y0 = e.clientY; }); sh.addEventListener('pointerup', e => { if (y0 < 0) return; const dy = e.clientY - y0; y0 = -1; if (dy < -30) { sh.classList.remove('compact'); sfx.select(); } else if (dy > 40) { if (sh.classList.contains('compact')) closeSheet(); else sh.classList.add('compact'); sfx.select(); } }); }
   main.innerHTML = ''; main.appendChild(bwrap); requestAnimationFrame(() => bv!.resize());
 }
 function baseEvent(i: number, v: number, ct: number, now: number) {
@@ -165,11 +169,13 @@ function openSheet(key: string) {
   if (sl.kind === 'mine') actions = `<button class="btn gold big" data-act="buy"></button>${s.mines[sl.idx].n && !s.mines[sl.idx].m ? `<button class="btn big" data-act="hire"></button>` : ''}<div class="row2">${multBtn()}<button class="btn ghost" data-act="list">All mines ›</button></div>`;
   else if (sl.kind === 'mach') actions = `<button class="btn gold big" data-act="buy"></button><div class="row2">${multBtn()}${s.mach[sl.idx] ? `<button class="btn ghost" data-act="tog"></button>` : ''}<button class="btn ghost" data-act="fac">Chain ›</button></div>`;
   else if (sl.kind === 'gen') actions = `<button class="btn gold big" data-act="buy"></button><div class="row2">${multBtn()}<button class="btn ghost" data-act="fac">Factory ›</button></div>`;
-  else if (sl.kind === 'yard') actions = v === 'built' ? `<div class="slist" id="ylist"></div><button class="btn ghost" data-act="fleet">Fleet &amp; ship builder ›</button>` : `<button class="btn big" disabled>Build a Chip Fab to unlock</button>`;
-  else if (sl.kind === 'gate') actions = `<button class="btn gold big" data-act="dowarp"></button><button class="btn ghost" data-act="warp">Perks &amp; stats ›</button>`;
+  else if (sl.kind === 'yard') actions = v === 'built' ? `<div class="seg">${['Missions', 'Ships', 'Upgrades'].map((n, k) => `<button data-act="yseg:${k}" class="${ySeg === k ? 'on' : ''}">${n}</button>`).join('')}</div><div class="slist" id="ylist"></div><button class="btn ghost" data-act="fleet">Manual crew picks ›</button>` : `<button class="btn big" disabled>Build a Chip Fab to unlock</button>`;
+  else if (sl.kind === 'gate') actions = `<button class="btn gold big" data-act="dowarp"></button><div class="slist">${PERKS.map(p => `<div class="trow ${s.warps >= p.warps ? '' : 'dimr'}"><span class="ti">${art(p.art)}</span><span class="tn"><b>${p.name}</b><small>${p.desc}</small></span><span class="tc">${s.warps >= p.warps ? '✓' : 'Warp ' + p.warps}</span></div>`).join('')}</div>`;
   else if (sl.kind === 'lab') actions = `<div class="slist" id="llist"></div>`;
-  else actions = `<button class="btn gold big" data-act="buy"></button><button class="btn big" data-act="fac">Market &amp; Research ›</button><div class="row2"><button class="btn ghost" data-act="crew">Crew ›</button><button class="btn ghost" data-act="trophy">Trophies ›</button></div>`;
-  sh.innerHTML = `<div class="grab"></div><button class="x" data-act="close">✕</button><div class="shead"><div class="sart">${slotArt(sl)}</div><div class="smid"><h3 class="h">${slotName(sl)}</h3><div class="slv"></div><div class="stier"></div></div></div><div class="sstats"></div><div class="sact">${actions}</div>`;
+  else actions = `<button class="btn gold big" data-act="buy"></button><button class="btn big" data-act="fac">Market &amp; Research ›</button><div class="row2"><button class="btn ghost" data-act="list">All mines ›</button><button class="btn ghost" data-act="crew">Crew ›</button></div><div class="row2"><button class="btn ghost" data-act="trophy">Trophies ›</button><button class="btn ghost" data-act="warp">Stats &amp; settings ›</button></div>`;
+  const compactable = sl.kind === 'mine' || sl.kind === 'mach' || sl.kind === 'gen';
+  sh.innerHTML = `<div class="grab" data-act="expand"></div><button class="x" data-act="close">✕</button><div class="shead"><div class="sart">${slotArt(sl)}</div><div class="smid"><h3 class="h">${slotName(sl)}</h3><div class="slv"></div><div class="stier"></div></div></div><div class="sstats"></div><div class="sact">${actions}</div>`;
+  if (newKey) sh.classList.toggle('compact', compactable); else if (!compactable) sh.classList.remove('compact');
   sh.classList.add('open'); sh.classList.remove('spop'); void sh.offsetWidth; sh.classList.add('spop');
   sh.querySelectorAll<HTMLElement>('[data-act]').forEach(b => b.addEventListener('click', ev => sheetAct(b.dataset.act!, ev as MouseEvent, b)));
   setTimeout(() => sheetTxt.clear(), 0); updateSheet(true);
@@ -183,7 +189,11 @@ function sheetAct(a: string, ev: MouseEvent, b: HTMLElement) {
   if (a === 'trophy') return $('#trophy').click();
   if (a === 'hire') { const i = sl.idx; if (s.cash < MINES[i].mgr) return deny(b); s.cash -= MINES[i].mgr; s.mines[i].m = true; celebrate(`${MINES[i].mname} hired!`, ev.clientX, ev.clientY); return openSheet(sheetKey!); }
   if (a === 'dowarp') { if (!G.warpOpen() || G.dmGain() < 1) return deny(b); confirmModal(art('hole'), 'Engage warp?', `Reset this sector for +${fmt(G.dmGain(), 0)} Dark Matter and jump to Sector ${G.sector() + 1}.`, 'WARP', () => { closeSheet(); sfx.warp(); buzz([50, 50, 100, 50, 200]); bv!.warp(() => { G.doWarp(); G.save(); flash(); for (let k = 0; k < 5; k++) setTimeout(() => burst(Math.random() * innerWidth, Math.random() * innerHeight * .6, 40), k * 120); celebrate(`Welcome to Sector ${G.sector()}!`); renderGoal(); }); }); return; }
-  if (a.startsWith('tech:')) { const t = TECH.find(x => x.id === a.slice(5))!; if (s.cash < t.cash || s.res[t.res] < t.amt) return deny(b); s.cash -= t.cash; s.res[t.res] -= t.amt; s.tech.push(t.id); sfx.claim(); celebrate(`${t.name}!`, ev.clientX, ev.clientY); const t0 = tier(sl); if (tier(sl) > t0) bv!.construct('lab'); bv!.puff('lab', '#7affd1'); bv!.puff('m' + Math.max(0, t.tgt), '#ffe98a'); return openSheet(sheetKey!); }
+  if (a.startsWith('tech:')) { const t = TECH.find(x => x.id === a.slice(5))!; if (s.cash < t.cash || s.res[t.res] < t.amt) return deny(b); s.cash -= t.cash; s.res[t.res] -= t.amt; s.tech.push(t.id); sfx.claim(); celebrate(`${t.name}!`, ev.clientX, ev.clientY); bv!.puff('lab', '#7affd1'); bv!.puff('m' + Math.max(0, t.tgt), '#ffe98a'); return openSheet(sheetKey!); }
+  if (a.startsWith('yseg:')) { ySeg = +a.slice(5); sfx.select(); return openSheet(sheetKey!); }
+  if (a.startsWith('ship:')) { const id = a.slice(5), c = G.shipCost(id); if (!G.canAfford(c)) return deny(b); G.pay(c); s.ships[id] = (s.ships[id] || 0) + 1; sfx.build(); buzz([20, 20, 40]); burst(ev.clientX, ev.clientY, 14); bv!.construct('yard'); return; }
+  if (a.startsWith('fu:')) { const id = a.slice(3), u = FLEET_UPG.find(x => x.id === id)!; if (G.fu(id) >= u.max) return; const c = { [u.res]: G.fuCost(id) }; if (!G.canAfford(c)) return deny(b); G.pay(c); s.fupg[id] = G.fu(id) + 1; celebrate(`${u.name} Lv ${s.fupg[id]}`, ev.clientX, ev.clientY); bv!.construct('yard'); return; }
+  if (a === 'expand') { const sh = $('#sheet'); sh.classList.toggle('compact'); sfx.select(); return; }
   if (a.startsWith('go:')) { const [, kind, id] = a.split(':'); const ms = G.launch(kind as 'run' | 'planet', id, 1.4); if (!ms) return deny(b); sfx.launch(); buzz([30, 30, 60]); bv!.launch(Object.values(ms.ships).reduce((x, y) => x + y, 0)); return openSheet(sheetKey!); }
   if (a === 'tog') { s.on[sl.idx] = !s.on[sl.idx]; sfx.tap(); buzz(8); return; }
   if (a === 'buy') {
@@ -192,8 +202,8 @@ function sheetAct(a: string, ev: MouseEvent, b: HTMLElement) {
     else if (sl.kind === 'mach') { const j = sl.idx, k = G.machK(j), c = G.machCostK(j, k); if (s.cash < c) return deny(b); const lb = Math.floor(s.mach[j] / 10), first = !s.mach[j]; s.cash -= c; s.mach[j] += k; sfx.buy(); sfx.clank(); buzz(14); burst(ev.clientX, ev.clientY, 16, 0, RES[MACHINES[j].out].color); if (first) celebrate(MACHINES[j].id === 'fab' ? 'Shipyard unlocked!' : `${MACHINES[j].name} built!`); else if (Math.floor(s.mach[j] / 10) > lb) celebrate(`${MACHINES[j].name} Lv ${s.mach[j]}: output ×2!`); }
     else if (sl.kind === 'hq') { let v = 0; for (const r of RES_ORDER) if (G.sellable(r) >= 1) v += G.sell(r); if (v <= 0) { toast('Nothing spare – your factory needs it all'); return deny(b); } sfx.coin(); buzz(14); popup(ev.clientX, ev.clientY - 20, '+$' + fmt(v)); fly(ev.clientX, ev.clientY, ...center(cashEl), 10, 1, '#ffc94a', () => bump(cashEl)); }
     else if (sl.kind === 'gen') { const k = G.genK(), c = G.genCost(k); if (s.cash < c) return deny(b); s.cash -= c; s.gen += k; sfx.buy(); buzz(14); burst(ev.clientX, ev.clientY, 14, 0, '#ffe066'); }
-    bv?.puff(sl.key); bump(b); if (wasPlot) { bv!.construct(sl.key); sfx.build(); }
-    if (tier(sl) > t0 && !wasPlot) { bv!.construct(sl.key); sfx.build(); const [x, y] = bv!.slotScreen(sl.key); celebrate(`${slotName(sl)} evolved: ${TIER_NAMES[tier(sl)]}!`, x, y); bv!.puff(sl.key, '#ffe98a'); }
+    bv?.puff(sl.key); bump(b); 
+    if (tier(sl) > t0 && !wasPlot) { const [x, y] = bv!.slotScreen(sl.key); celebrate(`${slotName(sl)} evolved: ${TIER_NAMES[tier(sl)]}!`, x, y); bv!.puff(sl.key, '#ffe98a'); }
     openSheet(sheetKey!); spotlight();
   }
 }
@@ -221,7 +231,9 @@ function updateSheet(force = false) {
   if (sl.kind === 'yard' && v === 'built') { const now = G.clock(); const busy = s.missions.map(m => { const d = m.kind === 'run' ? RUNS.find(r => r.id === m.target)! : PLANETS.find(p => p.id === m.target)!; return `<div class="trow busy"><span class="ti">${art(m.kind === 'run' ? d.id : d.id)}</span><span class="tn"><b>${d.name}</b><small>${Math.round(m.chance * 100)}% · ${m.power}⚔</small></span><span class="tc">${fmtT(Math.max(0, (m.end - now) / 1000))}</span></div>`; }).join('');
     const opts = [...RUNS.filter(r => G.idlePower() >= r.need && !s.missions.some(m => m.target === r.id)).slice(-2).map(r => ['run', r] as const), ...PLANETS.filter(p => G.avail(p as never) && !s.conquered.includes(p.id) && !s.missions.some(m => m.target === p.id) && G.idlePower() >= p.need).slice(0, 1).map(p => ['planet', p] as const)];
     const free = s.missions.length < G.docks();
-    sset('#ylist', busy + (free ? opts.map(([k, d]) => `<button class="trow" data-act="go:${k}:${d.id}"><span class="ti">${art(d.id)}</span><span class="tn"><b>${k === 'planet' ? 'Conquer ' : ''}${d.name}</b><small>needs ${d.need}⚔ · ${fmtT(G.missionTime(d.time))}</small></span><span class="tc go">LAUNCH</span></button>`).join('') : '') + (!busy && !opts.length ? '<p class="muted">Build more ships in the Fleet screen.</p>' : '')); bindActs('#ylist'); }
+    if (ySeg === 1) { sset('#ylist', G.shipsAvail().map(sh => { const c = G.shipCost(sh.id); return `<button class="trow" data-act="ship:${sh.id}" ${G.canAfford(c) ? '' : 'disabled'}><span class="ti">${art(sh.id)}</span><span class="tn"><b>${sh.name} <small>×${s.ships[sh.id] || 0}${G.away(sh.id) ? ` · ${G.away(sh.id)} away` : ''}</small></b><small>${sh.power}⚔ power</small></span><span class="tc">${costStr(c)}</span></button>`; }).join('')); bindActs('#ylist'); }
+    else if (ySeg === 2) { sset('#ylist', FLEET_UPG.map(u => { const lv = G.fu(u.id), mx = lv >= u.max, c = { [u.res]: G.fuCost(u.id) }; return `<button class="trow" data-act="fu:${u.id}" ${!mx && G.canAfford(c) ? '' : 'disabled'}><span class="ti">${art(({ engines: 'plasma', armor: 'hull', docks: 'scout' } as Record<string, string>)[u.id])}</span><span class="tn"><b>${u.name} <small>Lv ${lv}/${u.max}</small></b><small>${u.desc}</small></span><span class="tc">${mx ? 'MAX' : costStr(c)}</span></button>`; }).join('')); bindActs('#ylist'); }
+    else sset('#ylist', busy + (free ? opts.map(([k, d]) => `<button class="trow" data-act="go:${k}:${d.id}"><span class="ti">${art(d.id)}</span><span class="tn"><b>${k === 'planet' ? 'Conquer ' : ''}${d.name}</b><small>needs ${d.need}⚔ · ${fmtT(G.missionTime(d.time))}</small></span><span class="tc go">LAUNCH</span></button>`).join('') : '') + (!busy && !opts.length ? '<p class="muted">Build more ships in the Fleet screen.</p>' : '')); bindActs('#ylist'); }
   if (sl.kind === 'gate') { const ok = G.warpOpen() && G.dmGain() >= 1; const wb = $<HTMLButtonElement>('#sheet [data-act="dowarp"]'); if (wb) { sset('[data-act="dowarp"]', ok ? `ENGAGE WARP<b>+${fmt(G.dmGain(), 0)} DM</b>` : `Charging…<b>${Math.floor(Math.min(1, s.life / G.warpNeed()) * 100)}%</b>`); wb.disabled = !ok; } }
   if (sl.kind === 'mach') sset('[data-act="tog"]', s.on[sl.idx] ? '⏸ Pause' : '▶ Resume');
 }
@@ -390,7 +402,7 @@ function confirmModal(icon: string, title: string, txt: string, ok: string, fn: 
   m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('[data-ok]')!.addEventListener('click', () => { m.remove(); fn(); });
 }
 $('#trophy').addEventListener('click', () => { sfx.tap(); const s = st(); const m = modal(`<h2 class="h">🏆 Trophies <small>${s.ach.length}/${ACHS.length}</small></h2><p>Each trophy: <b style="color:var(--mint)">+2% profit</b> forever</p><div class="achs">${ACHS.map(a => `<div class="ach ${s.ach.includes(a.id) ? 'got' : ''}"><i>${s.ach.includes(a.id) ? a.e : '🔒'}</i><b>${a.name}</b><small>${a.desc}</small></div>`).join('')}</div><button class="btn big" data-x>Close</button>`); m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('.sheet')!.classList.add('tall'); });
-function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); sfx.fanfare(); buzz([20, 40, 20, 40]); toast(`🏆 ${a.name} · +2% profit`); bump($('#trophy')); burst(...center($('#trophy')), 24); } }
+function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); if (s.goal < 9) continue; sfx.fanfare(); buzz([20, 40, 20, 40]); toast(`🏆 ${a.name} · +2% profit`); bump($('#trophy')); burst(...center($('#trophy')), 24); } }
 
 // ---------- tabs ----------
 const RENDER: Record<string, () => void> = { base: renderBase, mine: renderMine, fac: renderFac, crew: renderCrew, fleet: renderFleet, warp: renderWarp };
@@ -399,12 +411,11 @@ document.querySelectorAll<HTMLElement>('nav button').forEach(b => b.addEventList
 const muteBtn = $('#mute'); const setMute = () => muteBtn.textContent = st().mute ? '🔇' : '🔊'; setMute();
 muteBtn.addEventListener('click', () => { st().mute = !st().mute; setMute(); sfx.tap(); buzz(8); G.save(); });
 function dots() {
-  const s = st(), d = document.querySelectorAll<HTMLElement>('nav .dot'), nb = document.querySelectorAll<HTMLElement>('nav button');
-  d[2].classList.toggle('show', MACHINES.some((m, j) => G.machUnlocked(j) && !s.mach[j] && s.cash >= m.cost) || TECH.some(t => !s.tech.includes(t.id) && s.cash >= t.cash && s.res[t.res] >= t.amt));
-  d[3].classList.toggle('show', MINES.some((m, i) => !s.mines[i].m && s.mines[i].n && s.cash >= m.mgr));
-  d[4].classList.toggle('show', G.fleetOpen() && s.missions.length < G.docks() && RUNS.some(r => G.idlePower() >= r.need));
-  d[5].classList.toggle('show', G.warpOpen() && G.dmGain() >= Math.max(1, s.dm * 0.5));
-  nb[4].classList.toggle('lockd', !G.fleetOpen()); nb[5].classList.toggle('lockd', !G.warpOpen());
+  const s = st(), dot = (t: string, on: boolean) => document.querySelector(`nav button[data-t="${t}"] .dot`)?.classList.toggle('show', on);
+  dot('fac', MACHINES.some((mm, j) => G.machUnlocked(j) && !s.mach[j] && s.cash >= mm.cost));
+  dot('fleet', false);
+  dot('base', G.fleetOpen() && s.missions.length < G.docks() && RUNS.some(r => G.idlePower() >= r.need) && tab !== 'base');
+  document.querySelector('nav button[data-t="fleet"]')?.classList.toggle('lockd', !G.fleetOpen());
   $('#dmPill').style.display = s.dm > 0 || s.warps > 0 ? '' : 'none';
 }
 
@@ -429,7 +440,7 @@ function frame(now: number) {
   if (now - lastSlow > 600) { lastSlow = now; if (acc > 0 && tab === 'mine' && G.perSec() > 0) { const r = cashEl.getBoundingClientRect(); popup(r.right + 14, r.top + 22, '+$' + fmt(acc), '#5cf2ff'); } acc = 0; }
   // header
   setT(cashEl, '$' + fmt(s.cash));
-  setT(rateEl, G.perSec() > 0 ? `+$${fmt(G.perSec())}/s` : !s.taps ? 'Tap a mine to start' : s.life < 500 ? 'Tap mines to earn' : 'Hire foremen in Crew to earn while idle');
+  setT(rateEl, G.perSec() > 0 ? `+$${fmt(G.perSec())}/s` : !s.taps ? 'Tap a mine to start' : s.life < 500 ? 'Tap mines to earn' : 'Hire a foreman on a mine to automate it');
   setT($('#dm'), fmt(s.dm, 0));
   RES_ORDER.forEach(r => { shown[r] += (s.res[r] - shown[r]) * Math.min(1, dt * 10); const el = resEl(r); setT($('span', el), fmt(shown[r])); el.classList.toggle('hide', s.res[r] < 0.5 && s.made[r] === 0 && !MINES.some((m, i) => m.res === r && s.mines[i].n)); });
   if (tab === 'base' && bv) { bv.draw(dt); updateSheet(); }
@@ -437,11 +448,43 @@ function frame(now: number) {
   if (now - tickSlow > 400) {
     const span = (now - tickSlow) / 1000; tickSlow = now;
     RES_ORDER.forEach(r => { const f = (s.res[r] - lastRes[r]) / span; flow[r] = flow[r] * 0.6 + f * 0.4; lastRes[r] = s.res[r]; });
-    dots(); missionsTick(); checkAch(); updateGoal(); if (tab === 'fleet') updateFleet();
+    dots(); missionsTick(); checkAch(); disclose(); explain(); updateGoal(); if (tab === 'fleet') updateFleet();
     if (tab === 'crew') main.querySelectorAll<HTMLButtonElement>('[data-m]').forEach(b => { const i = +b.dataset.m!; b.disabled = s.cash < MINES[i].mgr || !s.mines[i].n; b.classList.toggle('afford', !b.disabled); });
   }
   stepFx(dt, now);
   requestAnimationFrame(frame);
+}
+
+// ---------- progressive disclosure + Commander ----------
+const seen = (id: string) => (st().seen ||= []).includes(id);
+const mark = (id: string) => { if (!seen(id)) st().seen.push(id); };
+function intro(id: string, beats: (string | { t: string; h?: string })[], focus?: string) { if (seen(id)) return; mark(id); if (focus && bv && tab === 'base') bv.focus(focus); say(id, beats); }
+function disclose() {
+  const s = st();
+  app.classList.toggle('nonav', s.goal < 9 && !s.warps);
+  $('#trophy').style.visibility = s.ach.length && s.goal >= 9 ? '' : 'hidden';
+  $('#res').classList.toggle('hide', s.goal < 1 && !s.warps);
+}
+function explain() {
+  const s = st(); if (talking()) return;
+  if (s.goal >= 2 || s.warps) intro('factory', [{ h: 'REFINE', t: 'Raw ore is cheap. A <b>Smelter</b> turns it into <b>ingots</b> – worth far more. Conveyors carry the ore over by themselves.' }], 'f0');
+  if (s.mach[0] && G.powerDemand() >= G.powerSupply() * .75) intro('power', [{ h: 'POWER', t: 'Every factory draws power. When buildings flash <b>⚡</b>, upgrade the <b>Fusion Generator</b>.' }], 'gen');
+  if (s.goal >= 4 || s.tech.length) intro('lab', [{ h: 'RESEARCH', t: 'The <b>Lab</b> trades cash and goods for permanent profit boosts. Spend ingots here!' }], 'lab');
+  if (s.goal >= 7) intro('export', [{ h: 'EXPORT', t: 'Got spare goods? Export them at <b>HQ</b>. I never sell what your factory still needs.' }], 'hq');
+  if (s.goal >= 8) intro('foreman', [{ h: 'AUTOMATE', t: 'Tired of tapping? Hire a <b>foreman</b> on any mine and it runs forever – even while you are away.' }], 'm0');
+  if (s.mines.some(x => x.n >= 25)) intro('tiers', [{ t: 'Look at that! Buildings <b>evolve</b> at milestone levels: 25, 100, 300… Bigger, shinier, faster.' }]);
+  if (G.fleetOpen()) intro('fleet', [{ h: 'FLEET', t: 'The <b>Shipyard</b> is online! Build ships, fly salvage runs for goods, and conquer planets for <b>permanent</b> profit bonuses.' }], 'yard');
+  if (G.warpOpen()) intro('warp', [{ h: 'WARP', t: 'The <b>Warp Gate</b> is charged. Warping resets this sector but pays <b>Dark Matter</b> – a permanent multiplier on everything.' }], 'gate');
+}
+function storyIntro() {
+  if (seen('intro') || st().life > 0) { mark('intro'); return; }
+  mark('intro');
+  say('intro', [
+    { t: 'Commander! Welcome to <b>Void Reigen</b>. This lonely rock is ours now – let’s turn it into an empire.' },
+    { h: '① MINE', t: '<b>Tap</b> your drill to dig ore. Every load becomes cash.' },
+    { h: '② REFINE · ③ UPGRADE', t: 'Factories turn ore into pricier goods. Reinvest to <b>level up</b> buildings – they evolve as they grow.' },
+    { h: '④ AUTOMATE', t: 'Hire foremen and your base runs itself. Then: ships, planets… the whole sector. Tap the drill to begin!' },
+  ], { skip: true, done: () => bv?.focus('m0') });
 }
 
 // ---------- offline ----------
@@ -456,7 +499,7 @@ function offline() {
   $('#col', m).addEventListener('click', ev => { m.remove(); sfx.fanfare(); buzz([30, 40, 80]); fly(ev.clientX, ev.clientY, ...center(cashEl), 24, 1, '#ffc94a', () => bump(cashEl)); burst(ev.clientX, ev.clientY, 30); G.save(); });
 }
 
-setTab('base'); offline(); requestAnimationFrame(frame);
+setTab('base'); disclose(); offline(); setTimeout(storyIntro, 600); requestAnimationFrame(frame);
 setInterval(G.save, 5000);
 addEventListener('visibilitychange', () => { if (document.hidden) G.save(); else { prev = performance.now(); offline(); } });
 addEventListener('pagehide', G.save);

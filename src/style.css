@@ -264,3 +264,26 @@ main.basemode{padding:0;overflow:hidden}
 .trow .tc{display:flex;flex-direction:column;align-items:flex-end;font:700 14px Fredoka;color:#ffd23f}.trow .tc small{color:#cfc6ff;font-size:11px}.trow .tc svg{width:12px;height:12px}
 .trow .tc.go{background:#5cff9d;color:#120a24;padding:6px 10px;border-radius:10px;border:2px solid #120a24}
 .muted{color:#a99be0;font:600 13px Nunito;text-align:center;margin:4px 0}
+/* ---------- Commander ---------- */
+.cmdr{position:fixed;left:10px;right:10px;bottom:calc(var(--sb) + 14px);z-index:70;display:flex;align-items:flex-end;gap:6px;transform:translateY(140%);transition:transform .35s cubic-bezier(.3,1.4,.5,1);pointer-events:none}
+.cmdr.open{transform:none;pointer-events:auto}
+.cmdr.bump .cbub{animation:pop .3s cubic-bezier(.3,1.6,.5,1)}
+.cport{width:84px;height:84px;flex:none;filter:drop-shadow(0 4px 0 #120a24);animation:bob 2.4s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-4px)}}
+.cbub{position:relative;flex:1;background:#fff;color:#24163a;border:3px solid #120a24;border-radius:20px 20px 20px 6px;padding:10px 14px 10px;box-shadow:0 5px 0 #120a24}
+.cname{position:absolute;top:-13px;left:12px;background:#ffd23f;border:2.5px solid #120a24;border-radius:10px;padding:1px 10px;font:700 11px Fredoka;letter-spacing:1px}
+.chead{font:700 13px Fredoka;color:#7a4dff;letter-spacing:.5px;margin-top:4px}
+.cbub p{margin:4px 0 6px;font:600 15px/1.35 Nunito;min-height:42px}.cbub p b{color:#e0457b}
+.cfoot{display:flex;justify-content:space-between;align-items:center;font:700 14px Fredoka;color:#7a4dff}
+.cfoot button{background:none;border:none;color:#9a8fc4;font:600 12px Nunito;text-decoration:underline;padding:4px 0}
+.cdots{position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);display:flex;gap:4px}.cdots i{width:6px;height:6px;border-radius:3px;background:#fff6}.cdots i.on{background:#ffd23f;width:14px}
+#app.nonav nav{transform:translateY(160%);pointer-events:none}
+nav{transition:transform .4s cubic-bezier(.3,1.4,.5,1)}
+#res.hide{opacity:0;pointer-events:none}
+#res .rc{animation:pop .4s cubic-bezier(.3,1.6,.5,1) both}
+#app.nonav .bsheet{bottom:calc(var(--sb) + 14px)}
+.bsheet.compact .sstats,.bsheet.compact .row2,.bsheet.compact .slist,.bsheet.compact .seg,.bsheet.compact [data-act="hire"]:not(.coach),.bsheet.compact .btn.ghost{display:none}
+.bsheet.compact .grab{width:56px;background:#ffd23f99}
+.bsheet .grab{cursor:pointer;height:6px}
+.seg{display:flex;background:#0004;border-radius:12px;padding:3px;gap:3px}.seg button{flex:1;border:none;background:none;color:#b9adf0;font:600 13px Fredoka;padding:6px;border-radius:9px}.seg button.on{background:#ffd23f;color:#120a24}
+.trow.dimr{opacity:.5}
