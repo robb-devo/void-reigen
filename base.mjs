@@ -1,0 +1,19 @@
+import { chromium } from 'playwright';
+const URL='http://localhost:4173/', OUT='shots'; const errs=[];
+const b=await chromium.launch({args:['--use-gl=swiftshader','--enable-unsafe-swiftshader']});
+async function page(seed){ const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+  if(seed) await ctx.addInitScript(s=>{if(!sessionStorage.seed){sessionStorage.seed=1;localStorage.setItem('starforge.v2',s)}},JSON.stringify(seed));
+  const p=await ctx.newPage(); p.on('console',m=>m.type()==='error'&&errs.push(m.text())); p.on('pageerror',e=>errs.push(e.message)); await p.goto(URL); await p.waitForTimeout(1200); await p.$eval('#col',e=>e.click()).catch(()=>{}); await p.waitForTimeout(300); return p; }
+const F={force:true}, z={ore:0,quartz:0,ingot:0,glass:0,part:0,alloy:0,chip:0,hull:0,exotic:0};
+const M=(a)=>a.map(([n,m])=>({n,p:0,m:!!m,run:!!m}));
+let p=await page(); await p.screenshot({path:`${OUT}/b01-fresh.png`});
+const early={v:2,cash:400,life:900,total:0,dm:0,warps:0,mines:M([[18,0],[3,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]]),tech:['t0_0'],res:{...z,ore:40,quartz:12},made:{...z,ingot:30},mach:[4,1,0,0,0,0,0],on:Array(7).fill(true),gen:3,ships:{},conquered:[],missions:[],fupg:{},uid:1,ach:[],goal:8,sold:1,lost:0,wins:0,w:Array(7).fill(50),auto:false,taps:50,played:600,last:Date.now(),mult:0,mute:true};
+p=await page(early); await p.waitForTimeout(1500); await p.screenshot({path:`${OUT}/b02-early.png`});
+const mid={...early,cash:3.2e7,life:9e7,mines:M([[160,1],[90,1],[64,1],[40,1],[12,0],[0,0],[0,0],[0,0],[0,0]]),res:{...z,ore:52000,quartz:31000,ingot:4100,glass:2600,part:820,alloy:240,chip:3},mach:[38,30,14,6,1,0,0],gen:22,goal:20};
+p=await page(mid); await p.waitForTimeout(2000); console.log(await p.evaluate(()=>{const v=window.bv; const d=v.c.getImageData(350,600,1,1).data; return JSON.stringify({px:[...d],ga:v.c.globalAlpha,tf:v.c.getTransform().a,ox:v.ox,oy:v.oy,z:v.z,w:v.w,h:v.h,t:v.t})})); await p.screenshot({path:`${OUT}/b03-mid.png`});
+{ const [x,y]=await p.evaluate(()=>window.bv.slotScreen('f0')); await p.mouse.click(x,y+30); } await p.waitForTimeout(700); await p.screenshot({path:`${OUT}/b04-sheet.png`});
+const late={...mid,cash:4e13,life:2e14,dm:108,warps:2,mines:M([[420,1],[300,1],[260,1],[220,1],[180,1],[150,1],[120,1],[80,1],[12,0]]),res:{...z,ore:9e9,quartz:5e9,ingot:2e8,glass:1e8,part:3e7,alloy:8e6,chip:4e5,hull:2e4,exotic:120},mach:[120,110,90,70,40,20,6],gen:180,ships:{scout:40,barge:30},conquered:['p1','p2'],goal:40};
+p=await page(late); await p.waitForTimeout(2000); await p.screenshot({path:`${OUT}/b05-late.png`});
+const fps=await p.evaluate(()=>new Promise(r=>{let n=0;const t0=performance.now();const f=()=>{n++; if(performance.now()-t0<3000) requestAnimationFrame(f); else r(n/3)}; requestAnimationFrame(f);}));
+await p.evaluate(()=>{const c=document.querySelector('#base'); c.dispatchEvent(new WheelEvent('wheel',{deltaY:-400,clientX:195,clientY:400,bubbles:true}));}); await p.waitForTimeout(400); await p.screenshot({path:`${OUT}/b06-late-zoom.png`});
+console.log('fps',fps.toFixed(1),'errors',JSON.stringify(errs)); await b.close();
