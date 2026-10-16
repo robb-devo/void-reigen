@@ -5,7 +5,9 @@ const mk = (id: string) => (id === 'hull' ? 'hullworks' : id);
 import * as G from './game/state';
 import { GOALS, goalReward, ACHS } from './game/progress';
 import { art, ri } from './game/art';
-import { BaseView, SLOTS, Slot, level, tier, nextTierAt, visible, cost as slotCost } from './base/view';
+import { BaseView, SLOTS, Slot, level, tier, nextTierAt, visible, cost as slotCost, slotByKey } from './base/view';
+import { setBusy } from './base/render';
+import { SKILLS, BRANCHES, LEVEL_GATE, XP } from './game/skills';
 import { TIER_NAMES } from './base/render';
 import { say, talking } from './commander';
 import { sfx, buzz, initFx, stepFx, burst, fly, popup, toast, rocket, flash } from './game/fx';
@@ -28,8 +30,8 @@ const costStr = (c: Partial<Record<Res, number>>) => (Object.keys(c) as Res[]).m
 const $ = <T extends HTMLElement = HTMLElement>(s: string, r: ParentNode = document) => r.querySelector(s) as T;
 const app = $('#app');
 const TABS: [string, string, string][] = [['base', '🛰️', 'Base'], ['mine', '⛏️', 'Mines'], ['fac', '🏭', 'Factory'], ['crew', '👨‍🚀', 'Crew'], ['fleet', '🚀', 'Fleet'], ['warp', '🌀', 'Warp']];
-app.innerHTML = `<canvas id="stars"></canvas>
-<header><div class="toprow"><button class="iconbtn" id="trophy">🏆<i class="dot" id="tdot"></i></button><div class="title h">VOID REIGEN<span id="dmPill">🌀 <b id="dm">0</b></span></div><button class="iconbtn" id="mute"></button></div>
+app.innerHTML = `<button id="back" class="btn">‹ Base</button><canvas id="stars"></canvas>
+<button id="rockbtn" class="rockbtn"></button><header><div class="toprow"><div class="tl"><button class="cmdbadge" id="cmdbadge"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#2c2050" stroke-width="5"/><circle id="cmdring" cx="18" cy="18" r="15" fill="none" stroke="#ffd23f" stroke-width="5" stroke-linecap="round" stroke-dasharray="94.2" stroke-dashoffset="94.2" transform="rotate(-90 18 18)"/></svg><b id="cmdlv">1</b><i class="dot" id="cdot"></i></button><button class="iconbtn" id="trophy"><svg viewBox="0 0 24 24"><path d="M7 3h10v4a5 5 0 0 1-10 0z" fill="#ffd23f" stroke="#24163a" stroke-width="2"/><path d="M7 5H4a3 3 0 0 0 3 4M17 5h3a3 3 0 0 1-3 4" fill="none" stroke="#24163a" stroke-width="2"/><path d="M10 12h4v4h-4zM8 17h8v3H8z" fill="#ff9f43" stroke="#24163a" stroke-width="2"/></svg><i class="dot" id="tdot"></i></button></div><div class="title h">VOID REIGEN<span id="dmPill">${art('hole')}<b id="dm">0</b></span></div><div class="tl r"><button class="iconbtn" id="mute"></button></div></div>
 <div id="cash" class="h">$0</div><div id="rate"></div>
 <div class="res" id="res">${RES_ORDER.map(r => `<div class="rc" data-r="${r}" style="--c:${RES[r].color}">${ri(r)}<span>0</span></div>`).join('')}</div></header>
 <div id="goal"></div>
@@ -59,9 +61,10 @@ function renderGoal() {
   const g = GOALS[s.goal]; goalIdx = s.goal;
   if (!g) { goalEl.innerHTML = ''; return; }
   const done = g.done();
-  goalEl.innerHTML = `<div class="goal ${done ? 'ready' : ''}"><div class="gi">${done ? '🎁' : '🎯'}</div><div class="gm"><small>GOAL ${s.goal + 1}/${GOALS.length}</small><b>${g.text}</b>${g.prog && !done ? `<div class="gp"><i style="width:${Math.min(100, g.prog()[0] / g.prog()[1] * 100)}%"></i></div>` : ''}</div>${done ? `<button class="btn gold" id="claim">${g.reward ? 'Claim $' + fmt(goalReward(g)) : 'Next'}</button>` : g.tab !== tab ? `<button class="btn ghost go" data-go="${g.tab}">Go ›</button>` : ''}</div>`;
-  $('#claim')?.addEventListener('click', ev => { const r = goalReward(g); G.earn(r); s.goal++; sfx.claim(); buzz([20, 30, 50]); burst(ev.clientX, ev.clientY, 30); if (r) fly(ev.clientX, ev.clientY, ...center(cashEl), 12, 1, '#ffc94a', () => bump(cashEl)); renderGoal(); spotlight(); });
+  goalEl.innerHTML = `<div class="goal ${done ? 'ready' : ''}"><div class="gi">${done ? `<svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="12" rx="2" fill="#b06bff" stroke="#24163a" stroke-width="2"/><rect x="2" y="6" width="20" height="5" rx="1.5" fill="#c48bff" stroke="#24163a" stroke-width="2"/><path d="M12 6v15" stroke="#ffd23f" stroke-width="3"/><path d="M12 6c-2-4-6-3-5 0M12 6c2-4 6-3 5 0" fill="none" stroke="#ffd23f" stroke-width="2"/></svg>` : `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ff5b5b" stroke="#24163a" stroke-width="2"/><circle cx="12" cy="12" r="5.5" fill="#fff" stroke="#24163a" stroke-width="1.5"/><circle cx="12" cy="12" r="2.5" fill="#ff5b5b"/></svg>`}</div><div class="gm"><small>GOAL ${s.goal + 1}/${GOALS.length}</small><b>${g.text}</b>${g.prog && !done ? `<div class="gp"><i style="width:${Math.min(100, g.prog()[0] / g.prog()[1] * 100)}%"></i></div>` : ''}</div>${done ? `<button class="btn gold" id="claim">${g.reward ? 'Claim $' + fmt(goalReward(g)) : 'Next'}</button>` : g.tab !== tab ? `<button class="btn ghost go" data-go="${g.tab}">Go ›</button>` : ''}</div>`;
+  $('#claim')?.addEventListener('click', ev => { const r = goalReward(g); G.earn(r); xp(XP.goal(s.goal), ev.clientX, ev.clientY); s.goal++; sfx.claim(); buzz([20, 30, 50]); burst(ev.clientX, ev.clientY, 30); if (r) fly(ev.clientX, ev.clientY, ...center(cashEl), 12, 1, '#ffc94a', () => bump(cashEl)); renderGoal(); spotlight(); });
   $('[data-go]', goalEl)?.addEventListener('click', () => { sfx.tap(); setTab(g.tab); });
+  goalEl.querySelector('.gm')?.addEventListener('click', () => { if (tab === 'base' && bv?.guide) { sfx.select(); bv.focus(bv.guide); } });
 }
 let goalKey = '';
 function updateGoal() {
@@ -69,12 +72,12 @@ function updateGoal() {
   if (g && g.prog && !done) { const pi = goalEl.querySelector<HTMLElement>('.gp i'); if (pi) pi.style.width = Math.min(100, g.prog()[0] / g.prog()[1] * 100) + '%'; }
   if (key !== goalKey || goalIdx !== st().goal) { const wasDone = goalKey.split('|')[1] === 'false' && g?.done(); goalKey = key; renderGoal(); spotlight(); if (wasDone) { sfx.fanfare(); buzz(30); bump(goalEl); } }
 }
-let guided = -1;
+let guided = -1; let wantGuide: string | null = null;
 function spotlight() {
   document.querySelectorAll('.coach').forEach(e => e.classList.remove('coach'));
-  const g = GOALS[st().goal]; if (bv) bv.guide = null;
+  const g = GOALS[st().goal]; if (bv) bv.guide = null; wantGuide = null;
   if (!g || g.done() || g.tab !== tab || !g.focus) return;
-  if (g.focus.startsWith('@')) { if (bv) { const k = g.focus.slice(1); bv.guide = k; if (guided !== st().goal) { guided = st().goal; bv.focus(k); } } return; }
+  if (g.focus.startsWith('@')) { if (bv) { const k = g.focus.slice(1); bv.guide = k; wantGuide = k; if (guided !== st().goal) { guided = st().goal; if (st().warps === 0 && st().goal < 14 && k !== 'm0') bv.focus(k, bv.z, .45, 'm0'); else bv.focus(k); } } return; }
   if (st().goal > 12) return;
   document.querySelector(g.focus)?.classList.add('coach');
 }
@@ -142,6 +145,7 @@ let bv: BaseView | null = null; let bwrap: HTMLElement | null = null; let sheetK
 function renderBase() {
   if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); bv.z = Math.max(.62, Math.min(.95, 1 - SLOTS.filter(x => visible(x) === 'built').length * .03)); bv.onTap = baseTap; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`);
     bv.onConstruct = () => sfx.build();
+    bv.onTravel = r => { sfx.land(); if (r === 1) setTimeout(() => intro('rock2', [{ h: 'FLEET ROCK', t: 'Welcome to the <b>fleet asteroid</b>. The <b>Shipyard</b> builds ships, the <b>Hangar</b> stores them, <b>Docks</b> launch missions.' }, { t: '<b>Defenses</b> and the <b>Fuel Depot</b> upgrade your fleet. Goods from the mining rock pay for all of it.' }], 'yard'), 900); };
     const sh = $('#sheet'); let y0 = -1; sh.addEventListener('pointerdown', e => { y0 = e.clientY; }); sh.addEventListener('pointerup', e => { if (y0 < 0) return; const dy = e.clientY - y0; y0 = -1; if (dy < -30) { sh.classList.remove('compact'); sfx.select(); } else if (dy > 40) { if (sh.classList.contains('compact')) closeSheet(); else sh.classList.add('compact'); sfx.select(); } }); }
   main.innerHTML = ''; main.appendChild(bwrap); requestAnimationFrame(() => bv!.resize());
 }
@@ -154,47 +158,55 @@ function baseEvent(i: number, v: number, ct: number, now: number) {
 function baseTap(sl: Slot | null, x: number, y: number) {
   if (!sl) { closeSheet(); return; }
   $('#bhint')?.remove();
+  if (sl.kind === 'lift' && visible(sl) === 'built') { closeSheet(); sfx.launch(); buzz([20, 30]); bv!.travel(1); return; }
+  if (sl.kind === 'mine' && G.sk('mHand') && visible(sl) === 'built') { const b = st().mines[sl.idx]; if (b.run && !b.m) { b.p = Math.min(.999, b.p + .35); burst(x, y, 6, 0, '#ffd23f'); } }
   if (sl.kind === 'mine' && visible(sl) === 'built') { const b = st().mines[sl.idx]; st().taps++; if (!b.run && !b.m) { b.run = true; sfx.drill(); buzz(10); burst(x, y, 10, 0, `hsl(${MINES[sl.idx].hue} 100% 65%)`); } else sfx.tap(); }
   else sfx.select();
   openSheet(sl.key);
 }
-const slotOf = (k: string) => SLOTS.find(s => s.key === k)!;
+const slotOf = (k: string) => slotByKey(k)!;
+const AUX: Record<string, number> = { hangar: 1, dock: 0, turret: 2, fuel: 2 };
 function closeSheet() { sheetKey = null; if (bv) bv.sel = null; $('#sheet')?.classList.remove('open'); }
-function slotArt(sl: Slot) { return sl.kind === 'mine' ? art(MINES[sl.idx].id) : sl.kind === 'mach' ? art(mk(MACHINES[sl.idx].id)) : sl.kind === 'gen' ? art('gen') : sl.kind === 'yard' ? art('cruiser') : sl.kind === 'gate' ? art('hole') : sl.kind === 'lab' ? art('quantum') : art('p1'); }
-function slotName(sl: Slot) { return sl.kind === 'mine' ? MINES[sl.idx].name : sl.kind === 'mach' ? MACHINES[sl.idx].name : sl.kind === 'gen' ? GEN.name : sl.kind === 'yard' ? 'Shipyard' : sl.kind === 'gate' ? 'Warp Gate' : sl.kind === 'lab' ? 'Research Lab' : 'Command HQ'; }
-function openSheet(key: string) {
+function slotArt(sl: Slot) { return sl.kind === 'mine' ? art(MINES[sl.idx].id) : sl.kind === 'mach' ? art(mk(MACHINES[sl.idx].id)) : sl.kind === 'gen' ? art('gen') : sl.kind === 'yard' ? art('cruiser') : sl.kind === 'lift' ? art('cruiser') : sl.kind === 'gate' ? art('hole') : sl.kind === 'lab' ? art('quantum') : art('p1'); }
+function slotName(sl: Slot) { return sl.kind === 'mine' ? MINES[sl.idx].name : sl.kind === 'mach' ? MACHINES[sl.idx].name : sl.kind === 'gen' ? GEN.name : sl.kind === 'yard' ? 'Shipyard' : sl.kind === 'lift' ? 'Cargo Lift' : sl.kind === 'gate' ? 'Warp Gate' : sl.kind === 'lab' ? 'Research Lab' : 'Command HQ'; }
+function openSheet(key: string): void {
+  const k0 = slotOf(key); if (k0.kind in AUX) { if (sheetKey !== 'yard' || bv?.sel !== key) ySeg = AUX[k0.kind]; openSheet('yard'); if (bv) bv.sel = key; return; } if (k0.kind === 'lift') key = 'yard';
   const sh = $('#sheet'), sl = slotOf(key); const newKey = sheetKey !== key; sheetKey = key; if (bv) bv.sel = key;
   const v = visible(sl), s = st();
   let actions = '';
   if (sl.kind === 'mine') actions = `<button class="btn gold big" data-act="buy"></button>${s.mines[sl.idx].n && !s.mines[sl.idx].m ? `<button class="btn big" data-act="hire"></button>` : ''}<div class="row2">${multBtn()}<button class="btn ghost" data-act="list">All mines ›</button></div>`;
-  else if (sl.kind === 'mach') actions = `<button class="btn gold big" data-act="buy"></button><div class="row2">${multBtn()}${s.mach[sl.idx] ? `<button class="btn ghost" data-act="tog"></button>` : ''}<button class="btn ghost" data-act="fac">Chain ›</button></div>`;
+  else if (sl.kind === 'mach') actions = `<button class="btn gold big" data-act="buy"></button>${s.mach[sl.idx] && G.sharedInputs(sl.idx).length ? `<div class="split"><span>Priority for shared ${G.sharedInputs(sl.idx).map(r => ri(r)).join('')}</span><input type="range" min="1" max="100" value="${s.w[sl.idx]}" data-sw="${sl.idx}"><b>${s.w[sl.idx]}</b></div>` : ''}<div class="row2">${multBtn()}${s.mach[sl.idx] ? `<button class="btn ghost" data-act="tog"></button>` : ''}</div>`;
   else if (sl.kind === 'gen') actions = `<button class="btn gold big" data-act="buy"></button><div class="row2">${multBtn()}<button class="btn ghost" data-act="fac">Factory ›</button></div>`;
-  else if (sl.kind === 'yard') actions = v === 'built' ? `<div class="seg">${['Missions', 'Ships', 'Upgrades'].map((n, k) => `<button data-act="yseg:${k}" class="${ySeg === k ? 'on' : ''}">${n}</button>`).join('')}</div><div class="slist" id="ylist"></div><button class="btn ghost" data-act="fleet">Manual crew picks ›</button>` : `<button class="btn big" disabled>Build a Chip Fab to unlock</button>`;
+  else if (sl.kind === 'yard') actions = v === 'built' ? `<div class="seg">${['Missions', 'Ships', 'Upgrades'].map((n, k) => `<button data-act="yseg:${k}" class="${ySeg === k ? 'on' : ''}">${n}</button>`).join('')}</div><div class="slist" id="ylist"></div>` : `<button class="btn big" disabled>Build a Chip Fab to unlock</button>`;
   else if (sl.kind === 'gate') actions = `<button class="btn gold big" data-act="dowarp"></button><div class="slist">${PERKS.map(p => `<div class="trow ${s.warps >= p.warps ? '' : 'dimr'}"><span class="ti">${art(p.art)}</span><span class="tn"><b>${p.name}</b><small>${p.desc}</small></span><span class="tc">${s.warps >= p.warps ? '✓' : 'Warp ' + p.warps}</span></div>`).join('')}</div>`;
   else if (sl.kind === 'lab') actions = `<div class="slist" id="llist"></div>`;
-  else actions = `<button class="btn gold big" data-act="buy"></button><button class="btn big" data-act="fac">Market &amp; Research ›</button><div class="row2"><button class="btn ghost" data-act="list">All mines ›</button><button class="btn ghost" data-act="crew">Crew ›</button></div><div class="row2"><button class="btn ghost" data-act="trophy">Trophies ›</button><button class="btn ghost" data-act="warp">Stats &amp; settings ›</button></div>`;
+  else actions = `<button class="btn gold big" data-act="buy"></button><div class="mkt" id="mkt"></div>${G.autoOK() ? `<button class="btn ghost" data-act="auto">Auto-export: ${s.auto ? 'ON' : 'OFF'}</button>` : ''}<div class="row2"><button class="btn ghost" data-act="list">All mines ›</button><button class="btn ghost" data-act="crew">Crew ›</button></div><div class="row2"><button class="btn ghost" data-act="trophy">Trophies ›</button><button class="btn ghost" data-act="warp">Stats &amp; settings ›</button></div>`;
   const compactable = sl.kind === 'mine' || sl.kind === 'mach' || sl.kind === 'gen';
   sh.innerHTML = `<div class="grab" data-act="expand"></div><button class="x" data-act="close">✕</button><div class="shead"><div class="sart">${slotArt(sl)}</div><div class="smid"><h3 class="h">${slotName(sl)}</h3><div class="slv"></div><div class="stier"></div></div></div><div class="sstats"></div><div class="sact">${actions}</div>`;
   if (newKey) sh.classList.toggle('compact', compactable); else if (!compactable) sh.classList.remove('compact');
   sh.classList.add('open'); sh.classList.remove('spop'); void sh.offsetWidth; sh.classList.add('spop');
   sh.querySelectorAll<HTMLElement>('[data-act]').forEach(b => b.addEventListener('click', ev => sheetAct(b.dataset.act!, ev as MouseEvent, b)));
+  sh.querySelector<HTMLInputElement>('[data-sw]')?.addEventListener('input', e => { const inp = e.target as HTMLInputElement, j = +inp.dataset.sw!; st().w[j] = +inp.value; (inp.nextElementSibling as HTMLElement).textContent = inp.value; if (+inp.value % 10 === 0) { sfx.clank(); buzz(4); } });
+  sh.querySelector<HTMLInputElement>('[data-sw]')?.addEventListener('pointerdown', e => e.stopPropagation());
   setTimeout(() => sheetTxt.clear(), 0); updateSheet(true);
   if (newKey && bv) { const top = sh.parentElement!.getBoundingClientRect().bottom - (innerHeight - sh.getBoundingClientRect().bottom + (sh.style.transform ? 0 : 0)) - sh.offsetHeight; const top2 = innerHeight - parseFloat(getComputedStyle(sh).bottom) - sh.offsetHeight; const y = bv.slotScreen(key)[1] + 40; void top; if (y > top2 - 10) bv.focus(key, bv.z, Math.max(.2, (top2 - 90) / innerHeight)); }
 }
 const sheetTxt = new Map<string, string>();
 function sheetAct(a: string, ev: MouseEvent, b: HTMLElement) {
-  const sl = slotOf(sheetKey!), s = st();
+  if (!sheetKey) return; const sl = slotOf(sheetKey), s = st(); if (!sl) return;
   if (a === 'close') { sfx.tap(); return closeSheet(); }
   if (a === 'list' || a === 'fac' || a === 'crew' || a === 'fleet' || a === 'warp') { sfx.tap(); return setTab(a === 'list' ? 'mine' : a); }
   if (a === 'trophy') return $('#trophy').click();
   if (a === 'hire') { const i = sl.idx; if (s.cash < MINES[i].mgr) return deny(b); s.cash -= MINES[i].mgr; s.mines[i].m = true; celebrate(`${MINES[i].mname} hired!`, ev.clientX, ev.clientY); return openSheet(sheetKey!); }
-  if (a === 'dowarp') { if (!G.warpOpen() || G.dmGain() < 1) return deny(b); confirmModal(art('hole'), 'Engage warp?', `Reset this sector for +${fmt(G.dmGain(), 0)} Dark Matter and jump to Sector ${G.sector() + 1}.`, 'WARP', () => { closeSheet(); sfx.warp(); buzz([50, 50, 100, 50, 200]); bv!.warp(() => { G.doWarp(); G.save(); flash(); for (let k = 0; k < 5; k++) setTimeout(() => burst(Math.random() * innerWidth, Math.random() * innerHeight * .6, 40), k * 120); celebrate(`Welcome to Sector ${G.sector()}!`); renderGoal(); }); }); return; }
+  if (a === 'dowarp') { if (!G.warpOpen() || G.dmGain() < 1) return deny(b); confirmModal(art('hole'), 'Engage warp?', `Reset this sector for +${fmt(G.dmGain(), 0)} Dark Matter and jump to Sector ${G.sector() + 1}.`, 'WARP', () => { closeSheet(); sfx.warp(); buzz([50, 50, 100, 50, 200]); bv!.warp(() => { G.gainXp(XP.warp); G.doWarp(); G.save(); flash(); for (let k = 0; k < 5; k++) setTimeout(() => burst(Math.random() * innerWidth, Math.random() * innerHeight * .6, 40), k * 120); celebrate(`Welcome to Sector ${G.sector()}!`); renderGoal(); }); }); return; }
   if (a.startsWith('tech:')) { const t = TECH.find(x => x.id === a.slice(5))!; if (s.cash < t.cash || s.res[t.res] < t.amt) return deny(b); s.cash -= t.cash; s.res[t.res] -= t.amt; s.tech.push(t.id); sfx.claim(); celebrate(`${t.name}!`, ev.clientX, ev.clientY); bv!.puff('lab', '#7affd1'); bv!.puff('m' + Math.max(0, t.tgt), '#ffe98a'); return openSheet(sheetKey!); }
   if (a.startsWith('yseg:')) { ySeg = +a.slice(5); sfx.select(); return openSheet(sheetKey!); }
   if (a.startsWith('ship:')) { const id = a.slice(5), c = G.shipCost(id); if (!G.canAfford(c)) return deny(b); G.pay(c); s.ships[id] = (s.ships[id] || 0) + 1; sfx.build(); buzz([20, 20, 40]); burst(ev.clientX, ev.clientY, 14); bv!.construct('yard'); return; }
   if (a.startsWith('fu:')) { const id = a.slice(3), u = FLEET_UPG.find(x => x.id === id)!; if (G.fu(id) >= u.max) return; const c = { [u.res]: G.fuCost(id) }; if (!G.canAfford(c)) return deny(b); G.pay(c); s.fupg[id] = G.fu(id) + 1; celebrate(`${u.name} Lv ${s.fupg[id]}`, ev.clientX, ev.clientY); bv!.construct('yard'); return; }
   if (a === 'expand') { const sh = $('#sheet'); sh.classList.toggle('compact'); sfx.select(); return; }
   if (a.startsWith('go:')) { const [, kind, id] = a.split(':'); const ms = G.launch(kind as 'run' | 'planet', id, 1.4); if (!ms) return deny(b); sfx.launch(); buzz([30, 30, 60]); bv!.launch(Object.values(ms.ships).reduce((x, y) => x + y, 0)); return openSheet(sheetKey!); }
+  if (a === 'auto') { s.auto = !s.auto; sfx.select(); return openSheet(sheetKey!); }
+  if (a.startsWith('sell:')) { const r = a.slice(5) as Res; if (G.sellable(r) < 1) { toast('Nothing spare – your factory needs it'); return deny(b); } const v2 = G.sell(r); sfx.coin(); buzz(10); popup(ev.clientX, ev.clientY - 20, '+$' + fmt(v2)); fly(ev.clientX, ev.clientY, ...center(cashEl), 6, 1, '#ffc94a', () => bump(cashEl)); return; }
   if (a === 'tog') { s.on[sl.idx] = !s.on[sl.idx]; sfx.tap(); buzz(8); return; }
   if (a === 'buy') {
     const t0 = tier(sl), wasPlot = visible(sl) === 'plot';
@@ -220,13 +232,14 @@ function updateSheet(force = false) {
   else if (sl.kind === 'gen') stats = [['Supply', fmt(G.powerSupply()) + '⚡'], ['Demand', fmt(G.powerDemand()) + '⚡'], ['Efficiency', Math.round(G.powerEff() * 100) + '%']];
   else if (sl.kind === 'hq') stats = [['Income', '$' + fmt(G.perSec()) + '/s'], ['Earned this sector', '$' + fmt(s.life)], ['Dark Matter', fmt(s.dm, 0)]];
   else if (sl.kind === 'yard') stats = v === 'built' ? [['Docks', String(G.docks())], ['Fleet power', fmt(G.totalPower())]] : [['Unlock', 'Build a Chip Fab']];
-  else if (sl.kind === 'lab') stats = [['Researched', `${s.tech.length} / ${TECH.filter(t => G.techAvail(t)).length}`], ['Unlock tiers', 'more every warp']];
+  else if (sl.kind === 'lab') stats = [['Researched', `${s.tech.length} / ${TECH.filter(t => G.techAvail(t)).length}`], ['Ready to buy', String(TECH.filter(t => G.techAvail(t) && !s.tech.includes(t.id) && s.cash >= t.cash && s.res[t.res] >= t.amt).length)]];
   else stats = [['Charge', G.warpOpen() ? 'READY' : `$${fmt(s.life)} / $${fmt(G.warpNeed())}`]];
   sset('.sstats', stats.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join(''));
   const buy = $<HTMLButtonElement>('#sheet [data-act="buy"]');
   if (buy && sl.kind === 'hq') { const v = RES_ORDER.reduce((a, r) => a + (G.sellable(r) >= 1 ? G.sellable(r) * G.price(r) : 0), 0); sset('[data-act="buy"]', `Export surplus<b>$${fmt(v)}</b>`); buy.disabled = v <= 0; }
   else if (buy) { const c = slotCost(sl)!, k = sl.kind === 'mine' ? (s.mines[sl.idx].n ? G.buyK(sl.idx) : 1) : sl.kind === 'mach' ? G.machK(sl.idx) : G.genK(); sset('[data-act="buy"]', `${v === 'plot' ? 'Build' : `Upgrade ×${k}`}<b>$${fmt(c)}</b>`); buy.disabled = s.cash < c; }
   if (sl.kind === 'mine') { const h = $<HTMLButtonElement>('#sheet [data-act="hire"]'); if (h) { sset('[data-act="hire"]', `Hire ${MINES[sl.idx].mname}<b>$${fmt(MINES[sl.idx].mgr)}</b>`); h.disabled = s.cash < MINES[sl.idx].mgr; h.classList.toggle('coach', /^Hire/.test(GOALS[s.goal]?.text || '')); } }
+  if (sl.kind === 'hq') { const rs = RES_ORDER.filter(r => s.made[r] > 0 || s.res[r] >= 1); sset('#mkt', rs.map(r => { const v2 = G.sellable(r) * G.price(r); return `<button class="mk2" data-act="sell:${r}" style="--c:${RES[r].color}" ${v2 >= 1 ? '' : 'disabled'}>${ri(r)}<b>$${fmt(v2)}</b></button>`; }).join('')); bindActs('#mkt'); }
   if (sl.kind === 'lab') { const list = TECH.filter(t => G.techAvail(t) && !s.tech.includes(t.id)).slice(0, 3); sset('#llist', list.length ? list.map(t => `<button class="trow" data-act="tech:${t.id}" ${s.cash >= t.cash && s.res[t.res] >= t.amt ? '' : 'disabled'}><span class="ti">${art(t.tgt < 0 ? 'star' : MINES[t.tgt].id)}</span><span class="tn"><b>${t.name}</b><small>${t.tgt < 0 ? 'All mines' : MINES[t.tgt].name} profit ×${t.x}</small></span><span class="tc">$${fmt(t.cash)}<small>${ri(t.res)}${fmt(t.amt)}</small></span></button>`).join('') : '<p class="muted">All research complete for this sector.</p>'); bindActs('#llist'); }
   if (sl.kind === 'yard' && v === 'built') { const now = G.clock(); const busy = s.missions.map(m => { const d = m.kind === 'run' ? RUNS.find(r => r.id === m.target)! : PLANETS.find(p => p.id === m.target)!; return `<div class="trow busy"><span class="ti">${art(m.kind === 'run' ? d.id : d.id)}</span><span class="tn"><b>${d.name}</b><small>${Math.round(m.chance * 100)}% · ${m.power}⚔</small></span><span class="tc">${fmtT(Math.max(0, (m.end - now) / 1000))}</span></div>`; }).join('');
     const opts = [...RUNS.filter(r => G.idlePower() >= r.need && !s.missions.some(m => m.target === r.id)).slice(-2).map(r => ['run', r] as const), ...PLANETS.filter(p => G.avail(p as never) && !s.conquered.includes(p.id) && !s.missions.some(m => m.target === p.id) && G.idlePower() >= p.need).slice(0, 1).map(p => ['planet', p] as const)];
@@ -376,8 +389,8 @@ function missionsTick() {
     if (bv && tab === 'base') sfx.land(), bv.land(Object.values(o.m.ships).reduce((a, b) => a + b, 0) - Object.values(o.lost).reduce((a, b) => a + b, 0));
     const def = o.m.kind === 'run' ? RUNS.find(r => r.id === o.m.target)! : PLANETS.find(p => p.id === o.m.target)!;
     const lostN = Object.values(o.lost).reduce((a, b) => a + b, 0);
-    if (o.ok && o.m.kind === 'planet') { flash(); sfx.warp(); celebrate(`🏳️ ${def.name} conquered! Profit ×${(def as typeof PLANETS[number]).bonus}`); }
-    else if (o.ok) { sfx.fanfare(); buzz([20, 30]); toast(`${def.e} ${def.name}: loot secured!${lostN ? ` (−${lostN} ships)` : ''}`); if (o.loot) { const [x, y] = center(navBtn('fleet')); for (const r in o.loot) fly(x, y, ...center(resEl(r as Res)), 6, 2, RES[r as Res].color, () => bump(resEl(r as Res))); } }
+    if (o.ok && o.m.kind === 'planet') { xp(XP.conquer); flash(); sfx.warp(); celebrate(`🏳️ ${def.name} conquered! Profit ×${(def as typeof PLANETS[number]).bonus}`); }
+    else if (o.ok) { sfx.fanfare(); buzz([20, 30]); toast(`${def.e} ${def.name}: loot secured!${lostN ? ` (−${lostN} ships)` : ''}`); if (o.loot) { const [x, y] = bv ? bv.slotScreen(bv.rock ? 'yard' : 'lift') : center(cashEl); for (const r in o.loot) fly(x, y, ...center(resEl(r as Res)), 6, 2, RES[r as Res].color, () => bump(resEl(r as Res))); } }
     else { sfx.no(); buzz([60, 40, 60]); shakeEl(app); toast(`💥 ${def.name} failed – lost ${lostN} ship${lostN === 1 ? '' : 's'}`); }
     if (tab === 'fleet') renderFleet(); G.save();
   }
@@ -402,13 +415,13 @@ function confirmModal(icon: string, title: string, txt: string, ok: string, fn: 
   m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('[data-ok]')!.addEventListener('click', () => { m.remove(); fn(); });
 }
 $('#trophy').addEventListener('click', () => { sfx.tap(); const s = st(); const m = modal(`<h2 class="h">🏆 Trophies <small>${s.ach.length}/${ACHS.length}</small></h2><p>Each trophy: <b style="color:var(--mint)">+2% profit</b> forever</p><div class="achs">${ACHS.map(a => `<div class="ach ${s.ach.includes(a.id) ? 'got' : ''}"><i>${s.ach.includes(a.id) ? a.e : '🔒'}</i><b>${a.name}</b><small>${a.desc}</small></div>`).join('')}</div><button class="btn big" data-x>Close</button>`); m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('.sheet')!.classList.add('tall'); });
-function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); if (s.goal < 9) continue; sfx.fanfare(); buzz([20, 40, 20, 40]); toast(`🏆 ${a.name} · +2% profit`); bump($('#trophy')); burst(...center($('#trophy')), 24); } }
+function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); xp(XP.ach); if (s.goal < 9) continue; sfx.fanfare(); buzz([20, 40, 20, 40]); toast(`🏆 ${a.name} · +2% profit`); bump($('#trophy')); burst(...center($('#trophy')), 24); } }
 
 // ---------- tabs ----------
 const RENDER: Record<string, () => void> = { base: renderBase, mine: renderMine, fac: renderFac, crew: renderCrew, fleet: renderFleet, warp: renderWarp };
-function setTab(t: string) { tab = t; main.classList.toggle('basemode', t === 'base'); app.classList.toggle('basemode', t === 'base'); if (t !== 'base') closeSheet(); document.querySelectorAll<HTMLElement>('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); main.scrollTop = 0; cards = []; facRows = []; techBtns = []; RENDER[t](); renderGoal(); spotlight(); main.classList.remove('enter'); void main.offsetWidth; main.classList.add('enter'); }
+function setTab(t: string) { tab = t; app.classList.toggle('sub', t !== 'base'); main.classList.toggle('basemode', t === 'base'); app.classList.toggle('basemode', t === 'base'); if (t !== 'base') closeSheet(); document.querySelectorAll<HTMLElement>('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); main.scrollTop = 0; cards = []; facRows = []; techBtns = []; RENDER[t](); renderGoal(); spotlight(); main.classList.remove('enter'); void main.offsetWidth; main.classList.add('enter'); }
 document.querySelectorAll<HTMLElement>('nav button').forEach(b => b.addEventListener('click', () => { if (tab !== b.dataset.t) { sfx.tap(); buzz(6); setTab(b.dataset.t!); } }));
-const muteBtn = $('#mute'); const setMute = () => muteBtn.textContent = st().mute ? '🔇' : '🔊'; setMute();
+const muteBtn = $('#mute'); const setMute = () => muteBtn.innerHTML = st().mute ? `<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#8b84b0" stroke="#24163a" stroke-width="2" stroke-linejoin="round"/><path d="M16 9l5 6M21 9l-5 6" stroke="#ff5b5b" stroke-width="2.5" stroke-linecap="round"/></svg>` : `<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#5cf2ff" stroke="#24163a" stroke-width="2" stroke-linejoin="round"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>`; setMute();
 muteBtn.addEventListener('click', () => { st().mute = !st().mute; setMute(); sfx.tap(); buzz(8); G.save(); });
 function dots() {
   const s = st(), dot = (t: string, on: boolean) => document.querySelector(`nav button[data-t="${t}"] .dot`)?.classList.toggle('show', on);
@@ -428,7 +441,8 @@ function frame(now: number) {
   const ev = G.tick(dt);
   for (const e of ev) {
     const c = cards[e.i], d = MINES[e.i];
-    if (tab === 'base' && bv) { baseEvent(e.i, e.v, e.ct, now); continue; }
+    if (e.lode && tab === 'base' && bv && !bv.rock) { const [x, y] = bv.slotScreen('m' + e.i); popup(x, y - 30, 'MOTHERLODE ×10', '#ffd23f'); burst(x, y, 24, 0, '#ffd23f'); sfx.claim(); }
+    if (tab === 'base' && bv) { if (!bv.rock) baseEvent(e.i, e.v, e.ct, now); else acc += e.v; continue; }
     if (c && e.ct > 0.3) {
       const [x, y] = center(c.ico); popup(x, y - 40, '+$' + fmt(e.v));
       fly(x, y, ...center(cashEl), Math.min(6, 2 + (e.i >> 1)), 1, '#ffc94a', () => bump(cashEl));
@@ -473,7 +487,8 @@ function explain() {
   if (s.goal >= 7) intro('export', [{ h: 'EXPORT', t: 'Got spare goods? Export them at <b>HQ</b>. I never sell what your factory still needs.' }], 'hq');
   if (s.goal >= 8) intro('foreman', [{ h: 'AUTOMATE', t: 'Tired of tapping? Hire a <b>foreman</b> on any mine and it runs forever – even while you are away.' }], 'm0');
   if (s.mines.some(x => x.n >= 25)) intro('tiers', [{ t: 'Look at that! Buildings <b>evolve</b> at milestone levels: 25, 100, 300… Bigger, shinier, faster.' }]);
-  if (G.fleetOpen()) intro('fleet', [{ h: 'FLEET', t: 'The <b>Shipyard</b> is online! Build ships, fly salvage runs for goods, and conquer planets for <b>permanent</b> profit bonuses.' }], 'yard');
+  if (G.cmdLevel().lv >= 2) intro('skills', [{ h: 'COMMANDER', t: 'You just ranked up! Every <b>Commander level</b> earns a skill point. Tap your <b>rank badge</b> (top left) to open the skill tree.' }, { t: 'Skills stay with you forever – even through warps. Pick a branch that fits how you play.' }]);
+  if (G.fleetOpen()) intro('fleet', [{ h: 'FLEET', t: 'We bought a second rock! The <b>Cargo Lift</b> ships goods up to our new <b>fleet asteroid</b>.' }, { t: 'Tap the lift – or the button on the right – to fly over. Build ships there, run salvage missions and conquer planets for <b>permanent</b> bonuses.' }], 'lift');
   if (G.warpOpen()) intro('warp', [{ h: 'WARP', t: 'The <b>Warp Gate</b> is charged. Warping resets this sector but pays <b>Dark Matter</b> – a permanent multiplier on everything.' }], 'gate');
 }
 function storyIntro() {
@@ -499,9 +514,47 @@ function offline() {
   $('#col', m).addEventListener('click', ev => { m.remove(); sfx.fanfare(); buzz([30, 40, 80]); fly(ev.clientX, ev.clientY, ...center(cashEl), 24, 1, '#ffc94a', () => bump(cashEl)); burst(ev.clientX, ev.clientY, 30); G.save(); });
 }
 
+$('#back').addEventListener('click', () => { sfx.tap(); setTab('base'); });
 setTab('base'); disclose(); offline(); setTimeout(storyIntro, 600); requestAnimationFrame(frame);
 setInterval(G.save, 5000);
 addEventListener('visibilitychange', () => { if (document.hidden) G.save(); else { prev = performance.now(); offline(); } });
 addEventListener('pagehide', G.save);
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('./sw.js').catch(() => {});
 void MILESTONES;
+
+// ---------- Commander rank + skill tree ----------
+function xp(n: number, x = 60, y = 60) {
+  const up = G.gainXp(n); const b = $('#cmdbadge'); if (st().goal >= 2) { fly(x, y, ...center(b), 3, 1, '#7affd1', () => bump(b)); }
+  if (up) setTimeout(() => { sfx.fanfare(); buzz([30, 40, 80]); const [bx, by] = center(b); burst(bx, by, 40, 0, '#7affd1'); toast(`Commander rank ${G.cmdLevel().lv}! +1 skill point`); bump(b); }, 700);
+  cmdHud();
+}
+function cmdHud() {
+  const L = G.cmdLevel(), pts = G.skillPoints(); $('#cmdlv').textContent = String(L.lv);
+  ($('#cmdring') as unknown as SVGCircleElement).style.strokeDashoffset = String(94.2 * (1 - L.into / L.need));
+  $('#cdot').style.display = pts > 0 ? 'block' : 'none'; $('#cmdbadge').classList.toggle('pulse', pts > 0);
+  $('#cmdbadge').style.visibility = st().goal >= 2 || st().xp > 0 || st().warps ? '' : 'hidden';
+}
+let treeSel: string | null = null;
+function openTree() {
+  sfx.select(); const m = document.createElement('div'); m.className = 'tree'; document.body.appendChild(m);
+  const draw = () => {
+    const s = st(), L = G.cmdLevel(), pts = G.skillPoints();
+    const node = (id: string) => { const d = SKILLS.find(x => x.id === id)!, br = BRANCHES[d.br], has = G.sk(id), can = G.canLearn(id), lockLv = L.lv < LEVEL_GATE[d.tier];
+      return `<button class="tn2 ${has ? 'has' : can ? 'can' : 'lock'} ${treeSel === id ? 'sel' : ''}" data-sk="${id}" style="--c:${br.color}"><span class="ta">${art(d.art)}</span>${lockLv && !has ? `<em>Lv ${LEVEL_GATE[d.tier]}</em>` : ''}</button>`; };
+    const d = treeSel ? SKILLS.find(x => x.id === treeSel)! : null;
+    m.innerHTML = `<div class="thead"><button class="x" data-tx>✕</button><div class="trank"><div class="tbadge">${L.lv}</div><div><small>COMMANDER RANK</small><b>Vex's Protégé</b><div class="tbar"><i style="width:${L.into / L.need * 100}%"></i></div><small>${fmt(L.into, 0)} / ${fmt(L.need, 0)} XP</small></div></div><div class="tpts ${pts ? 'on' : ''}"><b>${pts}</b><small>points</small></div></div>
+    <div class="tgrid">${BRANCHES.map((br, bi) => `<div class="tcol" style="--c:${br.color}"><div class="tbr">${art(br.art)}<b>${br.name}</b></div>${SKILLS.filter(x => x.br === bi).map((x, k) => (k ? `<div class="tlink ${G.sk(x.id) ? 'on' : ''}"></div>` : '') + node(x.id)).join('')}</div>`).join('')}</div>
+    <div class="tinfo">${d ? `<div class="ti2" style="--c:${BRANCHES[d.br].color}"><span class="ta">${art(d.art)}</span><div><small>${BRANCHES[d.br].name.toUpperCase()} · TIER ${d.tier + 1}</small><b>${d.name}</b><p>${d.desc}</p></div></div>${G.sk(d.id) ? '<button class="btn big" disabled>Learned ✓</button>' : `<button class="btn gold big" data-learn ${G.canLearn(d.id) ? '' : 'disabled'}>${L.lv < LEVEL_GATE[d.tier] ? `Reach rank ${LEVEL_GATE[d.tier]}` : d.tier && !SKILLS.some(x => x.br === d.br && x.tier === d.tier - 1 && G.sk(x.id)) ? 'Learn the skill above first' : pts ? 'Learn · 1 point' : 'No points – rank up!'}</button>`}` : `<p class="muted">Rank up by claiming goals, earning trophies, conquering planets and warping. Each rank = 1 skill point. Skills are permanent.</p>`}</div>`;
+    m.querySelector('[data-tx]')!.addEventListener('click', () => { sfx.tap(); m.classList.add('out'); setTimeout(() => m.remove(), 200); cmdHud(); });
+    m.querySelectorAll<HTMLElement>('[data-sk]').forEach(b => b.addEventListener('click', () => { treeSel = b.dataset.sk!; sfx.select(); draw(); }));
+    m.querySelector('[data-learn]')?.addEventListener('click', ev => { if (!treeSel || !G.learn(treeSel)) return; const e = ev as MouseEvent; sfx.claim(); buzz([20, 30, 60]); burst(e.clientX, e.clientY, 30, 0, BRANCHES[SKILLS.find(x => x.id === treeSel)!.br].color); G.save(); draw(); const nb = m.querySelector(`[data-sk="${treeSel}"]`); nb?.classList.add('learnt'); cmdHud(); });
+  };
+  draw();
+}
+$('#cmdbadge').addEventListener('click', openTree);
+setBusy(() => st().missions.length);
+// rock switch (mining ⇄ fleet asteroid)
+const rockBtn = $('#rockbtn');
+function rockHud() { const show = !!bv && tab === 'base' && G.fleetOpen() && bv.travelT < 0; rockBtn.style.display = show ? '' : 'none'; if (!bv) return; rockBtn.innerHTML = bv.rock ? `${art('drill')}<span>Mining<br>Rock</span>` : `${art('cruiser')}<span>Fleet<br>Rock</span>`; }
+rockBtn.addEventListener('click', () => { if (!bv) return; closeSheet(); sfx.launch(); buzz([20, 30]); bv.travel(bv.rock ? 0 : 1); });
+setInterval(() => { rockHud(); cmdHud(); if (bv) { rockBtn.classList.remove('pulse'); const sl = wantGuide ? slotByKey(wantGuide) : null; if (!sl) bv.guide = null; else if ((sl.rock || 0) === bv.rock) bv.guide = wantGuide; else if (!bv.rock) bv.guide = 'lift'; else { bv.guide = null; rockBtn.classList.add('pulse'); } } }, 300);

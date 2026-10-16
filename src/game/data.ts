@@ -15,8 +15,8 @@ export const RES: Record<Res, { name: string; e: string; color: string; price: n
 
 export type MineDef = { id: string; name: string; e: string; hue: number; cost: number; g: number; rev: number; t: number; ore: number; res: Res; mgr: number; mname: string; sector?: number };
 export const MINES: MineDef[] = [
-  { id: 'drill', name: 'Pebble Drill', e: '⛏️', hue: 30, cost: 4, g: 1.12, rev: 1, t: 0.6, ore: 0.25, res: 'ore', mgr: 1.5e3, mname: 'Rusty the Bot' },
-  { id: 'ice', name: 'Quartz Comet Harvester', e: '🧊', hue: 195, cost: 150, g: 1.18, rev: 60, t: 4, ore: 1, res: 'quartz', mgr: 25e3, mname: 'Frosty Vega' },
+  { id: 'drill', name: 'Pebble Drill', e: '⛏️', hue: 30, cost: 4, g: 1.12, rev: 1, t: 0.6, ore: 0.25, res: 'ore', mgr: 800, mname: 'Rusty the Bot' },
+  { id: 'ice', name: 'Quartz Comet Harvester', e: '🧊', hue: 195, cost: 150, g: 1.18, rev: 60, t: 4, ore: 1, res: 'quartz', mgr: 15e3, mname: 'Frosty Vega' },
   { id: 'iron', name: 'Iron Asteroid Rig', e: '🪨', hue: 15, cost: 720, g: 1.18, rev: 540, t: 10, ore: 5, res: 'ore', mgr: 3e5, mname: 'Ferro Max' },
   { id: 'crystal', name: 'Crystal Laser Array', e: '💎', hue: 280, cost: 8640, g: 1.175, rev: 4320, t: 30, ore: 18, res: 'quartz', mgr: 3e6, mname: 'Dr. Prism' },
   { id: 'plasma', name: 'Plasma Excavator', e: '🔥', hue: 340, cost: 103680, g: 1.17, rev: 51840, t: 75, ore: 70, res: 'ore', mgr: 4e7, mname: 'Blaze Kowalski' },
@@ -93,7 +93,7 @@ export const PERKS: Perk[] = [
   { warps: 1, name: 'Veteran Crew', art: 'drill', e: '🤖', desc: 'Start each sector with the first 2 foremen hired' },
   { warps: 1, name: 'Sector 2 Tech', art: 'hole', e: '🕳️', desc: 'Unlocks Black Hole Tap, Quantum Refinery, Exotic Matter, Void Titans & 2 new planets' },
   { warps: 2, name: 'Blueprint Vault', art: 'press', e: '📐', desc: 'Machines keep 25% of their levels through warps' },
-  { warps: 2, name: 'Auto-Exporter', art: 'ingot', e: '🛒', desc: 'Market auto-sells surplus goods (toggle in Factory)' },
+  { warps: 2, name: 'Auto-Exporter', art: 'ingot', e: '🛒', desc: 'Market auto-sells surplus goods (toggle at HQ)' },
   { warps: 3, name: 'Hyperdock', art: 'scout', e: '🛫', desc: '+1 permanent launch dock' },
   { warps: 3, name: 'Crown of Stars', art: 'p9', e: '✴️', desc: 'Unlocks The Last Star' },
   { warps: 4, name: 'Deep Sleep', art: 'moon', e: '😴', desc: 'Offline earnings cap raised to 24h' },

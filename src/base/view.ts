@@ -3,21 +3,29 @@ import { MINES, MACHINES, RES, Res } from '../game/data';
 import * as G from '../game/state';
 import { drawBuilding, drawPlot, iso, TW, TH, Kind, hsl, scaffold, ship, glow, INK } from './render';
 
-export type Slot = { key: string; kind: Kind; idx: number; gx: number; gy: number; s: number };
-export const SLOTS: Slot[] = [
+export type Slot = { key: string; kind: Kind; idx: number; gx: number; gy: number; s: number; rock?: number };
+export const ALL_SLOTS: Slot[] = [
   { key: 'hq', kind: 'hq', idx: 0, gx: 0, gy: 0, s: 2 },
   { key: 'gen', kind: 'gen', idx: 0, gx: 3, gy: -3, s: 2 },
   ...([[-3, 0], [3, 0], [-3, 3], [-6, 0], [0, -6], [-3, -6], [-6, -3], [3, -6], [0, 6]] as const).map(([gx, gy], i) => ({ key: 'm' + i, kind: 'mine' as Kind, idx: i, gx, gy, s: 2 })),
   ...([[0, -3], [0, 3], [3, 3], [-6, 3], [3, 6], [6, 0], [-3, 6]] as const).map(([gx, gy], j) => ({ key: 'f' + j, kind: 'mach' as Kind, idx: j, gx, gy, s: 2 })),
-  { key: 'yard', kind: 'yard', idx: 0, gx: 6, gy: 3, s: 2 },
+  { key: 'lift', kind: 'lift', idx: 0, gx: 6, gy: 3, s: 2 },
+  // fleet asteroid
+  { key: 'yard', kind: 'yard', idx: 0, gx: 0, gy: 0, s: 2, rock: 1 },
+  { key: 'hangar', kind: 'hangar', idx: 0, gx: -3, gy: 0, s: 2, rock: 1 },
+  { key: 'dock', kind: 'dock', idx: 0, gx: 3, gy: 0, s: 2, rock: 1 },
+  { key: 'turret', kind: 'turret', idx: 0, gx: 0, gy: -3, s: 2, rock: 1 },
+  { key: 'fuel', kind: 'fuel', idx: 0, gx: 0, gy: 3, s: 2, rock: 1 },
   { key: 'gate', kind: 'gate', idx: 0, gx: 6, gy: -3, s: 2 },
   { key: 'lab', kind: 'lab', idx: 0, gx: -3, gy: -3, s: 2 },
 ];
 const tierOf = (n: number, steps: number[]) => Math.max(0, steps.filter(v => n >= v).length - 1);
-export const TIER_STEPS: Record<string, number[]> = { mine: [1, 25, 100, 300, 1000], mach: [1, 10, 25, 50, 100], gen: [1, 5, 15, 30, 60], lab: [0, 3, 10, 25, 50] };
+export let SLOTS: Slot[] = ALL_SLOTS.filter(s => !s.rock);
+export const slotByKey = (k: string) => ALL_SLOTS.find(s => s.key === k);
+export const TIER_STEPS: Record<string, number[]> = { mine: [1, 25, 100, 300, 1000], mach: [1, 10, 25, 50, 100], gen: [1, 5, 15, 30, 60], lab: [0, 3, 10, 25, 50], hangar: [1, 5, 15, 40, 100] };
 export function level(sl: Slot): number {
   const S = G.S;
-  switch (sl.kind) { case 'mine': return S.mines[sl.idx].n; case 'mach': return S.mach[sl.idx]; case 'gen': return S.gen; case 'yard': return G.fleetOpen() ? G.docks() : 0; case 'gate': return G.warpOpen() ? S.warps + 1 : S.warps; case 'lab': return S.tech.length; default: return G.sector(); }
+  switch (sl.kind) { case 'mine': return S.mines[sl.idx].n; case 'mach': return S.mach[sl.idx]; case 'gen': return S.gen; case 'yard': return G.fleetOpen() ? 1 + Object.values(S.fupg).reduce((a, b) => a + b, 0) : 0; case 'hangar': return Object.values(S.ships).reduce((a, b) => a + b, 0); case 'dock': return G.docks(); case 'turret': return 1 + G.fu('armor'); case 'fuel': return 1 + G.fu('engines'); case 'lift': return G.fleetOpen() ? 1 + Math.floor(S.conquered.length / 2) : 0; case 'gate': return G.warpOpen() ? S.warps + 1 : S.warps; case 'lab': return S.tech.length; default: return G.sector(); }
 }
 export function tier(sl: Slot) { const n = level(sl); return sl.kind in TIER_STEPS ? tierOf(n, TIER_STEPS[sl.kind]) : Math.min(4, Math.max(0, n - 1)); }
 export function nextTierAt(sl: Slot): number | null { const st = TIER_STEPS[sl.kind]; if (!st) return null; const n = level(sl); return st.find(v => v > n) ?? null; }
@@ -26,7 +34,8 @@ export function visible(sl: Slot): 'built' | 'plot' | 'hidden' {
   const S = G.S;
   if (sl.kind === 'mine') { const d = MINES[sl.idx]; if (!G.avail(d)) return 'hidden'; if (S.mines[sl.idx].n) return 'built'; const prev = sl.idx === 0 || S.mines[sl.idx - 1].n > 0; return prev ? 'plot' : 'hidden'; }
   if (sl.kind === 'mach') { const d = MACHINES[sl.idx]; if (!G.avail(d)) return 'hidden'; if (S.mach[sl.idx]) return 'built'; return G.machUnlocked(sl.idx) && (sl.idx === 0 || S.mach[sl.idx - 1] > 0 || G.machUnlocked(sl.idx)) ? 'plot' : 'hidden'; }
-  if (sl.kind === 'yard') return G.fleetOpen() ? 'built' : S.mach[4] ? 'plot' : 'hidden';
+  if (sl.kind === 'lift') return G.fleetOpen() ? 'built' : S.mach[4] ? 'plot' : 'hidden';
+  if (sl.rock) return G.fleetOpen() ? 'built' : 'hidden';
   if (sl.kind === 'lab') return S.mach[0] > 0 || S.tech.length ? 'built' : 'hidden';
   if (sl.kind === 'gate') return G.warpOpen() || S.warps ? 'built' : S.life > 1e9 ? 'plot' : 'hidden';
   if (sl.kind === 'gen') return S.mach[0] > 0 || S.gen > 1 || S.warps ? 'built' : 'hidden';
@@ -56,7 +65,12 @@ export class BaseView {
   onTap: (sl: Slot | null, x: number, y: number) => void = () => {};
   onConstruct: () => void = () => {};
   private lastTier = new Map<string, number>(); private workers: { a: number; b: number; f: number; sp: number; c: string }[] = [];
-  night = 0;
+  night = 0; rock = 0; travelT = -1; private travelTo = 0; onTravel: (r: number) => void = () => {};
+  /** fly the camera between asteroids */
+  travel(r: number) { if (this.travelT >= 0 || r === this.rock) return; this.travelTo = r; this.travelT = 0; this.cam = null; }
+  setRock(r: number) { this.rock = r; SLOTS = ALL_SLOTS.filter(s => (s.rock || 0) === r); this.workers = []; this.drones = []; this.gcache = null; this.sel = null; this.cam = null; this.ox = this.w / 2; this.oy = this.h * .52; if (r) { this.zMain = this.z; this.z = Math.max(this.z, .95); } else this.z = this.zMain || this.z; this.onTravel(r); }
+  private zMain = 0;
+  pad(): [number, number] { return this.rock ? iso(0, 0) : iso(6, 3); }
   private ptrs = new Map<number, { x: number; y: number }>(); private moved = 0; private pinch0 = 0; private z0 = 1; private craters: number[][] = [];
   constructor(parent: HTMLElement) {
     this.cv = document.createElement('canvas'); this.cv.id = 'base'; parent.appendChild(this.cv); this.c = this.cv.getContext('2d')!;
@@ -84,12 +98,13 @@ export class BaseView {
   /** world → client(page) coords */
   screen(gx: number, gy: number): [number, number] { const [x, y] = iso(gx, gy); const r = this.cv.getBoundingClientRect(); return [r.left + this.ox + x * this.z, r.top + this.oy + y * this.z]; }
   slotScreen(key: string): [number, number] { const sl = SLOTS.find(s => s.key === key)!; const [x, y] = this.screen(sl.gx, sl.gy); return [x, y - 40 * this.z]; }
-  focus(key: string, z = this.z, yf = .45) { const sl = SLOTS.find(s => s.key === key); if (!sl) return; const [x, y] = iso(sl.gx, sl.gy); const lx = 330 * z, ly = 200 * z; this.cam = { x: Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.w / 2 - x * z)), y: Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.h * yf - y * z)), z }; }
+  focus(key: string, z = this.z, yf = .45, with2?: string) { if (!with2 && !this.rock && G.S.warps === 0 && G.S.goal < 14 && key !== 'm0' && key !== 'hq') with2 = 'm0'; const sl = SLOTS.find(s => s.key === key); if (!sl) return; let [x, y] = iso(sl.gx, sl.gy); const s2 = with2 && SLOTS.find(s => s.key === with2); if (s2) { const [x2, y2] = iso(s2.gx, s2.gy); x = (x + x2) / 2; y = (y + y2) / 2; } const lx = 330 * z, ly = 200 * z; this.cam = { x: Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.w / 2 - x * z)), y: Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.h * yf - y * z)), z }; }
   construct(key: string) { this.cons.set(key, this.t); }
-  launch(n: number) { const [x, y] = iso(6, 3); for (let k = 0; k < Math.min(8, n); k++) this.ships.push({ x: x + (k % 3 - 1) * 26, y: y - 14, vy: 0, t: -k * .18, dir: 1, sc: .7 + Math.random() * .3 }); this.shake = .25; }
-  land(n: number) { const [x, y] = iso(6, 3); for (let k = 0; k < Math.min(6, n); k++) this.ships.push({ x: x + (k % 3 - 1) * 26, y: y - 700, vy: 0, t: -k * .25, dir: -1, sc: .8 }); }
-  warp(cb: () => void) { this.warpT = 0; this.warpCb = cb; this.focus('gate', .8); }
+  launch(n: number) { const [x, y] = this.pad(); for (let k = 0; k < Math.min(8, n); k++) this.ships.push({ x: x + (k % 3 - 1) * 26, y: y - 14, vy: 0, t: -k * .18, dir: 1, sc: .7 + Math.random() * .3 }); this.shake = .25; }
+  land(n: number) { const [x, y] = this.pad(); for (let k = 0; k < Math.min(6, n); k++) this.ships.push({ x: x + (k % 3 - 1) * 26, y: y - 700, vy: 0, t: -k * .25, dir: -1, sc: .8 }); }
+  warp(cb: () => void) { if (this.rock) this.setRock(0); this.warpT = 0; this.warpCb = cb; this.focus('gate', .8); }
   private tap(cx: number, cy: number) {
+    if (this.travelT >= 0) return;
     const r = this.cv.getBoundingClientRect(); const lx = (cx - r.left - this.ox) / this.z, ly = (cy - r.top - this.oy) / this.z;
     let best: Slot | null = null, bd = -1e9;
     for (const sl of SLOTS) {
@@ -108,7 +123,7 @@ export class BaseView {
 
   /** links: [fromSlot, toSlot, res, flowing] */
   links(): [Slot, Slot, Res, boolean][] {
-    const out: [Slot, Slot, Res, boolean][] = []; const S = G.S;
+    const out: [Slot, Slot, Res, boolean][] = []; const S = G.S; if (this.rock) return out;
     MACHINES.forEach((d, j) => {
       const to = SLOTS.find(s => s.key === 'f' + j)!; if (!S.mach[j] || visible(to) !== 'built') return;
       (Object.keys(d.inp) as Res[]).forEach(r => {
@@ -125,11 +140,13 @@ export class BaseView {
     if (this.cam) { const k = 1 - Math.pow(.0008, dt); this.ox += (this.cam.x - this.ox) * k; this.oy += (this.cam.y - this.oy) * k; this.z += (this.cam.z - this.z) * k; if (Math.abs(this.cam.x - this.ox) + Math.abs(this.cam.y - this.oy) < .5 && Math.abs(this.cam.z - this.z) < .002) { this.z = this.cam.z; this.cam = null; } }
     for (const sl of SLOTS) { const v = visible(sl), tv = v === 'built' ? tier(sl) : -1, prev = this.lastTier.get(sl.key); if (prev !== undefined && tv > prev && this.t > 1 && this.warpT < 0) { this.cons.set(sl.key, this.t); this.onConstruct(); } this.lastTier.set(sl.key, tv); }
     // day/night: 6-minute cycle, nights are short and pretty
-    const ph = (Date.now() / 360000) % 1; this.night = Math.max(0, Math.min(1, (Math.cos(ph * Math.PI * 2) * -1 - .1) * 1.6));
+    this.night = G.nightness();
     const fn = (window as unknown as { __night?: number }).__night; if (fn !== undefined) this.night = fn;
     let sx = 0, sy = 0; if (this.shake > 0) { this.shake -= dt; sx = (Math.random() - .5) * 8 * this.shake * 4; sy = (Math.random() - .5) * 8 * this.shake * 4; }
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); c.clearRect(0, 0, this.w, this.h);
-    c.translate(this.ox + sx, this.oy + sy); c.scale(this.z, this.z);
+    let tx = 0, tz = 1;
+    if (this.travelT >= 0) { this.travelT += dt; const T = this.travelT, D = .55; if (T < D) { const f = T / D, e = f * f * f; tx = (this.travelTo ? -1 : 1) * e * this.w * 1.6; tz = 1 - e * .35; } else { if (this.rock !== this.travelTo) this.setRock(this.travelTo); const f = Math.min(1, (T - D) / (D * 1.4)), e = 1 - Math.pow(1 - f, 3); tx = (this.travelTo ? 1 : -1) * (1 - e) * this.w * 1.6; tz = .65 + e * .35; if (f >= 1) this.travelT = -1; } }
+    c.translate(this.ox + sx + tx, this.oy + sy); c.scale(this.z * tz, this.z * tz);
     this.groundCached();
     // conveyors
     const L = this.links();
@@ -162,14 +179,15 @@ export class BaseView {
     });
     this.puffs = this.puffs.filter(p => { p.t += dt; if (p.t < 0) return true; const f = p.t / .8; c.globalAlpha = Math.max(0, 1 - f); c.beginPath(); c.arc(p.x, p.y - f * 30, 6 + f * 14, 0, 7); c.fillStyle = p.c; c.fill(); c.globalAlpha = 1; return f < 1; });
     // ships
-    this.ships = this.ships.filter(s => { s.t += dt; if (s.t < 0) return true; if (s.dir > 0) { s.vy -= dt * 900; s.y += s.vy * dt; ship(c, s.x, s.y, s.sc, 1); if (s.t < .4) for (let k = 0; k < 2; k++) this.puffs.push({ x: s.x + (Math.random() - .5) * 40, y: s.y + 10, t: 0, c: 'rgba(230,220,255,.8)' }); return s.y > -1200; } const ty = iso(6, 3)[1] - 14, f = Math.min(1, s.t / 1.6), e = 1 - Math.pow(1 - f, 3); const yy = ty - 700 * (1 - e); ship(c, s.x, yy, s.sc, 1 - e * .8); return f < 1; });
+    this.ships = this.ships.filter(s => { s.t += dt; if (s.t < 0) return true; if (s.dir > 0) { s.vy -= dt * 900; s.y += s.vy * dt; ship(c, s.x, s.y, s.sc, 1); if (s.t < .4) for (let k = 0; k < 2; k++) this.puffs.push({ x: s.x + (Math.random() - .5) * 40, y: s.y + 10, t: 0, c: 'rgba(230,220,255,.8)' }); return s.y > -1200; } const ty = this.pad()[1] - 14, f = Math.min(1, s.t / 1.6), e = 1 - Math.pow(1 - f, 3); const yy = ty - 700 * (1 - e); ship(c, s.x, yy, s.sc, 1 - e * .8); return f < 1; });
     // warp sequence
     if (this.warpT >= 0) { this.warpT += dt; const [gx, gy] = iso(6, -3); const f = Math.min(1, this.warpT / 2.2); glow(c, gx, gy - 50, 120 + f * 900, '#b06bff', .4 + f * .6); c.save(); c.translate(gx, gy - 50); c.rotate(this.warpT * 4 * f); for (let k = 0; k < 6; k++) { c.rotate(1.047); c.beginPath(); c.ellipse(0, 0, 60 + f * 500, 20 + f * 160, 0, 0, Math.PI); c.strokeStyle = `hsla(${270 + k * 15},100%,75%,${.6 * f})`; c.lineWidth = 6 + f * 10; c.stroke(); } c.restore(); this.shake = Math.max(this.shake, f * .2); if (this.warpT > 2.2 && this.warpCb) { const cb = this.warpCb; this.warpCb = null; cb(); } if (this.warpT > 3.2) { this.warpT = -1; this.sprites.clear(); } }
     // labels on top
     if (this.night > .01) {
-      c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = `rgba(16,8,58,${.5 * this.night})`; c.fillRect(0, 0, this.cv.width, this.cv.height); c.restore();
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = `rgba(10,4,48,${.7 * this.night})`; c.fillRect(0, 0, this.cv.width, this.cv.height); c.restore();
       c.globalCompositeOperation = 'lighter';
-      for (const sl of order) { if (visible(sl) !== 'built') continue; const [x, y] = iso(sl.gx, sl.gy), on = activeOf(sl); glow(c, x, y - 4, 70, on ? accentOf(sl) : '#5a6aff', this.night * (on ? .35 : .15)); glow(c, x - 10, y - 30 - tier(sl) * 6, 34, '#ffe9a0', this.night * .45); }
+      for (const sl of order) { if (visible(sl) !== 'built') continue; const [x, y] = iso(sl.gx, sl.gy), on = activeOf(sl); glow(c, x, y - 4, 90, on ? accentOf(sl) : '#5a6aff', this.night * (on ? .5 : .2)); glow(c, x - 10, y - 30 - tier(sl) * 6, 40, '#ffe9a0', this.night * .65); glow(c, x + 14, y - 12, 18, '#ffd28a', this.night * .5); }
+      { const [hx, hy] = iso(0, 0), ang = this.t * .35, len = 520; c.save(); c.translate(hx + 8, hy - 70); c.rotate(ang); const g = c.createLinearGradient(0, 0, len, 0); g.addColorStop(0, `rgba(255,240,190,${.28 * this.night})`); g.addColorStop(1, 'rgba(255,240,190,0)'); c.fillStyle = g; c.beginPath(); c.moveTo(0, 0); c.lineTo(len, -70); c.lineTo(len, 70); c.closePath(); c.fill(); c.restore(); }
       for (const [a, b, r, on] of L) if (on) { const [x1, y1] = iso(b.gx, a.gy); glow(c, x1, y1, 26, RES[r].color, this.night * .3); }
       c.globalCompositeOperation = 'source-over';
     }
@@ -180,6 +198,7 @@ export class BaseView {
     // ambient lighting: cool vignette + warm key light (screen space)
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (!this.vig || this.vig.width !== this.cv.width) { const v = document.createElement('canvas'); v.width = this.cv.width; v.height = this.cv.height; const g = v.getContext('2d')!; const W = v.width, H = v.height; let gr = g.createRadialGradient(W * .5, H * .45, H * .2, W * .5, H * .5, H * .75); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(8,2,30,.55)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); gr = g.createRadialGradient(W * .15, H * .1, 0, W * .15, H * .1, H * .6); gr.addColorStop(0, 'rgba(255,190,120,.16)'); gr.addColorStop(1, 'rgba(255,190,120,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); this.vig = v; }
+    if (this.travelT >= 0) { const f = Math.sin(Math.min(1, this.travelT / 1.32) * Math.PI); c.strokeStyle = `rgba(200,230,255,${.5 * f})`; c.lineWidth = 2; let sd = 3; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647; for (let k = 0; k < 40; k++) { const yy = r() * this.h, xx = ((r() * this.w * 2 - this.travelT * 2600 * (this.travelTo ? 1 : -1)) % (this.w * 1.2) + this.w * 1.2) % (this.w * 1.2) - this.w * .1, L = 60 + r() * 140; c.beginPath(); c.moveTo(xx, yy); c.lineTo(xx + L * f, yy); c.stroke(); } }
     c.drawImage(this.vig, 0, 0, this.w, this.h);
     c.setTransform(1, 0, 0, 1, 0, 0);
   }
@@ -217,29 +236,30 @@ export class BaseView {
     drawBuilding(c, 1, sl.kind, id, hueOf(sl), tr, x, y, sl.s, this.t + sl.gx * .37, act, accentOf(sl));
   }
   private ground() {
-    const c = this.c, R = 10.2;
+    const c = this.c, R = this.rock ? 7 : 10.2, ice = this.rock === 1;
     // rim thickness (asteroid side)
     const pts: [number, number][] = []; for (let k = 0; k < 48; k++) { const a = k / 48 * Math.PI * 2, r = R * (1 + Math.sin(a * 3) * .05 + Math.sin(a * 7 + 1) * .03); pts.push(iso(Math.cos(a) * r, Math.sin(a) * r)); }
     c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y + 60) : c.moveTo(x, y + 60)); c.closePath();
-    let g = c.createLinearGradient(0, -200, 0, 500); g.addColorStop(0, '#5a3b6e'); g.addColorStop(1, '#2a1838'); c.fillStyle = g; c.fill(); c.strokeStyle = '#140a22'; c.lineWidth = 4; c.stroke();
+    let g = c.createLinearGradient(0, -200, 0, 500); g.addColorStop(0, ice ? '#3b5a7e' : '#5a3b6e'); g.addColorStop(1, ice ? '#182a48' : '#2a1838'); c.fillStyle = g; c.fill(); c.strokeStyle = '#140a22'; c.lineWidth = 4; c.stroke();
     // strata lines
     c.save(); c.clip(); c.strokeStyle = 'rgba(0,0,0,.25)'; c.lineWidth = 3; for (let k = 1; k < 3; k++) { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y + k * 20) : c.moveTo(x, y + k * 20)); c.stroke(); } c.restore();
     // top surface
     c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath();
-    g = c.createRadialGradient(-60, -80, 40, 0, 0, 760); g.addColorStop(0, '#a77ab8'); g.addColorStop(.6, '#7d5397'); g.addColorStop(1, '#5c3a75'); c.fillStyle = g; c.fill(); c.strokeStyle = '#140a22'; c.lineWidth = 4; c.stroke();
+    g = c.createRadialGradient(-60, -80, 40, 0, 0, 760); g.addColorStop(0, ice ? '#9cc4e0' : '#a77ab8'); g.addColorStop(.6, ice ? '#6a90b8' : '#7d5397'); g.addColorStop(1, ice ? '#4a6890' : '#5c3a75'); c.fillStyle = g; c.fill(); c.strokeStyle = '#140a22'; c.lineWidth = 4; c.stroke();
     c.save(); c.clip();
     // subtle tile grid
     c.strokeStyle = 'rgba(255,255,255,.05)'; c.lineWidth = 1;
     for (let k = -11; k <= 11; k++) { let [a, b] = iso(k, -11), [d, e] = iso(k, 11); c.beginPath(); c.moveTo(a, b); c.lineTo(d, e); c.stroke(); [a, b] = iso(-11, k); [d, e] = iso(11, k); c.beginPath(); c.moveTo(a, b); c.lineTo(d, e); c.stroke(); }
     // craters
-    for (const [cx, cy, r] of this.craters) { const [x, y] = iso(cx, cy); c.beginPath(); c.ellipse(x, y, r * TW / 2, r * TH / 2, 0, 0, 7); c.fillStyle = 'rgba(40,16,60,.35)'; c.fill(); c.beginPath(); c.ellipse(x, y + 2, r * TW / 2, r * TH / 2, 0, .2, Math.PI - .2); c.strokeStyle = 'rgba(255,220,255,.18)'; c.lineWidth = 3; c.stroke(); }
+    for (const [cx, cy, r] of this.craters) { if (Math.hypot(cx, cy) > R - 1) continue; const [x, y] = iso(cx, cy); c.beginPath(); c.ellipse(x, y, r * TW / 2, r * TH / 2, 0, 0, 7); c.fillStyle = 'rgba(40,16,60,.35)'; c.fill(); c.beginPath(); c.ellipse(x, y + 2, r * TW / 2, r * TH / 2, 0, .2, Math.PI - .2); c.strokeStyle = 'rgba(255,220,255,.18)'; c.lineWidth = 3; c.stroke(); }
     // surface details: boulders, crystal clusters, beacon posts (kept off building plots)
     let sd = 11; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647; const taken = (gx: number, gy: number) => SLOTS.some(s => Math.abs(s.gx - gx) < 1.7 && Math.abs(s.gy - gy) < 1.7);
-    for (let k = 0; k < 70; k++) { const a = rnd() * 7, r = 2 + rnd() * 7.8, gx = Math.cos(a) * r, gy = Math.sin(a) * r; if (taken(gx, gy)) continue; const [x, y] = iso(gx, gy), kind = rnd();
+    for (let k = 0; k < 70; k++) { const a = rnd() * 7, r = 2 + rnd() * (R - 2.4), gx = Math.cos(a) * r, gy = Math.sin(a) * r; if (taken(gx, gy)) continue; const [x, y] = iso(gx, gy), kind = rnd();
       if (kind < .55) { const s2 = 4 + rnd() * 9; c.beginPath(); c.ellipse(x + 2, y + 2, s2 * 1.2, s2 * .5, 0, 0, 7); c.fillStyle = 'rgba(30,10,50,.35)'; c.fill(); c.beginPath(); c.moveTo(x - s2, y); c.quadraticCurveTo(x - s2 * .8, y - s2 * 1.1, x, y - s2); c.quadraticCurveTo(x + s2, y - s2 * .9, x + s2, y); c.quadraticCurveTo(x, y + s2 * .4, x - s2, y); c.fillStyle = '#6e4a86'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(); c.beginPath(); c.moveTo(x - s2 * .6, y - s2 * .6); c.quadraticCurveTo(x - s2 * .2, y - s2 * .95, x + s2 * .2, y - s2 * .85); c.strokeStyle = 'rgba(255,230,255,.35)'; c.lineWidth = 2; c.stroke(); }
       else if (kind < .85) { const hue = rnd() < .5 ? 190 : 290; for (let j = 0; j < 3; j++) { const cx = x + (j - 1) * 5, h2 = 8 + rnd() * 10; c.beginPath(); c.moveTo(cx - 3, y); c.lineTo(cx - 1, y - h2); c.lineTo(cx + 2, y - h2 - 3); c.lineTo(cx + 3, y); c.closePath(); c.fillStyle = hsl(hue, 90, 70); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.5; c.stroke(); } }
       else { c.strokeStyle = INK; c.lineWidth = 3; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - 18); c.stroke(); c.beginPath(); c.arc(x, y - 20, 3, 0, 7); c.fillStyle = '#ffd23f'; c.fill(); c.stroke(); }
     }
+    if (ice) { c.strokeStyle = 'rgba(255,210,63,.55)'; c.lineWidth = 4; c.setLineDash([14, 10]); for (const [a, b] of [[-3, 0], [3, 0], [0, -3], [0, 3]]) { const [x1, y1] = iso(0, 0), [x2, y2] = iso(a, b); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); } c.setLineDash([]); }
     c.restore();
   }
   private belt(a: Slot, b: Slot, col: string, on: boolean) {

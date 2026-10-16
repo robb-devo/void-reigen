@@ -8,7 +8,7 @@ type C = CanvasRenderingContext2D;
 export const hsl = (h: number, s: number, l: number, a = 1) => `hsla(${h},${s}%,${l}%,${a})`;
 let MODE: 0 | 1 = 0; const S = () => MODE === 0, A = () => MODE === 1;
 export const TIER_NAMES = ['Prototype', 'Outpost', 'Industrial', 'Advanced', 'Ascended'];
-export type Kind = 'mine' | 'mach' | 'gen' | 'yard' | 'gate' | 'hq' | 'lab';
+export type Kind = 'mine' | 'mach' | 'gen' | 'yard' | 'gate' | 'hq' | 'lab' | 'lift' | 'hangar' | 'dock' | 'turret' | 'fuel';
 
 export function poly(c: C, pts: number[], fill: string | CanvasGradient, stroke: string | null = INK, lw = 2.5) {
   c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); c.closePath();
@@ -207,19 +207,58 @@ DRAW.forge = p => { // alloy forge: crucible on a crane over a lava trough
   if (A()) { const sw = on ? Math.sin(t * 1.5) * 10 : 0; const cx = x - hw * .25 + sw, cy = y - 22; c.strokeStyle = INK; c.lineWidth = 2; c.beginPath(); c.moveTo(cx, y - 52 - tier * 4); c.lineTo(cx, cy - 10); c.stroke(); c.beginPath(); c.moveTo(cx - 10, cy - 10); c.lineTo(cx + 10, cy - 10); c.lineTo(cx + 7, cy + 4); c.lineTo(cx - 7, cy + 4); c.closePath(); c.fillStyle = '#6d6a85'; c.fill(); c.stroke(); c.beginPath(); c.ellipse(cx, cy - 10, 10, 3.5, 0, 0, 7); c.fillStyle = on ? '#ffb02e' : '#4a3f60'; c.fill(); poly(c, [x - hw * .7, y + hh * .1, x - hw * .22, y + hh * .36, x - hw * .05, y + hh * .28, x - hw * .55, y + hh * .02], on ? lg(c, x - hw * .7, 0, x, 0, '#ffe066', ac) : '#4a2a40', null); if (on) { glow(c, x - hw * .35, y + hh * .2, 30, '#ff8a2e', .6); steam(c, x + hw * .25 - 8, y - 50 - tier * 10, t, 'rgba(120,100,120,.6)'); } }
   if (tier >= 2) lamp(c, x + hw * .55, y - 30 - tier * 6, '#ffd23f', t);
 };
-DRAW.fab = p => { // chip fab: white clean-room with glass roof strip + vent fans + robot arm
-  const { c, x, y, hw, hh, tier, t, on } = p; const bw = hw * (.64 + tier * .04), bh = 22 + tier * 6;
-  let top = y - bh;
-  if (S()) { top = box(c, x, y, bw, bw / 2, bh, 210, 25, 82, { panels: 3 }); poly(c, [x - bw * .6, top + 2, x, top - bw * .3 + 2, x + bw * .2, top - bw * .2 + 2, x - bw * .4, top + bw * .1 + 2], 'rgba(120,220,255,.85)', INK, 2); for (const s of [0, 1]) { c.beginPath(); c.ellipse(x + bw * (.35 + s * .2) - 8, top + 4 - s * 5, 7, 3.5, 0, 0, 7); c.fillStyle = '#4a4470'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(); } }
-  windowsL(c, x, y, bw, bw / 2, bh, 3, tier >= 3 ? 2 : 1);
-  if (A()) { for (const s of [0, 1]) { const fx = x + bw * (.35 + s * .2) - 8, fy = top + 4 - s * 5, a = on ? t * 12 : 0; c.strokeStyle = '#c4c9e6'; c.lineWidth = 2; c.beginPath(); c.moveTo(fx - Math.cos(a) * 6, fy - Math.sin(a) * 3); c.lineTo(fx + Math.cos(a) * 6, fy + Math.sin(a) * 3); c.stroke(); } const ax = x + bw * .8, ay = y - 4, an = on ? Math.sin(t * 2.5) : 0; c.save(); c.translate(ax, ay); c.rotate(-1.9 + an * .4); c.strokeStyle = INK; c.lineWidth = 7; c.lineCap = 'round'; c.beginPath(); c.moveTo(0, 0); c.lineTo(20, 0); c.stroke(); c.strokeStyle = '#ff9f43'; c.lineWidth = 4; c.stroke(); c.translate(20, 0); c.rotate(1.3 - an * .6); c.strokeStyle = INK; c.lineWidth = 6; c.beginPath(); c.moveTo(0, 0); c.lineTo(14, 0); c.stroke(); c.strokeStyle = '#ff9f43'; c.lineWidth = 3; c.stroke(); c.restore(); if (on) glow(c, x - bw * .2, top - 4, 20, '#7ae8ff', .5); }
-  if (tier >= 1) lamp(c, x - bw, y - bh - 2, '#5cff9d', t);
+DRAW.fab = p => { // chip fab: stepped white clean-room tower, glowing circuit stripes, satellite uplink, wafer silo
+  const { c, x, y, hw, hh, tier, t, on } = p;
+  const b1 = hw * .62, h1 = 18 + tier * 3, b2 = hw * .42, h2 = 16 + tier * 5;
+  if (S()) {
+    cyl(c, x - hw * .62, y + hh * .12, 10, 24 + tier * 3, 200, 30, 78, undefined, 2); dome(c, x - hw * .62, y + hh * .12 - 24 - tier * 3, 10, '#c8f0ff');
+    const t1 = box(c, x + 4, y, b1, b1 / 2, h1, 215, 25, 84, { panels: 3, rivets: true });
+    const t2 = box(c, x + 4, t1, b2, b2 / 2, h2, 210, 30, 88, { panels: 2 });
+    // stepped roof terrace with railing
+    c.strokeStyle = INK; c.lineWidth = 2; for (let k = 0; k <= 4; k++) { const f = k / 4, px = x + 4 - b1 + (b1 - b2) * .5 + f * 0; void px; }
+    poly(c, [x + 4 - b2 * .55, t2 + 1, x + 4, t2 - b2 * .27 + 1, x + 4 + b2 * .55, t2 + 1, x + 4, t2 + b2 * .27 + 1], '#4a4470', INK, 2);
+    // uplink dish on mast
+    c.strokeStyle = INK; c.lineWidth = 4; c.beginPath(); c.moveTo(x + 4 + b2 * .3, t2); c.lineTo(x + 4 + b2 * .3, t2 - 22 - tier * 3); c.stroke();
+  }
+  windowsL(c, x + 4, y, b1, b1 / 2, h1, 3);
+  if (A()) {
+    // circuit stripe pulses along right face
+    const f = (t * .8) % 1, cx0 = x + 4, cy0 = y + b1 / 2 - h1 * .45; c.lineCap = 'round';
+    c.strokeStyle = on ? '#5cf2ff' : '#3a6080'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(cx0 + 2, cy0); c.lineTo(cx0 + b1 * .45, cy0 - b1 * .22); c.lineTo(cx0 + b1 * .45, cy0 - b1 * .22 - 8); c.lineTo(cx0 + b1 * .9, cy0 - b1 * .45 - 8); c.stroke();
+    if (on) { const px = cx0 + 2 + (b1 * .88) * f, py = cy0 - (b1 * .45) * f - (f > .5 ? 8 : 0); glow(c, px, py, 12, '#9af7ff', .9); c.beginPath(); c.arc(px, py, 2.5, 0, 7); c.fillStyle = '#fff'; c.fill(); }
+    const t2y = y - h1 - h2, mx = x + 4 + b2 * .3, my = t2y - 22 - tier * 3, ang = Math.sin(t * .7) * .4;
+    c.save(); c.translate(mx, my); c.rotate(ang - .5); c.beginPath(); c.ellipse(0, 0, 13, 6, 0, 0, Math.PI); c.fillStyle = '#eef6ff'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke(); c.restore();
+    if (on) { for (let k = 0; k < 3; k++) { const r2 = ((t * 1.2 + k / 3) % 1) * 26; c.globalAlpha = 1 - r2 / 26; c.beginPath(); c.arc(mx, my - 4, r2, Math.PI * 1.15, Math.PI * 1.85); c.strokeStyle = '#9af7ff'; c.lineWidth = 2; c.stroke(); } c.globalAlpha = 1; glow(c, x + 4, t2y + 1, 22, '#7ae8ff', .45 + Math.sin(t * 3) * .15); }
+  }
+  if (tier >= 1) lamp(c, x + 4 - b1, y - h1 - 2, '#5cff9d', t);
+  if (tier >= 3) lamp(c, x + 4 + b2, y - h1 - h2 - 2, '#ff7bd5', t, 1);
 };
-DRAW.hull = p => { // hullworks: big arched hangar with a hull section peeking out
-  const { c, x, y, hw, hh, tier, t, on, hue } = p; const w = hw * .8, h = 30 + tier * 6;
-  if (S()) { poly(c, [x - w, y, x, y + w / 2, x, y + w / 2 - h, x - w, y - h], lg(c, x - w, 0, x, 0, hsl(hue, 30, 55), hsl(hue, 30, 42))); c.beginPath(); c.moveTo(x - w, y - h); c.quadraticCurveTo(x - w * .1, y - h - w * .9, x + w, y - h); c.lineTo(x, y + w / 2 - h); c.closePath(); c.fillStyle = lg(c, x - w, y - h - w, x + w, y - h, hsl(hue, 35, 70), hsl(hue, 35, 50)); c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke(); poly(c, [x + w, y, x, y + w / 2, x, y + w / 2 - h, x + w, y - h], hsl(hue, 30, 35)); poly(c, [x + w * .2, y + w * .4 - 2, x + w * .8, y + w * .1 - 2, x + w * .8, y + w * .1 - h * .8, x + w * .2, y + w * .4 - h * .8], '#1d1530', INK, 2); c.strokeStyle = 'rgba(0,0,0,.2)'; for (let k = 1; k < 5; k++) { c.beginPath(); c.moveTo(x - w + k * w / 5, y + k * w / 10 - h); c.lineTo(x - w + k * w / 5, y + k * w / 10); c.stroke(); } }
-  if (A()) { const b = on ? Math.sin(t * .8) * 4 : 0; poly(c, [x + w * .3, y + w * .32 - 8 + b, x + w * .85, y + w * .05 - 14 + b, x + w * .7, y + w * .05 - 26 + b, x + w * .3, y + w * .3 - 22 + b], '#c4c9e6', INK, 2); if (on) { c.fillStyle = '#ffe066'; const sp = (t * 7) % 1; glow(c, x + w * .55, y + w * .2 - 16, 16 * sp + 6, '#fff3a0', .9 - sp * .6); } }
-  if (tier >= 2) lamp(c, x - w * .1, y - h - w * .45, '#ff5b5b', t);
+DRAW.hull = p => { // hull works: dry-dock gantry crane straddling a half-built ship hull, welding sparks
+  const { c, x, y, hw, hh, tier, t, on, hue } = p;
+  const L = hw * .78, H = 50 + tier * 8;
+  if (S()) {
+    // dock trench
+    poly(c, [x - L, y, x, y + L / 2, x + L * .6, y + L * .2, x - L * .4, y - L * .3], '#2a1c44', INK, 2.5);
+    // hull keel + ribs (ship lying in dock, bow to the right)
+    const hx = x - L * .25, hy = y + L * .02;
+    c.beginPath(); c.moveTo(hx - L * .55, hy - 4); c.quadraticCurveTo(hx, hy + 18, hx + L * .75, hy - 12); c.lineTo(hx + L * .55, hy - 26); c.quadraticCurveTo(hx - L * .05, hy - 10, hx - L * .55, hy - 20); c.closePath();
+    c.fillStyle = lg(c, hx - L * .5, hy - 24, hx + L * .6, hy + 10, '#d8deef', '#7b84a8'); c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke();
+    c.strokeStyle = 'rgba(36,22,58,.55)'; c.lineWidth = 2; for (let k = 1; k < 5; k++) { const f = k / 5, rx = hx - L * .55 + f * L * 1.3; c.beginPath(); c.moveTo(rx, hy - 4 + f * -8 + 6); c.lineTo(rx - 4, hy - 22 + f * -6); c.stroke(); }
+    poly(c, [hx + L * .3, hy - 18, hx + L * .52, hy - 25, hx + L * .52, hy - 20, hx + L * .3, hy - 13], '#ff5b5b', INK, 1.5);
+    // gantry legs + beam
+    for (const s2 of [-1, 1]) { const lx = x + s2 * L * .62, ly = y + s2 * -L * .05; box(c, lx, ly, 6, 3, H, hue, 75, 52, { panels: 0 }); box(c, lx, ly + 2, 10, 5, 6, 230, 15, 40); }
+    box(c, x, y - H + 4, L * .7, 5, 9, hue, 80, 50, { rivets: true });
+    c.fillStyle = '#ffd23f'; for (let k = 0; k < 6; k++) { const f = k / 6; poly(c, [x - L * .62 + f * L * 1.24, y - H + 1, x - L * .62 + (f + .08) * L * 1.24, y - H + 1, x - L * .62 + (f + .04) * L * 1.24, y - H - 4], k % 2 ? '#ffd23f' : INK, null); }
+  }
+  if (A()) {
+    const tx = x + Math.sin(t * .6) * L * .45, ty = y - H + 8;
+    box(c, tx, ty + 6, 9, 4.5, 8, 45, 90, 55);
+    const dy = on ? 22 + Math.sin(t * 2) * 6 : 18; c.strokeStyle = INK; c.lineWidth = 1.5; c.beginPath(); c.moveTo(tx, ty + 8); c.lineTo(tx, ty + 8 + dy); c.stroke();
+    poly(c, [tx - 5, ty + 8 + dy, tx + 5, ty + 8 + dy, tx + 3, ty + 14 + dy, tx - 3, ty + 14 + dy], '#9aa3c0', INK, 1.5);
+    if (on) { const sx = x - L * .1 + Math.sin(t * 1.3) * L * .3, sy = y - 12; if (Math.sin(t * 13) > 0) { glow(c, sx, sy, 18, '#fff3a0', .95); for (let k = 0; k < 5; k++) { const a = t * 20 + k * 1.3; c.fillStyle = '#ffe066'; c.fillRect(sx + Math.cos(a) * 9, sy + Math.sin(a) * 6 - 4, 2, 2); } } }
+  }
+  if (tier >= 1) { lamp(c, x - L * .62, y - H - 6, '#ff5b5b', t); lamp(c, x + L * .62, y - H - 10, '#ff5b5b', t, 1.4); }
+  if (tier >= 3) lamp(c, x, y - H - 6, '#5cf2ff', t, 2);
 };
 DRAW.quantum = p => { // quantum lab: floating orb inside gyroscope rings on a pylon
   const { c, x, y, hw, tier, t, on } = p; const cy = y - 46 - tier * 5;
@@ -238,6 +277,44 @@ DRAW.yard = p => {
   if (S()) { c.beginPath(); c.ellipse(x, y, hw * .75, hh * .75, 0, 0, 7); c.fillStyle = '#3d3460'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke(); c.beginPath(); c.ellipse(x, y, hw * .62, hh * .62, 0, 0, 7); c.strokeStyle = '#ffd23f'; c.lineWidth = 3; c.setLineDash([8, 6]); c.stroke(); c.setLineDash([]); box(c, gx, y - hh * .2, 8, 4, gh, 15, 70, 50, { panels: 0 }); c.strokeStyle = INK; c.lineWidth = 4; c.beginPath(); c.moveTo(gx, y - hh * .2 - gh + 6); c.lineTo(x + 8, y - gh + 14); c.stroke(); }
   for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + .78; lamp(c, x + Math.cos(a) * hw * .75, y + Math.sin(a) * hh * .75, on ? '#5cff9d' : '#ff5b5b', t, k); }
 };
+DRAW.lift = p => { // cargo lift: launch rail + tether beam to the fleet rock, pods ride up
+  const { c, x, y, hw, hh, tier, t, on } = p; const H = 70 + tier * 10;
+  if (S()) { box(c, x, y, hw * .5, hh * .5, 14, 220, 30, 50, { rivets: true }); for (const s2 of [-1, 1]) box(c, x + s2 * 10, y - 12, 4, 2, H, 45, 85, 52); for (let k = 1; k < 6; k++) { c.strokeStyle = INK; c.lineWidth = 2.5; c.beginPath(); c.moveTo(x - 10, y - 12 - H * k / 6); c.lineTo(x + 10, y - 12 - H * k / 6 - 6); c.stroke(); } dome(c, x, y - 14 - H, 9, '#ffd23f'); }
+  if (A()) { if (on) { const g = c.createLinearGradient(0, y - H, 0, y - H - 260); g.addColorStop(0, 'rgba(120,230,255,.45)'); g.addColorStop(1, 'rgba(120,230,255,0)'); c.fillStyle = g; c.fillRect(x - 3, y - H - 260, 6, 260); for (let k = 0; k < 2; k++) { const f = (t * .35 + k * .5) % 1, py = y - 20 - f * (H + 200); c.globalAlpha = f > .7 ? (1 - f) / .3 : 1; box(c, x, py, 7, 3.5, 8, 30, 90, 58); c.globalAlpha = 1; } } lamp(c, x, y - 24 - H, on ? '#5cf2ff' : '#ff5b5b', t); }
+};
+DRAW.hangar = p => { // arched hangar; a ship nose pokes out at higher tiers
+  const { c, x, y, hw, hh, tier, t, on } = p; const L = hw * .78, R2 = 24 + tier * 4;
+  if (S()) {
+    box(c, x, y, L, L / 2, 10, 220, 25, 45);
+    // barrel vault: draw as stacked ribs along the left->right axis
+    const ax = x - L * .5, ay = y - 10 + L * .25, bx = x + L * .5, by = y - 10 - L * .25;
+    c.beginPath(); c.moveTo(ax - R2 * .9, ay); c.quadraticCurveTo(ax - R2 * .9, ay - R2 * 1.5, ax, ay - R2 * 1.5); c.lineTo(bx, by - R2 * 1.5); c.quadraticCurveTo(bx + R2 * .9, by - R2 * 1.5, bx + R2 * .9, by); c.lineTo(ax + R2 * .9, ay + R2 * .1); c.closePath();
+    c.fillStyle = lg(c, ax, ay - R2 * 1.5, ax, ay, '#c9d4ec', '#6c7aa6'); c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke();
+    c.strokeStyle = 'rgba(36,22,58,.4)'; c.lineWidth = 2; for (let k = 1; k < 5; k++) { const f = k / 5; c.beginPath(); c.moveTo(ax + (bx - ax) * f - R2 * .9, ay + (by - ay) * f); c.quadraticCurveTo(ax + (bx - ax) * f - R2 * .9, ay + (by - ay) * f - R2 * 1.5, ax + (bx - ax) * f, ay + (by - ay) * f - R2 * 1.5); c.stroke(); }
+    // door face (front, lower-left end)
+    c.beginPath(); c.moveTo(ax - R2 * .9, ay); c.quadraticCurveTo(ax - R2 * .9, ay - R2 * 1.5, ax, ay - R2 * 1.5); c.quadraticCurveTo(ax + R2 * .9, ay - R2 * 1.5, ax + R2 * .9, ay + R2 * .1); c.closePath(); c.fillStyle = '#4a5684'; c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(ax - R2 * .6, ay + 1); c.quadraticCurveTo(ax - R2 * .6, ay - R2 * 1.05, ax, ay - R2 * 1.05); c.quadraticCurveTo(ax + R2 * .6, ay - R2 * 1.05, ax + R2 * .6, ay + R2 * .1); c.closePath(); c.fillStyle = '#1c1434'; c.fill();
+    for (let k = 0; k < 4; k++) poly(c, [ax - R2 * .6 + k * R2 * .3, ay + 2, ax - R2 * .45 + k * R2 * .3, ay + 2, ax - R2 * .3 + k * R2 * .3, ay - 3, ax - R2 * .45 + k * R2 * .3, ay - 3], k % 2 ? '#ffd23f' : INK, null);
+  }
+  if (A()) { const ax = x - L * .5, ay = y - 10 + L * .25; glow(c, ax, ay - R2 * .5, R2 * 1.2, '#ffd28a', on ? .55 : .2); if (tier >= 1) ship(c, ax, ay - 6 + Math.sin(t * 1.5) * 1.5, .55, 0); lamp(c, x + L * .5, y - 10 - L * .25 - R2 * 1.5 - 4, '#ff5b5b', t); }
+};
+DRAW.dock = p => { // launch docks: raised pads with clamp arms, one per dock level
+  const { c, x, y, hw, hh, tier, t } = p; const n = Math.min(4, 1 + tier);
+  const pads: [number, number][] = [[-.35, -.15], [.35, .15], [.35, -.35], [-.35, .35]].slice(0, n).map(([a, b]) => [x + a * hw, y + b * hh * 1.6]) as [number, number][];
+  if (S()) for (const [px, py] of pads) { cyl(c, px, py, hw * .3, 8, 220, 25, 50); c.beginPath(); c.ellipse(px, py - 8, hw * .22, hw * .11, 0, 0, 7); c.strokeStyle = '#ffd23f'; c.lineWidth = 2.5; c.stroke(); c.font = '700 9px Fredoka'; c.fillStyle = '#ffd23f'; c.textAlign = 'center'; c.fillText('H', px, py - 5); for (const s2 of [-1, 1]) { c.strokeStyle = INK; c.lineWidth = 3.5; c.beginPath(); c.moveTo(px + s2 * hw * .3, py - 4); c.lineTo(px + s2 * hw * .34, py - 22); c.lineTo(px + s2 * hw * .2, py - 26); c.stroke(); } }
+  if (A()) pads.forEach(([px, py], k) => { const busy = k < G_busy(); if (!busy) ship(c, px, py - 12, .45, 0); lamp(c, px - hw * .3, py - 8, busy ? '#ff9f43' : '#5cff9d', t, k); });
+};
+DRAW.turret = p => { // defense battery: rotating twin cannon on a fortified base
+  const { c, x, y, hw, tier, t } = p; const r = hw * .38;
+  if (S()) { box(c, x, y, hw * .55, hw * .28, 12, 0, 10, 40, { rivets: true }); cyl(c, x, y - 12, r, 10 + tier * 3, 210, 15, 55, undefined, 1); }
+  if (A()) { const ang = Math.sin(t * .4) * 1.2, cy = y - 22 - tier * 3; dome(c, x, cy, r * .75, '#9aa3c0'); for (const s2 of [-1, 1]) { const ox = Math.cos(ang) * 22, oy = Math.sin(ang) * 11; c.strokeStyle = INK; c.lineWidth = 7; c.lineCap = 'round'; c.beginPath(); c.moveTo(x + s2 * 4, cy - 6 + s2 * 2); c.lineTo(x + ox + s2 * 4, cy - 6 + oy - 8 + s2 * 2); c.stroke(); c.strokeStyle = '#d8deef'; c.lineWidth = 4; c.stroke(); } if (Math.sin(t * 2.3) > .97) glow(c, x + Math.cos(ang) * 26, y - 36 + Math.sin(ang) * 13 - tier * 3, 16, '#ffe066', 1); lamp(c, x, cy - r * .75 - 3, '#ff5b5b', t); }
+};
+DRAW.fuel = p => { // fuel depot: spherical tanks + pipes
+  const { c, x, y, hw, tier, t, on } = p; const n = 2 + Math.min(2, tier >> 1);
+  if (S()) { box(c, x, y, hw * .6, hw * .3, 6, 220, 20, 45); for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2 + .6, px = x + Math.cos(a) * hw * .32, py = y + Math.sin(a) * hw * .16 - 6; cyl(c, px, py, 5, 14, 210, 10, 40); c.beginPath(); c.arc(px, py - 26, 14, 0, 7); c.fillStyle = lg(c, px - 14, py - 40, px + 14, py - 12, '#fff', '#ff8a3a'); c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke(); c.beginPath(); c.ellipse(px, py - 26, 14, 4, 0, 0, Math.PI); c.strokeStyle = 'rgba(36,22,58,.4)'; c.lineWidth = 2; c.stroke(); } }
+  if (A()) { steam(c, x, y - 30, t, 'rgba(255,230,200,.5)', 2, 24); if (on) glow(c, x, y - 20, 30, '#ff9f43', .25 + Math.sin(t * 2) * .1); lamp(c, x + hw * .5, y - 8, '#ffd23f', t); }
+};
+let busyFn = () => 0; export const setBusy = (f: () => number) => { busyFn = f; }; const G_busy = () => busyFn();
 export function ship(c: C, x: number, y: number, sc: number, flame: number) {
   c.save(); c.translate(x, y); c.scale(sc, sc);
   if (flame > 0) { glow(c, 0, 12, 22, '#ffb23f', .6 + flame * .3); poly(c, [-6, 6, 0, 10 + flame * 20, 6, 6], '#fff3a0', null); }

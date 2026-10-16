@@ -1,5 +1,14 @@
 import { MINES, MILESTONES, MACHINES, TECH, SHIPS, PLANETS, RUNS, RES, RES_ORDER, GEN, FLEET_UPG, GATES, Res } from './data';
+import { SKILLS, levelOf, LEVEL_GATE } from './skills';
 export const sector = () => S.warps + 1;
+export const sk = (id: string) => S.skills.includes(id);
+export const cmdLevel = () => levelOf(S.xp);
+export const skillPoints = () => cmdLevel().lv - 1 - S.skills.length;
+export const canLearn = (id: string) => { const d = SKILLS.find(x => x.id === id)!; return !sk(id) && skillPoints() > 0 && cmdLevel().lv >= LEVEL_GATE[d.tier] && (d.tier === 0 || SKILLS.some(x => x.br === d.br && x.tier === d.tier - 1 && sk(x.id))); };
+export function learn(id: string) { if (!canLearn(id)) return false; S.skills.push(id); return true; }
+export function gainXp(n: number) { const a = cmdLevel().lv; S.xp += n; return cmdLevel().lv - a; }
+/** 0 = day … 1 = deep night. 6-minute cycle driven by play time, so the first minutes are always daylight. */
+export const nightness = () => { const ph = (S.played / 360 + .8) % 1; return Math.max(0, Math.min(1, (Math.cos(ph * Math.PI * 2) * -1 - .1) * 1.6)); };
 export const avail = (d: { sector?: number }) => (d.sector || 1) <= sector();
 export const techAvail = (t: { tgt: number; res: Res }) => (t.tgt < 0 || avail(MINES[t.tgt])) && (t.res !== 'exotic' || sector() >= 2);
 export type Mine = { n: number; p: number; m: boolean; run: boolean };
@@ -11,7 +20,7 @@ export type State = {
   mines: Mine[]; tech: string[]; res: Bag; made: Bag; mach: number[]; on: boolean[]; gen: number;
   ships: Record<string, number>; conquered: string[]; missions: Mission[]; fupg: Record<string, number>; uid: number;
   ach: string[]; goal: number; sold: number; lost: number; wins: number; w: number[]; auto: boolean;
-  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[];
+  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[];
 };
 export const KEY = 'starforge.v2';
 export const fresh = (keep?: Partial<State>): State => ({
@@ -19,7 +28,7 @@ export const fresh = (keep?: Partial<State>): State => ({
   mines: MINES.map((_, i) => ({ n: i === 0 ? 1 : 0, p: 0, m: false, run: false })),
   tech: [], res: bag(), made: bag(), mach: MACHINES.map(() => 0), on: MACHINES.map(() => true), gen: 1,
   ships: {}, conquered: [], missions: [], fupg: {}, uid: 1, ach: [], goal: 0, sold: 0, lost: 0, wins: 0, w: MACHINES.map(() => 50), auto: false,
-  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], ...keep,
+  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], ...keep,
 });
 export let S: State = fresh();
 export let clock = () => Date.now();
@@ -45,7 +54,7 @@ export const globalMul = () => dmMul() * planetMul() * achMul();
 export const revMul = (i: number) => { let m = globalMul() * Math.pow(2, Math.max(0, msIdx(S.mines[i].n) - 6)); for (const t of TECH) if ((t.tgt === i || t.tgt === -1) && S.tech.includes(t.id)) m *= t.x; return m; };
 export const revenue = (i: number) => MINES[i].rev * S.mines[i].n * revMul(i);
 export const oreMul = () => (1 + S.conquered.length * 0.5) * (1 + S.dm * 0.01);
-export const orePerCycle = (i: number) => MINES[i].ore * S.mines[i].n * oreMul();
+export const orePerCycle = (i: number) => MINES[i].ore * S.mines[i].n * oreMul() * (sk('mVein') ? 2 : 1);
 export const perSec = () => MINES.reduce((a, _, i) => a + (S.mines[i].m && S.mines[i].n ? revenue(i) / cycle(i) : 0), 0);
 export const resPerSec = (r: Res) => MINES.reduce((a, d, i) => a + (d.res === r && S.mines[i].m && S.mines[i].n ? orePerCycle(i) / cycle(i) : 0), 0);
 export const prodRate = (r: Res) => resPerSec(r) + MACHINES.reduce((a, d, j) => a + (d.out === r && S.on[j] ? machRate(j) * powerEff() : 0), 0);
@@ -60,14 +69,16 @@ export function earn(v: number) { S.cash += v; S.life += v; }
 export const machCost = (j: number) => MACHINES[j].cost * Math.pow(MACHINES[j].g, S.mach[j]);
 export const machCostK = (j: number, k: number) => { const g = MACHINES[j].g; return machCost(j) * (Math.pow(g, k) - 1) / (g - 1); };
 export const machK = (j: number) => { if (!S.mach[j]) return 1; const m = BUY[S.mult]; if (m !== -1) return m; const g = MACHINES[j].g; return Math.max(1, Math.floor(Math.log(S.cash * (g - 1) / machCost(j) + 1) / Math.log(g))); };
-export const machRate = (j: number) => MACHINES[j].rate * S.mach[j] * Math.pow(2, Math.floor(S.mach[j] / 10)) * (1 + S.dm * 0.01);
+export const machRate = (j: number) => MACHINES[j].rate * S.mach[j] * Math.pow(2, Math.floor(S.mach[j] / 10)) * (1 + S.dm * 0.01) * (sk('iOver') ? 1.5 : 1) * (sk('iNight') ? 1 + nightness() : 1);
 export const machUnlocked = (j: number) => S.mach[j] > 0 || allTime() >= MACHINES[j].unlock;
 export const genCost = (k = 1) => GEN.cost * Math.pow(GEN.g, S.gen) * (Math.pow(GEN.g, k) - 1) / (GEN.g - 1);
 export const genK = () => { const m = BUY[S.mult]; if (m !== -1) return m; return Math.max(1, Math.floor(Math.log(S.cash * (GEN.g - 1) / genCost() + 1) / Math.log(GEN.g))); };
 export const powerSupply = () => GEN.power * S.gen * Math.pow(2, Math.floor(S.gen / 10));
 export const powerDemand = () => MACHINES.reduce((a, d, j) => a + (S.on[j] ? d.power * S.mach[j] : 0), 0);
-export const powerEff = () => { const d = powerDemand(); return d ? Math.min(1, powerSupply() / d) : 1; };
-export const price = (r: Res) => RES[r].price * MINES.reduce((a, _, i) => Math.max(a, S.mines[i].n ? revMul(i) : 1), 1);
+export const powerEff = () => { const d = powerDemand(); const e = d ? Math.min(1, powerSupply() / d) : 1; return sk('iGrid') ? Math.max(.75, e) : e; };
+export const autoOK = () => S.warps >= 2 || sk("lAuto");
+export const inMul = () => sk('iLean') ? .75 : 1;
+export const price = (r: Res) => (sk('lTrade') ? 1.5 : 1) * RES[r].price * MINES.reduce((a, _, i) => Math.max(a, S.mines[i].n ? revMul(i) : 1), 1);
 /** Sell surplus only: keeps ~30s of factory input + whatever upcoming research/ships need. */
 export const sellable = (r: Res) => { const use = MACHINES.reduce((a, d, j) => a + (d.inp[r] && S.mach[j] && S.on[j] && avail(d) ? machRate(j) * d.inp[r]! * 30 : 0), 0); return Math.max(0, S.res[r] - use - reserveFor(r)); };
 export function sell(r: Res, frac = 1) { const q = sellable(r) * frac; const v = q * price(r); S.res[r] -= q; earn(v); S.sold++; return v; }
@@ -80,7 +91,7 @@ export function factoryTick(dt: number) {
   const alloc: Partial<Record<Res, number[]>> = {};
   for (const r of RES_ORDER) {
     const users = MACHINES.map((d, j) => (d.inp[r] && want[j] > 0 ? j : -1)).filter(j => j >= 0); if (!users.length) continue;
-    const desire = users.map(j => want[j] * MACHINES[j].inp[r]!); const D = desire.reduce((a, b) => a + b, 0), A = S.res[r];
+    const desire = users.map(j => want[j] * MACHINES[j].inp[r]! * inMul()); const D = desire.reduce((a, b) => a + b, 0), A = S.res[r];
     const out = MACHINES.map(() => 0);
     if (D <= A) users.forEach((j, k) => out[j] = desire[k]);
     else { // weighted water-filling
@@ -97,9 +108,9 @@ export function factoryTick(dt: number) {
     if (!S.mach[j] || !avail(d)) return { made: 0, eff: 0, reason: 'idle' };
     if (!S.on[j]) return { made: 0, eff: 0, reason: 'off' };
     const max = machRate(j) * dt; let can = want[j], need: Res | undefined;
-    for (const r in d.inp) { const lim = (alloc[r as Res]?.[j] ?? 0) / d.inp[r as Res]!; if (lim < can - 1e-12) { can = lim; need = r as Res; } }
+    for (const r in d.inp) { const lim = (alloc[r as Res]?.[j] ?? 0) / (d.inp[r as Res]! * inMul()); if (lim < can - 1e-12) { can = lim; need = r as Res; } }
     can = Math.max(0, can);
-    for (const r in d.inp) S.res[r as Res] = Math.max(0, S.res[r as Res] - can * d.inp[r as Res]!);
+    for (const r in d.inp) S.res[r as Res] = Math.max(0, S.res[r as Res] - can * d.inp[r as Res]! * inMul());
     S.res[d.out] += can; S.made[d.out] += can;
     const eff = max ? can / max : 0;
     return { made: can, eff, reason: eff > 0.97 ? '' : need ? 'starved' : pe < 1 ? 'power' : '', need };
@@ -113,7 +124,7 @@ export function reserveFor(r: Res) {
   return need;
 }
 export function autoSellTick(dt: number) {
-  if (!S.auto || S.warps < 2) return;
+  if (!S.auto || !autoOK()) return;
   for (const r of RES_ORDER) { const used = MACHINES.some((d, j) => d.inp[r] && S.mach[j] && S.on[j]); if (used) continue; const keep = reserveFor(r) * 1.2; if (S.res[r] > keep + 1) { const q = (S.res[r] - keep) * Math.min(1, dt * 0.2); S.res[r] -= q; earn(q * price(r)); } }
 }
 
@@ -125,12 +136,12 @@ export const shipsAvail = () => SHIPS.filter(avail);
 export const idlePower = () => SHIPS.reduce((a, s) => a + idle(s.id) * s.power, 0);
 export const totalPower = () => SHIPS.reduce((a, s) => a + (S.ships[s.id] || 0) * s.power, 0);
 export const fu = (id: string) => S.fupg[id] || 0;
-export const docks = () => 1 + fu('docks') + (S.warps >= 3 ? 1 : 0);
+export const docks = () => 1 + fu('docks') + (S.warps >= 3 ? 1 : 0) + (sk('fDock') ? 1 : 0);
 export const fuCost = (id: string) => { const u = FLEET_UPG.find(x => x.id === id)!; return Math.ceil(u.base * Math.pow(3, fu(id))); };
 export const canAfford = (c: Partial<Record<Res, number>>) => (Object.keys(c) as Res[]).every(r => S.res[r] >= (c[r] || 0));
 export const pay = (c: Partial<Record<Res, number>>) => { for (const r in c) S.res[r as Res] -= c[r as Res]!; };
 export const shipCost = (id: string) => { const d = SHIPS.find(s => s.id === id)!, f = Math.pow(1.08, S.ships[id] || 0); const c: Partial<Record<Res, number>> = {}; for (const r in d.cost) c[r as Res] = Math.ceil(d.cost[r as Res]! * f); return c; };
-export const chanceFor = (sent: number, need: number) => sent < need ? 0 : Math.min(0.97, 0.3 + 0.5 * sent / need);
+export const chanceFor = (sent: number, need: number) => sent < need ? 0 : Math.min(sk('fEsc') ? .99 : 0.97, 0.3 + 0.5 * sent / need + (sk('fEsc') ? .1 : 0));
 /** Pick idle ships to reach `want` power, big ships first, minimal overshoot. */
 export function pickShips(want: number) {
   const pick: Record<string, number> = {}; let rem = want;
@@ -141,7 +152,7 @@ export function pickShips(want: number) {
   const power = SHIPS.reduce((a, s) => a + (pick[s.id] || 0) * s.power, 0);
   return { pick, power };
 }
-export const missionTime = (base: number) => base * Math.pow(0.85, fu('engines'));
+export const missionTime = (base: number) => base * Math.pow(0.85, fu('engines')) * (sk('fBurn') ? .75 : 1);
 export function launch(kind: 'planet' | 'run', target: string, greed: number, manual?: Record<string, number>) {
   const def = kind === 'planet' ? PLANETS.find(p => p.id === target)! : RUNS.find(r => r.id === target)!;
   if (S.missions.length >= docks() || S.missions.some(m => m.target === target)) return null;
@@ -158,7 +169,7 @@ export function resolveMissions(rng = Math.random): Outcome[] {
     if (clock() < m.end) continue;
     S.missions = S.missions.filter(x => x !== m);
     const ok = rng() < m.chance, lost: Record<string, number> = {};
-    const lossRate = (ok ? 0.05 : 0.35) * (1 - 0.2 * fu('armor'));
+    const lossRate = (ok ? 0.05 : 0.35) * (1 - 0.2 * fu('armor')) * (sk('fLife') ? .5 : 1);
     for (const id in m.ships) { const k = Math.floor(m.ships[id] * lossRate + (rng() < (m.ships[id] * lossRate) % 1 ? 1 : 0)); if (k) { lost[id] = k; S.ships[id] -= k; S.lost += k; } }
     let loot: Partial<Bag> | undefined;
     if (ok) {
@@ -166,24 +177,25 @@ export function resolveMissions(rng = Math.random): Outcome[] {
       if (m.kind === 'planet') { if (!S.conquered.includes(m.target)) S.conquered.push(m.target); }
       else { const r = RUNS.find(x => x.id === m.target)!; loot = {}; const f = (1 + S.conquered.length * 0.5) * Math.min(2, m.power / r.need); for (const k in r.loot) { const v = r.loot[k as Res]! * f + prodRate(k as Res) * r.time * 1.5 * Math.min(2, m.power / r.need); loot[k as Res] = v; S.res[k as Res] += v; } }
     }
+    if (sk('lDrop')) earn(perSec() * 120);
     out.push({ m, ok, lost, loot });
   }
   return out;
 }
 
 // ---------- main tick (shared by game + simulator) ----------
-export type MineEvent = { i: number; v: number; ore: number; ct: number };
+export type MineEvent = { i: number; v: number; ore: number; ct: number; lode?: boolean };
 export function tick(dt: number, autoTap = false): MineEvent[] {
   const ev: MineEvent[] = [];
   for (let i = 0; i < MINES.length; i++) {
     const b = S.mines[i]; if (!b.n || !avail(MINES[i])) continue;
-    if (autoTap && !b.m && !b.run) b.run = true;
+    if ((autoTap || sk('mAuto')) && !b.m && !b.run) b.run = true;
     if (!(b.run || b.m)) continue;
     const ct = cycle(i); b.p += dt / ct;
     if (b.p >= 1) {
-      const times = b.m ? Math.floor(b.p) : 1, v = revenue(i) * times, ore = orePerCycle(i) * times;
+      const times = b.m ? Math.floor(b.p) : 1, lode = sk('mLode') && Math.random() < .04, v = revenue(i) * times * (lode ? 10 : 1), ore = orePerCycle(i) * times;
       earn(v); S.res[MINES[i].res] += ore; b.p = b.m ? b.p - times : 0; if (!b.m) b.run = false;
-      ev.push({ i, v, ore, ct });
+      ev.push({ i, v, ore, ct, lode });
     }
   }
   factoryTick(dt); autoSellTick(dt); S.played += dt;
@@ -199,11 +211,11 @@ export function simulateOffline(secs: number) {
 }
 
 export let GOAL_SECTOR = 0; export function setGoalSector(i: number) { GOAL_SECTOR = i; }
-export const offlineCap = () => (S.warps >= 4 ? 24 : 8) * 3600;
+export const offlineCap = () => ((S.warps >= 4 ? 24 : 8) + (sk('lCold') ? 8 : 0)) * 3600;
 /** Warp: reset the sector, keep meta-progress, apply perks. */
 export function doWarp() {
   const o = S, g = dmGain(), w = o.warps + 1;
-  const n = fresh({ dm: o.dm + g, total: o.total + o.life, warps: w, mute: o.mute, taps: o.taps, ach: o.ach, sold: o.sold, played: o.played, lost: o.lost, wins: o.wins, auto: o.auto, w: o.w, mult: o.mult, seen: o.seen });
+  const n = fresh({ dm: o.dm + g, total: o.total + o.life, warps: w, mute: o.mute, taps: o.taps, ach: o.ach, sold: o.sold, played: o.played, lost: o.lost, wins: o.wins, auto: o.auto, w: o.w, mult: o.mult, seen: o.seen, xp: o.xp, skills: o.skills });
   n.goal = GOAL_SECTOR;
   if (w >= 1) { n.mines[0].m = true; n.mines[1].m = true; n.mines[1].n = 1; n.cash = 1e4; }
   if (w >= 2) n.mach = o.mach.map(l => Math.floor(l * 0.25));

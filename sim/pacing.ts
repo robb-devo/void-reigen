@@ -2,6 +2,8 @@
 import { MINES, MACHINES, TECH, SHIPS, PLANETS, RUNS, RES_ORDER, FLEET_UPG, Res } from '../src/game/data';
 import * as G from '../src/game/state';
 import { GOALS, goalReward, ACHS } from '../src/game/progress';
+import { XP, SKILLS } from '../src/game/skills';
+const SKILL_ORDER = (process.env.SKILLS || 'iOver,mHand,lTrade,mVein,iNight,fEsc,lAuto,mAuto,iLean,fBurn,fLife,lCold,iGrid,mLode,fDock,lDrop').split(',');
 let T = 0; G.setClock(() => T * 1000); G.setS(G.fresh()); G.S.last = 0;
 const S = () => G.S;
 const SRC = { goal: 0, sell: 0 };
@@ -14,8 +16,9 @@ const reserveFor = G.reserveFor;
 function step() {
   const s = S();
   // claim goals
-  while (s.goal < GOALS.length && GOALS[s.goal].done()) { const r = goalReward(GOALS[s.goal]); G.earn(r); SRC.goal += r; log(`goal ${s.goal + 1}: ${GOALS[s.goal].text}`); s.goal++; }
-  for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); log(`trophy ${a.name}`, false); }
+  while (s.goal < GOALS.length && GOALS[s.goal].done()) { const r = goalReward(GOALS[s.goal]); G.earn(r); SRC.goal += r; log(`goal ${s.goal + 1}: ${GOALS[s.goal].text}`); if (G.gainXp(XP.goal(s.goal))) log(`COMMANDER LV ${G.cmdLevel().lv}`); s.goal++; }
+  for (const id of SKILL_ORDER) if (G.learn(id)) log(`skill ${SKILLS.find(x => x.id === id)!.name}`);
+  for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); G.gainXp(XP.ach); log(`trophy ${a.name}`, false); }
   // managers
   MINES.forEach((d, i) => { if (G.avail(d) && s.mines[i].n && !s.mines[i].m && s.cash >= d.mgr) { s.cash -= d.mgr; s.mines[i].m = true; log(`hire ${d.mname}`); } });
   // power
@@ -35,7 +38,7 @@ function step() {
     const next = PLANETS.find(p => G.avail(p) && !s.conquered.includes(p.id));
     if (next && G.idlePower() >= next.need * 1.4) { if (G.launch('planet', next.id, 1.4)) log(`launch invade ${next.name}`, false); }
     for (const r of [...RUNS].reverse()) if (G.idlePower() >= r.need * 1.4 && s.missions.length < G.docks()) G.launch('run', r.id, 1.4);
-    for (const o of G.resolveMissions(rand)) { if (o.m.kind === 'planet') log(`${o.ok ? 'CONQUER' : 'FAILED'} ${o.m.target}`, o.ok); }
+    for (const o of G.resolveMissions(rand)) { if (o.m.kind === 'planet') { log(`${o.ok ? 'CONQUER' : 'FAILED'} ${o.m.target}`, o.ok); if (o.ok) G.gainXp(XP.conquer); } }
   }
   // mines: buy best marginal ROI repeatedly
   for (let guard = 0; guard < 200; guard++) {
@@ -66,13 +69,13 @@ while (T < 30 * 3600 && runEnds.length < RUNS_N) {
   const gate = G.warpOpen();
   const planetsLeft = PLANETS.some(p => G.avail(p) && !S().conquered.includes(p.id));
   const want = !S().missions.some(m => m.kind === 'planet') && ((!planetsLeft && G.dmGain() >= Math.max(1, S().dm)) || T - runT0 > 75 * 60);
-  if (gate && want) { if (!warpAt) warpAt = T; runEnds.push(T); log(`*** WARP ${S().warps + 1} (+${G.dmGain()} DM, total ${S().dm + G.dmGain()}) after ${fmtT(T - runT0)} ***`); G.doWarp(); S().auto = true; S().taps = 1; runT0 = T; runStarts.push(T); }
+  if (gate && want) { if (!warpAt) warpAt = T; runEnds.push(T); log(`*** WARP ${S().warps + 1} (+${G.dmGain()} DM, total ${S().dm + G.dmGain()}) after ${fmtT(T - runT0)} ***`); G.gainXp(XP.warp); G.doWarp(); S().auto = true; S().taps = 1; runT0 = T; runStarts.push(T); }
 }
 function fmtT(t: number) { return `${Math.floor(t / 3600)}h${String(Math.floor(t % 3600 / 60)).padStart(2, '0')}m${String(Math.floor(t % 60)).padStart(2, '0')}s`; }
 const _f = (t: number) => `${Math.floor(t / 3600)}h${String(Math.floor(t % 3600 / 60)).padStart(2, '0')}m${String(Math.floor(t % 60)).padStart(2, '0')}s`;
 const notable = events.filter(e => e.notable);
-console.log(`\n=== Pacing (TAP=${TAP_EFF}) ===  runs: ${runEnds.map((e, k) => fmtT(e - runStarts[k])).join(' | ')}  first warp at ${warpAt ? fmtT(warpAt) : 'NOT REACHED'}  · goals ${S().goal}/${GOALS.length} · trophies ${S().ach.length}`);
+console.log(`\n=== Pacing (TAP=${TAP_EFF}) ===  runs: ${runEnds.map((e, k) => fmtT(e - runStarts[k])).join(' | ')}  first warp at ${warpAt ? fmtT(warpAt) : 'NOT REACHED'}  · goals ${S().goal}/${GOALS.length} · trophies ${S().ach.length} · cmdr Lv ${G.cmdLevel().lv} · skills ${S().skills.length}`);
 const buckets: [string, number, number, number][] = [['0-5m', 0, 300, 90], ['5-30m', 300, 1800, 120], ['30-90m', 1800, Math.max(1801, runEnds[0] || 5400), 300], ['run 2', runStarts[1] ?? 1e9, runEnds[1] ?? 1e9, 300], ['run 3', runStarts[2] ?? 1e9, runEnds[2] ?? 1e9, 300]];
 for (const [n, a, b, target] of buckets) { let mx = 0, at = 0; for (let k = 1; k < notable.length; k++) { const e = notable[k], p = notable[k - 1]; if (e.t >= a && e.t < b && e.t - p.t > mx) { mx = e.t - p.t; at = p.t; } } console.log(`${n.padEnd(7)} longest gap between notable events: ${Math.round(mx)}s (target ≤${target}s) ${mx > target ? '❌' : '✅'} ${mx ? 'after ' + fmtT(at) : ''}`); }
 if (process.env.V) for (const e of notable) console.log(fmtT(e.t), e.what);
-else for (const e of notable.filter(e => /goal|NEW MINE|build|CONQUER|WARP|Quantum|Black/.test(e.what))) console.log(fmtT(e.t), e.what);
+else for (const e of notable.filter(e => /goal|NEW MINE|build|CONQUER|WARP|Quantum|Black|COMMANDER|skill/.test(e.what))) console.log(fmtT(e.t), e.what);
