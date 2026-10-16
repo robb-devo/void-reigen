@@ -74,7 +74,9 @@ type Card = { root: HTMLElement; fill: HTMLElement; bt: HTMLElement; buy: HTMLBu
 let cards: Card[] = [];
 const visibleMines = () => { let k = 0; for (let i = 0; i < MINES.length; i++) { k = i + 1; if (st().mines[i].n === 0) break; } return Math.min(MINES.length, k + 1); };
 function renderMine() {
-  main.innerHTML = `<div class="buyrow"><div class="hint"></div>${multBtn()}</div>`;
+  const built = MINES.filter((_, i) => st().mines[i].n > 0);
+  main.innerHTML = `<div class="roidwrap" id="roid"><div class="orbit">${built.map((d, k) => `<i style="--a:${k / built.length * 360}deg">${d.e}</i>`).join('')}</div><div class="roid"><span></span><span></span><span></span><b></b><b></b></div><div class="roidtxt h">Asteroid <small>tap to drill all</small></div></div><div class="buyrow"><div class="hint"></div>${multBtn()}</div>`;
+  $('#roid').addEventListener('pointerdown', ev => { let any = false; st().mines.forEach((b, i) => { if (b.n && !b.m && !b.run) { b.run = true; any = true; } void i; }); st().taps++; const r = $('.roid'); r.classList.remove('hit'); void r.offsetWidth; r.classList.add('hit'); burst(ev.clientX, ev.clientY, 12, 0, '#ff9f43'); if (any) { sfx.drill(); buzz(12); } else sfx.tap(); });
   cards = [];
   for (let i = 0; i < visibleMines(); i++) {
     const d = MINES[i], el = document.createElement('div'); el.className = 'biz'; el.style.animationDelay = i * 35 + 'ms'; el.style.setProperty('--h', String(d.hue));
@@ -209,10 +211,10 @@ function renderFleet() {
   main.innerHTML = `<div class="power card"><div><small>FLEET POWER</small><b class="h" id="fp"></b></div><div class="docks" id="docks"></div></div>
   <div class="seg"><span>Send</span>${[[1, 'Lean ×1'], [1.4, 'Safe ×1.4'], [2, 'Overwhelming ×2']].map(([g, n]) => `<button data-greed="${g}" class="${greed === g ? 'on' : ''}">${n}</button>`).join('')}</div>
   <div id="missions"></div>
-  <div class="sec">Salvage runs <span class="sech">repeatable</span></div>${RUNS.map(r => `<div class="row mis" data-run="${r.id}"><div class="ico sm">${r.e}</div><div class="mid"><div class="name">${r.name}</div><p>⚔️${r.need} · ${fmtT(G.missionTime(r.time))} · <span class="lootp" data-loot="${r.id}"></span></p><p class="ch"></p></div><button class="btn"></button></div>`).join('')}
-  <div class="sec">Conquest <span class="sech">permanent bonuses</span></div>${PLANETS.map((p, k) => { const done = s.conquered.includes(p.id), open = k === 0 || s.conquered.includes(PLANETS[k - 1].id);
-    return `<div class="row mis planet ${done ? 'done' : ''} ${!open ? 'dim' : ''}" data-planet="${p.id}"><div class="ico sm">${p.e}</div><div class="mid"><div class="name">${open ? p.name : 'Unknown world'}</div><p>${done ? `🏳️ Yours · profit ×${p.bonus}, ore +50%` : open ? `${p.desc}<br>⚔️${p.need} · ${fmtT(G.missionTime(p.time))} · profit <b class="x">×${p.bonus}</b>` : 'Conquer the previous planet'}</p><p class="ch"></p></div>${done ? '<span class="ok">🏳️</span>' : open ? '<button class="btn gold"></button>' : ''}</div>`; }).join('')}
   <div class="sec">Shipyard</div>${SHIPS.map(sh => `<div class="row" data-ship="${sh.id}"><div class="ico sm">${sh.e}</div><div class="mid"><div class="name">${sh.name} <small class="own"></small></div><p>⚔️ ${sh.power} power</p></div><button class="btn sb"></button></div>`).join('')}
+  <div class="sec">Salvage runs <span class="sech">repeatable</span></div>${RUNS.map(r => `<div class="row mis" data-run="${r.id}"><div class="ico sm">${r.e}</div><div class="mid"><div class="name">${r.name}</div><p>⚔️${r.need} · ${fmtT(G.missionTime(r.time))} · <span class="lootp" data-loot="${r.id}"></span></p><p class="ch"></p></div><button class="btn"></button></div>`).join('')}
+  <div class="sec">Conquest <span class="sech">permanent bonuses</span></div>${PLANETS.map((p, k) => { const done = s.conquered.includes(p.id), open = k === 0 || s.conquered.includes(PLANETS[k - 1].id); if (!open && k > 0 && !(k - 1 === 0 || s.conquered.includes(PLANETS[k - 2].id))) return '';
+    return `<div class="row mis planet ${done ? 'done' : ''} ${!open ? 'dim' : ''}" data-planet="${p.id}"><div class="ico sm">${p.e}</div><div class="mid"><div class="name">${open ? p.name : 'Unknown world'}</div><p>${done ? `🏳️ Yours · profit ×${p.bonus}, ore +50%` : open ? `${p.desc}<br>⚔️${p.need} · ${fmtT(G.missionTime(p.time))} · profit <b class="x">×${p.bonus}</b>` : 'Conquer the previous planet'}</p><p class="ch"></p></div>${done ? '<span class="ok">🏳️</span>' : open ? '<button class="btn gold"></button>' : ''}</div>`; }).join('')}
   <div class="sec">Fleet upgrades</div>${FLEET_UPG.map(u => `<div class="row" data-fu="${u.id}"><div class="ico sm">${u.e}</div><div class="mid"><div class="name">${u.name} <small class="own"></small></div><p>${u.desc}</p></div><button class="btn gold sb"></button></div>`).join('')}`;
   main.querySelectorAll<HTMLElement>('[data-greed]').forEach(b => b.addEventListener('click', () => { greed = +b.dataset.greed!; sfx.tap(); buzz(6); main.querySelectorAll('[data-greed]').forEach(x => x.classList.toggle('on', x === b)); }));
   main.querySelectorAll<HTMLElement>('[data-ship]').forEach(row => { const id = row.dataset.ship!, b = $<HTMLButtonElement>('button', row); b.addEventListener('click', ev => { const c = G.shipCost(id); if (!G.canAfford(c)) return deny(b); G.pay(c); s.ships[id] = (s.ships[id] || 0) + 1; sfx.launch(); buzz([20, 20, 40]); rocket(ev.clientX, ev.clientY - 20); burst(ev.clientX, ev.clientY, 14); }); });
@@ -229,7 +231,7 @@ function updateFleet() {
     setT(b, busy ? 'En route' : s.missions.length >= G.docks() ? 'Docks full' : row.dataset.run ? 'Launch' : 'Invade'); b.disabled = busy || ch <= 0 || s.missions.length >= G.docks();
     setT(row.querySelector('.ch'), busy ? '' : ch > 0 ? `<span class="${ch > 0.9 ? 'good' : ch > 0.7 ? 'mid' : 'risk'}">${Math.round(ch * 100)}% success</span> with ⚔️${power}` : `<span class="risk">Need ⚔️${def.need} idle</span>`, true); });
   main.querySelectorAll<HTMLElement>('[data-loot]').forEach(el => { const r = RUNS.find(x => x.id === el.dataset.loot)!; setT(el, Object.entries(r.loot).map(([k, v]) => RES[k as Res].e + fmt(v! * (1 + s.conquered.length * 0.5) + G.prodRate(k as Res) * r.time * 1.5)).join(' ')); });
-  main.querySelectorAll<HTMLElement>('[data-ship]').forEach(row => { const id = row.dataset.ship!, b = $<HTMLButtonElement>('button', row), c = G.shipCost(id); setT(b, costStr(c), true); b.disabled = !G.canAfford(c); setT($('.own', row), `${G.idle(id)}/${s.ships[id] || 0}`); });
+  main.querySelectorAll<HTMLElement>('[data-ship]').forEach(row => { const id = row.dataset.ship!, b = $<HTMLButtonElement>('button', row), c = G.shipCost(id); setT(b, costStr(c), true); b.disabled = !G.canAfford(c); setT($('.own', row), (s.ships[id] || 0) ? `×${s.ships[id]}${G.away(id) ? ` · ${G.away(id)} away` : ''}` : ''); });
   main.querySelectorAll<HTMLElement>('[data-fu]').forEach(row => { const id = row.dataset.fu!, u = FLEET_UPG.find(x => x.id === id)!, b = $<HTMLButtonElement>('button', row); const max = G.fu(id) >= u.max; setT($('.own', row), `Lv ${G.fu(id)}/${u.max}`); setT(b, max ? 'MAX' : costStr({ [u.res]: G.fuCost(id) }), true); b.disabled = max || !G.canAfford({ [u.res]: G.fuCost(id) }); });
 }
 function missionsTick() {
@@ -299,7 +301,7 @@ function frame(now: number) {
   if (now - lastSlow > 600) { lastSlow = now; if (acc > 0 && tab === 'mine' && G.perSec() > 0) { const r = cashEl.getBoundingClientRect(); popup(r.right + 14, r.top + 22, '+$' + fmt(acc), '#5cf2ff'); } acc = 0; }
   // header
   setT(cashEl, '$' + fmt(s.cash));
-  setT(rateEl, G.perSec() > 0 ? `+$${fmt(G.perSec())}/s` : 'Tap mines to earn');
+  setT(rateEl, G.perSec() > 0 ? `+$${fmt(G.perSec())}/s` : !s.taps ? 'Tap a mine to start' : s.life < 500 ? 'Tap mines to earn' : 'Hire foremen in Crew to earn while idle');
   setT($('#dm'), fmt(s.dm, 0));
   RES_ORDER.forEach(r => { shown[r] += (s.res[r] - shown[r]) * Math.min(1, dt * 10); const el = resEl(r); setT($('span', el), fmt(shown[r])); el.classList.toggle('hide', s.res[r] < 0.5 && s.made[r] === 0 && !MINES.some((m, i) => m.res === r && s.mines[i].n)); });
   if (tab === 'mine') updateMine(); else if (tab === 'fac') updateFac();

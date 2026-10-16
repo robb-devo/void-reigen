@@ -176,3 +176,17 @@ header{padding:calc(var(--st) + 6px) 12px 6px}
 .name{align-items:baseline}.name>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.name small{flex:none;white-space:nowrap}
 .biz .name{font-size:14px}
 .buyrow{margin:0 2px 8px}
+
+.roidwrap{position:relative;height:118px;margin:2px 0 6px;display:grid;place-items:center;touch-action:manipulation}
+.roid{position:relative;width:86px;height:78px;border-radius:46% 54% 42% 58%/55% 45% 55% 45%;background:radial-gradient(circle at 35% 30%,#a99bd6,#5b4f8c 55%,#2c2550);box-shadow:0 0 40px -6px #b08cff88,inset -10px -8px 18px #0007;animation:roidspin 24s linear infinite;transition:transform .12s}
+.roid.hit{animation:roidspin 24s linear infinite,roidhit .2s cubic-bezier(.3,1.8,.5,1)}
+@keyframes roidhit{50%{scale:.88}}
+@keyframes roidspin{to{rotate:360deg}}
+.roid span{position:absolute;border-radius:50%;background:#2c2550;box-shadow:inset 2px 2px 4px #0008}
+.roid span:nth-child(1){width:18px;height:16px;left:18px;top:20px}.roid span:nth-child(2){width:12px;height:12px;left:52px;top:44px}.roid span:nth-child(3){width:9px;height:9px;left:56px;top:16px}
+.roid b{position:absolute;width:7px;height:7px;transform:rotate(45deg);background:#5cf2ff;box-shadow:0 0 10px 2px #5cf2ff;animation:pulse 1.8s ease-in-out infinite}
+.roid b:nth-of-type(1){left:30px;top:50px}.roid b:nth-of-type(2){left:64px;top:30px;background:#ff9f43;box-shadow:0 0 10px 2px #ff9f43;animation-delay:.6s}
+.orbit{position:absolute;inset:0;animation:roidspin 40s linear infinite;pointer-events:none}
+.orbit i{position:absolute;left:50%;top:50%;font-style:normal;font-size:18px;transform:rotate(var(--a)) translate(68px) rotate(calc(-1 * var(--a)));margin:-11px;filter:drop-shadow(0 0 6px #fff6)}
+.roidtxt{position:absolute;left:4px;bottom:0;font-size:13px;color:#cfe3ff}.roidtxt small{display:block;font:800 10px Nunito;color:var(--dim)}
+.power{padding:10px 14px}.power b{font-size:22px}
