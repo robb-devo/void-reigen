@@ -20,8 +20,15 @@ await p.evaluate(()=>document.querySelector('#main').scrollTo(0,99999)); await p
 await p.tap('nav button[data-t=crew]',F); await p.waitForTimeout(500); await p.screenshot({path:`${OUT}/09-crew.png`});
 await p.tap('nav button[data-t=fleet]',F); await p.waitForTimeout(700); await p.screenshot({path:`${OUT}/10-fleet.png`});
 await p.evaluate(()=>document.querySelector('#main').scrollTo(0,700)); await p.waitForTimeout(300); await p.screenshot({path:`${OUT}/11-fleet-scroll.png`});
+await p.evaluate(()=>document.querySelector('#main').scrollTo(0,0)); await p.waitForTimeout(200); const lb=await p.$('.mis button:not([disabled])'); if(lb){ await lb.click(F); await p.waitForTimeout(500); await p.screenshot({path:`${OUT}/14-ship-select.png`}); await p.tap('.modal [data-x]',F);} 
 await p.tap('nav button[data-t=warp]',F); await p.waitForTimeout(500); await p.screenshot({path:`${OUT}/12-warp.png`});
 await p.tap('#trophy',F); await p.waitForTimeout(600); await p.screenshot({path:`${OUT}/13-trophies.png`});
 await p.tap('.modal [data-x]',F); await p.tap('nav button[data-t=mine]',F);
+const late={...mid,cash:4e13,life:2e14,total:5e15,dm:108,warps:2,mines:[[420,1],[300,1],[260,1],[220,1],[180,1],[150,1],[120,1],[80,1],[12,0]].map(([n,m])=>({n,p:0,m:!!m,run:false})),res:{...z,ore:9e9,quartz:5e9,ingot:2e8,glass:1e8,part:3e7,alloy:8e6,chip:4e5,hull:2e4,exotic:120},made:{...z,ingot:1e9,glass:5e8,part:1e8,alloy:1e7,chip:1e6,hull:5e4,exotic:300},mach:[120,110,90,70,40,20,6],on:Array(7).fill(true),w:[50,50,70,30,50,50,50],gen:180,ships:{scout:40,barge:30,cruiser:20,dread:6,titan:1},conquered:['p1','p2','p3','p4','p5'],missions:[],fupg:{engines:3,armor:2,docks:2},goal:41,auto:true,last:Date.now()};
+p=await page(late); await p.waitForTimeout(800); await p.screenshot({path:`${OUT}/15-sector3-asteroid.png`});
+await p.tap('nav button[data-t=fac]',F); await p.waitForTimeout(800); await p.evaluate(()=>document.querySelector('#main').scrollTo(0,900)); await p.waitForTimeout(300); await p.screenshot({path:`${OUT}/16-sector3-factory-splits.png`});
+await p.tap('nav button[data-t=fleet]',F); await p.waitForTimeout(600); { const lb=await p.$('.mis button:not([disabled])'); if(lb){ await lb.click(F); await p.waitForTimeout(500); await p.screenshot({path:`${OUT}/14-ship-select.png`}); await p.tap('.modal [data-x]',F); await p.waitForTimeout(300);} } await p.evaluate(()=>document.querySelector('#main').scrollTo(0,1100)); await p.waitForTimeout(300); await p.screenshot({path:`${OUT}/17-sector3-conquest.png`});
+await p.tap('nav button[data-t=warp]',F); await p.waitForTimeout(500); await p.screenshot({path:`${OUT}/18-warp-perks.png`});
+await p.tap('nav button[data-t=mine]',F);
 const fps=await p.evaluate(()=>new Promise(r=>{let n=0,t=performance.now();const f=()=>{n++; if(performance.now()-t<3000) requestAnimationFrame(f); else r(n/3)};requestAnimationFrame(f)}));
 console.log('fps',fps.toFixed(1),'errors:',JSON.stringify(errs)); await b.close();

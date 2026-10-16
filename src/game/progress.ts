@@ -1,6 +1,6 @@
-import { S, perSec, fleetOpen } from './state';
+import { S, perSec, fleetOpen, setGoalSector } from './state';
 import type { State } from './state';
-const mach = (id: string) => S.mach[['smelter', 'kiln', 'press', 'forge', 'fab', 'hull'].indexOf(id)];
+const mach = (id: string) => S.mach[['smelter', 'kiln', 'press', 'forge', 'fab', 'hull', 'quantum'].indexOf(id)];
 const mine = (i: number) => S.mines[i].n;
 const ships = () => Object.values(S.ships).reduce((a, b) => a + b, 0);
 // Guided goal chain = tutorial + "always a next goal". tab = where the player should go, focus = CSS selector to spotlight.
@@ -42,7 +42,20 @@ export const GOALS: Goal[] = [
   { text: 'Conquer Gaseous Rex', done: () => S.conquered.includes('p5'), reward: 5e11, tab: 'fleet' },
   { text: 'Charge the Warp Drive ($100T lifetime)', done: () => S.total + S.life >= 1e14, reward: 0, tab: 'warp' },
   { text: 'Engage Warp', done: () => S.warps >= 1, reward: 0, tab: 'warp' },
+  // ---- Sector 2+ goals (start here after a warp) ----
+  { text: 'New sector! Own 100 Pebble Drills', done: () => mine(0) >= 100, prog: () => [mine(0), 100], reward: 5e4, tab: 'mine' },
+  { text: 'Rebuild the Chip Fab', done: () => mach('fab') >= 1, reward: 1e6, tab: 'fac' },
+  { text: 'Build a Star Siphon', done: () => mine(7) >= 1, reward: 3e9, tab: 'mine' },
+  { text: 'Build the Black Hole Tap', done: () => mine(8) >= 1, reward: 2e10, tab: 'mine' },
+  { text: 'Build the Quantum Refinery', done: () => mach('quantum') >= 1, reward: 5e10, tab: 'fac' },
+  { text: 'Refine 50 Exotic Matter', done: () => S.made.exotic >= 50, prog: () => [S.made.exotic, 50], reward: 1e11, tab: 'fac' },
+  { text: 'Build a Void Titan', done: () => (S.ships.titan || 0) >= 1, reward: 1e12, tab: 'fleet' },
+  { text: 'Conquer Nyx Throne', done: () => S.conquered.includes('p6'), reward: 5e12, tab: 'fleet' },
+  { text: 'Conquer Abyssal Reach', done: () => S.conquered.includes('p7'), reward: 2e13, tab: 'fleet' },
+  { text: 'Conquer Chronos Belt', done: () => S.conquered.includes('p8'), reward: 1e14, tab: 'fleet' },
+  { text: 'Warp again for more Dark Matter', done: () => false, reward: 0, tab: 'warp' },
 ];
+export const SECTOR_GOAL_START = GOALS.findIndex(g => g.text.startsWith('New sector'));
 export const goalReward = (g: Goal) => g.reward ? Math.max(g.reward, perSec() * 10) : 0;
 
 export type Ach = { id: string; name: string; e: string; desc: string; check: (s: State) => boolean };
@@ -73,4 +86,12 @@ export const ACHS: Ach[] = [
   A('p6', '🌌', 'Emperor', 'Conquer every planet', s => s.conquered.length >= 6),
   A('tech10', '🔬', 'Lab Rat', 'Complete 10 research', s => s.tech.length >= 10),
   A('warp', '🌀', 'Into the Void', 'Warp once', s => s.warps >= 1),
+  A('warp3', '♾️', 'Serial Warper', 'Warp 3 times', s => s.warps >= 3),
+  A('exotic', '🌀', 'Strange Matter', 'Refine Exotic Matter', s => s.made.exotic >= 1),
+  A('hole', '🕳️', 'Event Horizon', 'Build a Black Hole Tap', s => (s.mines[8]?.n || 0) >= 1),
+  A('titan', '🛸', 'Titanomachy', 'Build a Void Titan', s => (s.ships.titan || 0) >= 1),
+  A('p9', '✴️', 'Keeper of the Last Star', 'Conquer The Last Star', s => s.conquered.includes('p9')),
+  A('c1e21', '🌌', 'Sextillionaire', 'Earn $1Sx', s => s.total + s.life >= 1e21),
 ];
+
+setGoalSector(SECTOR_GOAL_START);
