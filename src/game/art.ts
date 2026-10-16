@@ -52,6 +52,7 @@ const G: Record<string, () => string> = {
   r1: () => { const a = 'a' + n++; return svg(rg(a, ['#b9a7e8', '#4b3f7a']), `${rock(a, ['', ''], 'M6 30 L12 20 L24 18 L28 30 L18 38 Z')}${rock(a, ['', ''], 'M30 46 L36 34 L50 32 L58 44 L48 56 L34 56 Z')}${rock(a, ['', ''], 'M38 14 L46 8 L54 14 L50 22 L40 22 Z')}`); },
   r2: () => G.barge(),
   r3: () => { const a = 'a' + n++; return svg(lg(a, ['#4a4f73', '#1a1d33']), `<rect x="8" y="24" width="48" height="30" rx="4" fill="url(#${a})"/><path d="M8 24 L32 10 L56 24 Z" fill="#2c3052"/><path d="M26 34 L38 46 M38 34 L26 46" stroke="#ff6f8a" stroke-width="4" stroke-linecap="round"/><path d="M44 10 L44 2 L54 5 L44 8" fill="#ff6f8a"/>`); },
+  unknown: () => svg('', `<circle cx="32" cy="32" r="22" fill="#1a2246" stroke="#5a6aa8" stroke-width="2" stroke-dasharray="5 5"/><text x="32" y="41" text-anchor="middle" font-family="Fredoka,sans-serif" font-weight="700" font-size="26" fill="#7a88c8">?</text>`),
   r4: () => { const a = 'a' + n++; return svg(lg(a, ['#ffe9a8', '#b07a0a']), `<rect x="8" y="16" width="48" height="40" rx="6" fill="url(#${a})"/><circle cx="32" cy="36" r="10" fill="#5a3a00"/><circle cx="32" cy="36" r="10" fill="none" stroke="#fff3c4" stroke-width="2"/><path d="M32 30 L32 42 M26 36 L38 36" stroke="#ffd84a" stroke-width="2.5"/>${shine(22, 20, 9, 2.5, .4)}`); },
 };
 // Planets: parametric so every world is unique but on-style.

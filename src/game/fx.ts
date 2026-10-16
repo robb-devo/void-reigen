@@ -11,14 +11,15 @@ export function tone(f: number, d = 0.08, type: OscillatorType = 'sine', vol = 0
   o.connect(g).connect(out()); o.start(t); o.stop(t + d + 0.02);
 }
 function noise(d = 0.3, vol = 0.08, freq = 800) { if (S.mute) return; const c = ac(); const b = c.createBuffer(1, c.sampleRate * d, c.sampleRate), a = b.getChannelData(0); for (let k = 0; k < a.length; k++) a[k] = (Math.random() * 2 - 1) * (1 - k / a.length); const s = c.createBufferSource(); s.buffer = b; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq; const g = c.createGain(); g.gain.value = vol; s.connect(f).connect(g).connect(out()); s.start(); }
-let lastCoin = 0, combo = 0, comboT = 0;
+let lastCoin = 0, combo = 0, comboT = 0, lastFan = 0;
 export const sfx = {
   tap: () => tone(440, 0.05, 'triangle', 0.1, 1.8),
-  drill: () => { tone(90, 0.12, 'square', 0.05, 0.6); noise(0.08, 0.05, 2500); },
-  coin: () => { const n = performance.now(); if (n - lastCoin < 60) return; combo = n - comboT < 600 ? Math.min(combo + 1, 12) : 0; comboT = n; lastCoin = n; const f = 990 * Math.pow(2, combo / 24); tone(f, 0.08, 'square', 0.03); tone(f * 1.5, 0.14, 'sine', 0.05, 1, 0.035); },
+  drill: () => { tone(110, 0.1, 'triangle', 0.08, 0.55); noise(0.06, 0.035, 2200); },
+  coin: () => { const n = performance.now(); if (n - lastCoin < 60) return; combo = n - comboT < 600 ? Math.min(combo + 1, 12) : 0; comboT = n; lastCoin = n; const f = 990 * Math.pow(2, combo / 24); tone(f, 0.07, 'triangle', 0.06); tone(f * 1.5, 0.16, 'sine', 0.045, 1, 0.03); },
   buy: () => { tone(620, 0.06, 'triangle', 0.12); tone(930, 0.1, 'triangle', 0.1, 1, 0.05); },
   no: () => tone(160, 0.12, 'sawtooth', 0.05, 0.7),
-  fanfare: () => [523, 659, 784, 1047].forEach((f, k) => tone(f, 0.25, 'triangle', 0.11, 1, k * 0.08)),
+  fanfare: () => { const n = performance.now(); if (n - lastFan < 350) return; lastFan = n; [523, 659, 784, 1047].forEach((f, k) => tone(f, 0.25, 'triangle', 0.09, 1, k * 0.08)); },
+  claim: () => { for (let k = 0; k < 6; k++) tone(1200 + k * 160, 0.09, 'square', 0.025, 1, k * 0.045); tone(784, 0.35, 'triangle', 0.08, 1, 0.28); },
   launch: () => { noise(0.9, 0.06, 600); tone(120, 0.8, 'sawtooth', 0.03, 3); },
   warp: () => { tone(80, 1.6, 'sawtooth', 0.08, 12); noise(1.5, 0.08, 1200); [523, 784, 1047, 1568].forEach((f, k) => tone(f, 0.6, 'sine', 0.09, 1, 0.6 + k * 0.1)); },
   clank: () => { tone(300, 0.05, 'square', 0.04, 0.5); },
@@ -53,7 +54,11 @@ export function stepFx(dt: number, t: number) {
   }
   if (parts.length > 400) parts.splice(0, parts.length - 400);
 }
-export function popup(x: number, y: number, txt: string, color?: string) { const d = document.createElement('div'); d.className = 'pop'; d.textContent = txt; d.style.left = x + 'px'; d.style.top = y + 'px'; if (color) d.style.color = color; document.body.appendChild(d); setTimeout(() => d.remove(), 900); }
-export function toast(t: string) { document.querySelectorAll('.toast').forEach(e => e.remove()); const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2400); }
-export function rocket(x: number, y: number) { const d = document.createElement('div'); d.className = 'rocket'; d.textContent = '🚀'; d.style.left = x + 'px'; d.style.top = y + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1400); for (let k = 0; k < 8; k++) setTimeout(() => burst(x, y + 10 - k * 18, 3, 0, k % 2 ? '#ff9f43' : '#ffd84a'), k * 40); }
+let popN = 0;
+export function popup(x: number, y: number, txt: string, color?: string) { if (popN > 14) return; popN++; setTimeout(() => popN--, 900); const d = document.createElement('div'); d.className = 'pop'; d.textContent = txt; d.style.left = x + 'px'; d.style.top = y + 'px'; if (color) d.style.color = color; document.body.appendChild(d); setTimeout(() => d.remove(), 900); }
+const tq: string[] = []; let tbusy = false;
+function nextToast() { const t = tq.shift(); if (!t) { tbusy = false; return; } tbusy = true; const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2400); setTimeout(nextToast, tq.length ? 1100 : 2000); }
+export function toast(t: string) { if (tq.includes(t)) return; if (tq.length > 3) tq.shift(); tq.push(t); if (!tbusy) nextToast(); }
+let lastRocket = 0;
+export function rocket(x: number, y: number, force = false) { const n = performance.now(); if (!force && n - lastRocket < 700) return; lastRocket = n; const d = document.createElement('div'); d.className = 'rocket'; d.textContent = '🚀'; d.style.left = x + 'px'; d.style.top = y + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1400); for (let k = 0; k < 8; k++) setTimeout(() => burst(x, y + 10 - k * 18, 3, 0, k % 2 ? '#ff9f43' : '#ffd84a'), k * 40); }
 export function flash() { const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:70;background:radial-gradient(circle,#fff,#7ee8ff 40%,#4a2f9a);pointer-events:none;transition:opacity 1.2s'; document.body.appendChild(d); requestAnimationFrame(() => requestAnimationFrame(() => d.style.opacity = '0')); setTimeout(() => d.remove(), 1300); }

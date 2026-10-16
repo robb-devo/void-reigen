@@ -49,9 +49,10 @@ export const perSec = () => MINES.reduce((a, _, i) => a + (S.mines[i].m && S.min
 export const resPerSec = (r: Res) => MINES.reduce((a, d, i) => a + (d.res === r && S.mines[i].m && S.mines[i].n ? orePerCycle(i) / cycle(i) : 0), 0);
 export const prodRate = (r: Res) => resPerSec(r) + MACHINES.reduce((a, d, j) => a + (d.out === r && S.on[j] ? machRate(j) * powerEff() : 0), 0);
 export const allTime = () => S.total + S.life;
-export const dmGain = () => Math.max(0, Math.floor(50 * Math.sqrt(allTime() / 1e14)) - S.dm);
-export const dmNext = () => 1e14 * Math.pow((S.dm + dmGain() + 1) / 50, 2);
-export const warpOpen = () => allTime() >= GATES.warp || S.warps > 0;
+export const dmGain = () => Math.max(0, Math.floor(50 * Math.pow(allTime() / 1e14, 0.3)) - S.dm);
+export const dmNext = () => 1e14 * Math.pow((S.dm + dmGain() + 1) / 50, 1 / 0.3);
+export const warpNeed = () => GATES.warp * Math.pow(3, S.warps);
+export const warpOpen = () => S.life >= warpNeed();
 export function earn(v: number) { S.cash += v; S.life += v; }
 
 // ---------- factory ----------
@@ -102,9 +103,15 @@ export function factoryTick(dt: number) {
   });
 }
 export const sharedInputs = (j: number) => (Object.keys(MACHINES[j].inp) as Res[]).filter(r => MACHINES.some((d, k) => k !== j && d.inp[r] && S.mach[k] > 0 && avail(d)));
+/** Goods worth keeping for upcoming research, ships and fleet upgrades. */
+export function reserveFor(r: Res) {
+  let need = 0; for (const t of TECH.filter(t => techAvail(t) && !S.tech.includes(t.id)).slice(0, 4)) if (t.res === r) need = Math.max(need, t.amt);
+  if (fleetOpen()) { for (const sh of SHIPS) if (avail(sh)) { const c = shipCost(sh.id)[r]; if (c) need = Math.max(need, c * 3); } for (const u of FLEET_UPG) if (u.res === r && fu(u.id) < u.max) need = Math.max(need, fuCost(u.id)); }
+  return need;
+}
 export function autoSellTick(dt: number) {
   if (!S.auto || S.warps < 2) return;
-  for (const r of RES_ORDER) { const used = MACHINES.some((d, j) => d.inp[r] && S.mach[j] && S.on[j]); const keep = used ? Infinity : 0; if (!used && S.res[r] > 1) { const q = S.res[r] * Math.min(1, dt * 0.2); S.res[r] -= q; earn(q * price(r)); } void keep; }
+  for (const r of RES_ORDER) { const used = MACHINES.some((d, j) => d.inp[r] && S.mach[j] && S.on[j]); if (used) continue; const keep = reserveFor(r) * 1.2; if (S.res[r] > keep + 1) { const q = (S.res[r] - keep) * Math.min(1, dt * 0.2); S.res[r] -= q; earn(q * price(r)); } }
 }
 
 // ---------- fleet ----------

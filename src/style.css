@@ -225,3 +225,4 @@ header{padding:calc(var(--st) + 6px) 12px 6px}
 .ico b{filter:none}
 .ico{contain:layout paint}
 .empire small{font:700 10px Fredoka;letter-spacing:1.5px;color:var(--gold)}.empire div{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}.empire span{width:40px;height:40px;display:block;animation:bob 3s ease-in-out infinite}.empire span:nth-child(2n){animation-delay:-1.5s}
+.art-hero{width:76px;height:76px;margin:0 auto}.hero.art-hero{animation:bob 2s ease-in-out infinite}.sun.art-hero{display:block}

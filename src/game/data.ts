@@ -66,10 +66,10 @@ export const PLANETS: PlanetDef[] = [
   { id: 'p3', name: 'Ferrox Prime', e: '🔴', need: 50, time: 300, bonus: 2, desc: 'Iron world, iron will.' },
   { id: 'p4', name: 'Verdantis', e: '🌍', need: 180, time: 600, bonus: 2.25, desc: 'Jungle with crystal veins.' },
   { id: 'p5', name: 'Gaseous Rex', e: '🪐', need: 700, time: 1200, bonus: 2.5, desc: 'Ring-mining heaven.' },
-  { id: 'p6', name: 'Nyx Throne', e: '🌌', need: 3000, time: 2400, bonus: 3, desc: 'Seat of the old empire.' },
-  { id: 'p7', name: 'Abyssal Reach', e: '🌑', need: 12000, time: 3600, bonus: 3, desc: 'A world orbiting nothing at all.', sector: 2 },
-  { id: 'p8', name: 'Chronos Belt', e: '⏳', need: 50000, time: 5400, bonus: 4, desc: 'Time runs sideways here.', sector: 2 },
-  { id: 'p9', name: 'The Last Star', e: '✴️', need: 250000, time: 7200, bonus: 5, desc: 'Whoever holds it, holds the galaxy.', sector: 3 },
+  { id: 'p6', name: 'Nyx Throne', e: '🌌', need: 3000, time: 1200, bonus: 3, desc: 'Seat of the old empire.' },
+  { id: 'p7', name: 'Abyssal Reach', e: '🌑', need: 12000, time: 1500, bonus: 2, desc: 'A world orbiting nothing at all.', sector: 2 },
+  { id: 'p8', name: 'Chronos Belt', e: '⏳', need: 40000, time: 1800, bonus: 2.5, desc: 'Time runs sideways here.', sector: 2 },
+  { id: 'p9', name: 'The Last Star', e: '✴️', need: 200000, time: 1500, bonus: 3, desc: 'Whoever holds it, holds the galaxy.', sector: 3 },
 ];
 // Repeatable salvage runs: goods rewards, risk scales with greed.
 export type RunDef = { id: string; name: string; e: string; need: number; time: number; loot: Partial<Record<Res, number>> };
@@ -88,13 +88,13 @@ export const GATES = { fleetMach: 'fab', fleetLvl: 1, warp: 1e14 };
 
 // Each warp opens a new sector with fresh content + permanent perks, so run 2+ feels different.
 export const SECTORS = ['Kuiper Fringe', 'Obsidian Expanse', 'Crown of Stars', 'The Deep Black'];
-export type Perk = { warps: number; name: string; e: string; desc: string };
+export type Perk = { warps: number; name: string; e: string; art: string; desc: string };
 export const PERKS: Perk[] = [
-  { warps: 1, name: 'Veteran Crew', e: '🤖', desc: 'Start each sector with the first 2 foremen hired' },
-  { warps: 1, name: 'Sector 2 Tech', e: '🕳️', desc: 'Unlocks Black Hole Tap, Quantum Refinery, Exotic Matter, Void Titans & 2 new planets' },
-  { warps: 2, name: 'Blueprint Vault', e: '📐', desc: 'Machines keep 25% of their levels through warps' },
-  { warps: 2, name: 'Auto-Exporter', e: '🛒', desc: 'Market auto-sells surplus goods (toggle in Factory)' },
-  { warps: 3, name: 'Hyperdock', e: '🛫', desc: '+1 permanent launch dock' },
-  { warps: 3, name: 'Crown of Stars', e: '✴️', desc: 'Unlocks The Last Star' },
-  { warps: 4, name: 'Deep Sleep', e: '😴', desc: 'Offline earnings cap raised to 24h' },
+  { warps: 1, name: 'Veteran Crew', art: 'drill', e: '🤖', desc: 'Start each sector with the first 2 foremen hired' },
+  { warps: 1, name: 'Sector 2 Tech', art: 'hole', e: '🕳️', desc: 'Unlocks Black Hole Tap, Quantum Refinery, Exotic Matter, Void Titans & 2 new planets' },
+  { warps: 2, name: 'Blueprint Vault', art: 'press', e: '📐', desc: 'Machines keep 25% of their levels through warps' },
+  { warps: 2, name: 'Auto-Exporter', art: 'ingot', e: '🛒', desc: 'Market auto-sells surplus goods (toggle in Factory)' },
+  { warps: 3, name: 'Hyperdock', art: 'scout', e: '🛫', desc: '+1 permanent launch dock' },
+  { warps: 3, name: 'Crown of Stars', art: 'p9', e: '✴️', desc: 'Unlocks The Last Star' },
+  { warps: 4, name: 'Deep Sleep', art: 'moon', e: '😴', desc: 'Offline earnings cap raised to 24h' },
 ];

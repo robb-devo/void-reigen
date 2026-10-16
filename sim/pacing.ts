@@ -10,11 +10,7 @@ const log = (what: string, notable = true) => events.push({ t: T, what, notable 
 const TAP_EFF = +(process.env.TAP ?? 0.7); // fraction of time an active player keeps unmanaged mines running
 let rng = 42; const rand = () => (rng = (rng * 16807) % 2147483647) / 2147483647;
 const unitIncome = (i: number) => MINES[i].rev * G.revMul(i) / G.cycle(i) * (S().mines[i].m ? 1 : TAP_EFF);
-function reserveFor(r: Res) { // goods we want to keep for upcoming research/ships
-  let need = 0; for (const t of TECH.filter(t => G.techAvail(t) && !S().tech.includes(t.id)).slice(0, 4)) if (t.res === r) need = Math.max(need, t.amt);
-  if (G.fleetOpen()) for (const sh of SHIPS) { const c = G.shipCost(sh.id)[r]; if (c) need = Math.max(need, c * 2); }
-  return need;
-}
+const reserveFor = G.reserveFor;
 function step() {
   const s = S();
   // claim goals
@@ -67,8 +63,9 @@ while (T < 30 * 3600 && runEnds.length < RUNS_N) {
     G.tick(DT); T += DT;
   }
   step(); if (Math.floor(T) % 300 === 0 && process.env.P) console.log(fmtT(T), 'cash/s', G.perSec().toExponential(2), 'all', G.allTime().toExponential(2), 'mines', S().mines.map(m=>m.n).join(','), 'tech', S().tech.length, 'dm', S().dm);
-  const gate = G.warpOpen() && G.allTime() >= +(process.env.WARP ?? 1e14);
-  const want = S().warps === 0 ? gate : (G.dmGain() >= Math.max(1, S().dm * 1.0) && T - runT0 > 600) || T - runT0 > 3 * 3600;
+  const gate = G.warpOpen();
+  const planetsLeft = PLANETS.some(p => G.avail(p) && !S().conquered.includes(p.id));
+  const want = !S().missions.some(m => m.kind === 'planet') && ((!planetsLeft && G.dmGain() >= Math.max(1, S().dm)) || T - runT0 > 75 * 60);
   if (gate && want) { if (!warpAt) warpAt = T; runEnds.push(T); log(`*** WARP ${S().warps + 1} (+${G.dmGain()} DM, total ${S().dm + G.dmGain()}) after ${fmtT(T - runT0)} ***`); G.doWarp(); S().auto = true; S().taps = 1; runT0 = T; runStarts.push(T); }
 }
 function fmtT(t: number) { return `${Math.floor(t / 3600)}h${String(Math.floor(t % 3600 / 60)).padStart(2, '0')}m${String(Math.floor(t % 60)).padStart(2, '0')}s`; }
