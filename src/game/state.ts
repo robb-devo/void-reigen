@@ -67,7 +67,9 @@ export const powerSupply = () => GEN.power * S.gen * Math.pow(2, Math.floor(S.ge
 export const powerDemand = () => MACHINES.reduce((a, d, j) => a + (S.on[j] ? d.power * S.mach[j] : 0), 0);
 export const powerEff = () => { const d = powerDemand(); return d ? Math.min(1, powerSupply() / d) : 1; };
 export const price = (r: Res) => RES[r].price * MINES.reduce((a, _, i) => Math.max(a, S.mines[i].n ? revMul(i) : 1), 1);
-export function sell(r: Res, frac = 1) { const q = S.res[r] * frac; const v = q * price(r); S.res[r] -= q; earn(v); S.sold++; return v; }
+/** Sell surplus only: keeps ~30s of factory input + whatever upcoming research/ships need. */
+export const sellable = (r: Res) => { const use = MACHINES.reduce((a, d, j) => a + (d.inp[r] && S.mach[j] && S.on[j] && avail(d) ? machRate(j) * d.inp[r]! * 30 : 0), 0); return Math.max(0, S.res[r] - use - reserveFor(r)); };
+export function sell(r: Res, frac = 1) { const q = sellable(r) * frac; const v = q * price(r); S.res[r] -= q; earn(v); S.sold++; return v; }
 export type MachStat = { made: number; eff: number; reason: '' | 'power' | 'starved' | 'off' | 'idle'; need?: Res };
 export let machStats: MachStat[] = MACHINES.map(() => ({ made: 0, eff: 0, reason: 'idle' }));
 /** Shared inputs are split between machines by their priority weights (S.w). */

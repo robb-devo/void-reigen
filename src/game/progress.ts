@@ -9,7 +9,7 @@ export const GOALS: Goal[] = [
   { text: 'Tap the Pebble Drill to mine', done: () => S.taps >= 1, reward: 0, tab: 'mine', focus: '.biz:nth-of-type(1) .ico' },
   { text: 'Own 5 Pebble Drills', done: () => mine(0) >= 5, prog: () => [mine(0), 5], reward: 10, tab: 'mine', focus: '.biz:nth-of-type(1) .buy' },
   { text: 'Build a Smelter in the Factory', done: () => mach('smelter') >= 1, reward: 15, tab: 'fac', focus: '.mach[data-j="0"] .btn' },
-  { text: 'Smelt 6 Ingots', done: () => S.made.ingot >= 6, prog: () => [S.made.ingot, 6], reward: 20, tab: 'fac' },
+  { text: 'Drill ore – the Smelter makes 6 Ingots', done: () => S.made.ingot >= 6, prog: () => [S.made.ingot, 6], reward: 20, tab: 'mine', focus: '#roid' },
   { text: 'Research Reinforced Pebble Drill', done: () => S.tech.includes('t0_0'), reward: 40, tab: 'fac', focus: '[data-u="t0_0"]' },
   { text: 'Build a Quartz Comet Harvester', done: () => mine(1) >= 1, reward: 60, tab: 'mine', focus: '.biz:nth-of-type(2) .buy' },
   { text: 'Build a Glass Kiln', done: () => mach('kiln') >= 1, reward: 120, tab: 'fac', focus: '.mach[data-j="1"] .btn' },

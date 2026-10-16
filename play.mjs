@@ -5,13 +5,14 @@ const p=await ctx.newPage(); const errs=[]; p.on('pageerror',e=>errs.push(e.mess
 await p.goto('http://localhost:4173/'); await p.waitForTimeout(800);
 const F={force:true}; const t0=Date.now(); const marks=[20,60,120,180,240]; let mi=0; const log=[];
 while(Date.now()-t0<245000){
-  const c=await p.$('#claim'); if(c){ log.push(`${Math.round((Date.now()-t0)/1000)}s claim: `+(await p.$eval('.gm b',e=>e.textContent))); await c.click(F); await p.waitForTimeout(250); continue; }
-  const go=await p.$('[data-go]'); if(go){ await go.click(F); await p.waitForTimeout(300); }
+  const c=await p.$('#claim'); if(c){ log.push(`${Math.round((Date.now()-t0)/1000)}s claim: `+(await p.$eval('.gm b',e=>e.textContent).catch(()=>'?'))); await c.click(F).catch(()=>{}); await p.waitForTimeout(250); continue; }
+  const coach0=await p.$('.coach'); const blocked=coach0 && await coach0.evaluate(e=>e.disabled); if(blocked){ await p.tap('nav button[data-t=mine]',F).catch(()=>{}); for(let k=0;k<6;k++){ await p.tap('#roid',F).catch(()=>{}); await p.waitForTimeout(120);} const ms=await p.$$('[data-sell]:not([disabled])'); }
+  const go=blocked?null:await p.$('[data-go]'); if(go){ await go.click(F).catch(()=>{}); await p.waitForTimeout(300); }
   const coach=await p.$('.coach'); if(coach && !(await coach.evaluate(e=>e.disabled))) { await coach.click(F).catch(()=>{}); }
   else { const tab=await p.$eval('nav button.on',e=>e.dataset.t);
-    if(tab==='mine'){ await p.tap('#roid',F).catch(()=>{}); const bs=await p.$$('.biz .buy:not([disabled])'); if(bs.length) await bs[bs.length-1].click(F); }
-    else if(tab==='fac'){ const bs=await p.$$('.mach .btn:not([disabled]), .gen .btn:not([disabled]), [data-u]:not([disabled]), .mk:not([disabled])'); if(bs.length) await bs[0].click(F); await p.tap('nav button[data-t=mine]',F); }
-    else if(tab==='crew'){ const bs=await p.$$('[data-m]:not([disabled])'); if(bs.length) await bs[0].click(F); await p.tap('nav button[data-t=mine]',F); }
+    if(tab==='mine'){ for(let k=0;k<4;k++){ await p.tap('#roid',F).catch(()=>{}); await p.waitForTimeout(120);}  const bs=await p.$$('.biz .buy:not([disabled])'); if(bs.length) await bs[bs.length-1].click(F).catch(()=>{}); }
+    else if(tab==='fac'){ const bs=await p.$$('.mach .btn:not([disabled]), .gen .btn:not([disabled]), [data-u]:not([disabled]), .mk:not([disabled])'); if(bs.length) await bs[0].click(F).catch(()=>{}); await p.tap('nav button[data-t=mine]',F); }
+    else if(tab==='crew'){ const bs=await p.$$('[data-m]:not([disabled])'); if(bs.length) await bs[0].click(F).catch(()=>{}); await p.tap('nav button[data-t=mine]',F); }
     else await p.tap('nav button[data-t=mine]',F); }
   await p.waitForTimeout(300);
   if(mi<marks.length && Date.now()-t0>marks[mi]*1000){ await p.screenshot({path:`shots/play-${String(marks[mi]).padStart(3,'0')}s.png`}); mi++; }

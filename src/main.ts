@@ -62,7 +62,8 @@ function renderGoal() {
 }
 let goalKey = '';
 function updateGoal() {
-  const g = GOALS[st().goal]; const key = g ? `${st().goal}|${g.done()}|${tab}|${g.prog ? Math.floor(g.prog()[0]) : ''}` : 'x';
+  const g = GOALS[st().goal]; const done = !!g && g.done(); const key = g ? `${st().goal}|${done}|${tab}` : 'x';
+  if (g && g.prog && !done) { const pi = goalEl.querySelector<HTMLElement>('.gp i'); if (pi) pi.style.width = Math.min(100, g.prog()[0] / g.prog()[1] * 100) + '%'; }
   if (key !== goalKey || goalIdx !== st().goal) { const wasDone = goalKey.split('|')[1] === 'false' && g?.done(); goalKey = key; renderGoal(); spotlight(); if (wasDone) { sfx.fanfare(); buzz(30); bump(goalEl); } }
 }
 function spotlight() {
@@ -166,7 +167,7 @@ function renderFac() {
   $('#auto')?.addEventListener('click', () => { s.auto = !s.auto; sfx.tap(); buzz(8); renderFac(); });
   const gb = $<HTMLButtonElement>('.gen .btn');
   gb.addEventListener('click', ev => { const k = G.genK(), c = G.genCost(k); if (s.cash < c) return deny(gb); s.cash -= c; s.gen += k; sfx.buy(); tone2(); buzz(14); burst(ev.clientX, ev.clientY, 14, 0, '#ffe066'); });
-  main.querySelectorAll<HTMLButtonElement>('[data-sell]').forEach(b => b.addEventListener('click', () => { const r = b.dataset.sell as Res; if (s.res[r] < 1) return deny(b); const v = G.sell(r); sfx.buy(); sfx.coin(); buzz(14); const [x, y] = center(b); popup(x, y - 20, '+$' + fmt(v)); fly(x, y, ...center(cashEl), 8, 1, '#ffc94a', () => bump(cashEl)); }));
+  main.querySelectorAll<HTMLButtonElement>('[data-sell]').forEach(b => b.addEventListener('click', () => { const r = b.dataset.sell as Res; if (G.sellable(r) < 1) { toast('Nothing spare – your factory needs it'); return deny(b); } const v = G.sell(r); sfx.buy(); sfx.coin(); buzz(14); const [x, y] = center(b); popup(x, y - 20, '+$' + fmt(v)); fly(x, y, ...center(cashEl), 8, 1, '#ffc94a', () => bump(cashEl)); }));
   techBtns = [];
   const list = TECH.filter(t => G.techAvail(t) && !s.tech.includes(t.id)).slice(0, 8), tech = $('#tech');
   tech.innerHTML = list.map(t => `<div class="row"><div class="ico sm" style="--h:${t.tgt < 0 ? 50 : MINES[t.tgt].hue}">${art(t.tgt < 0 ? 'star' : MINES[t.tgt].id)}</div><div class="mid"><div class="name sm">${t.name}</div><p>${t.tgt < 0 ? 'All mines' : MINES[t.tgt].name} profit <b class="x">×${t.x}</b></p></div><button class="btn gold tb" data-u="${t.id}">$${fmt(t.cash)}<b>${ri(t.res)}${fmt(t.amt)}</b></button></div>`).join('') || '<p class="empty">All research complete. 🏆</p>';
@@ -197,7 +198,7 @@ function updateFac() {
     r.root.style.setProperty('--sp', Math.max(0.3, 2.4 / Math.sqrt(1 + rate * Math.max(eff, 0.05))) + 's');
     r.root.querySelectorAll<HTMLElement>('[data-in]').forEach(n => n.classList.toggle('need', ms.reason === 'starved' && ms.need === n.dataset.in));
   });
-  main.querySelectorAll<HTMLButtonElement>('[data-sell]').forEach(b => { const r = b.dataset.sell as Res; const has = s.res[r] >= 1 || s.made[r] > 0 || G.resPerSec(r) > 0; b.classList.toggle('gone', !has); setT($('b', b), '$' + fmt(s.res[r] * G.price(r))); setT($('small', b), `${flow[r] >= 0 ? '+' : ''}${fmt(flow[r])}/s`); $('small', b).classList.toggle('neg', flow[r] < -0.01); b.disabled = s.res[r] < 1; });
+  main.querySelectorAll<HTMLButtonElement>('[data-sell]').forEach(b => { const r = b.dataset.sell as Res; const has = s.res[r] >= 1 || s.made[r] > 0 || G.resPerSec(r) > 0; b.classList.toggle('gone', !has); setT($('b', b), '$' + fmt(G.sellable(r) * G.price(r))); setT($('small', b), `${flow[r] >= 0 ? '+' : ''}${fmt(flow[r])}/s`); $('small', b).classList.toggle('neg', flow[r] < -0.01); b.disabled = G.sellable(r) < 1; });
   techBtns.forEach(({ el, t }) => { const ok = s.cash >= t.cash && s.res[t.res] >= t.amt; el.disabled = !ok; el.classList.toggle('afford', ok); });
 }
 
