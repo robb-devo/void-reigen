@@ -77,4 +77,4 @@ export const FLEET_UPG = [
   { id: 'armor', name: 'Ablative Armor', e: '🛡️', desc: '−20% ship losses', max: 4, res: 'part' as Res, base: 80 },
   { id: 'docks', name: 'Launch Docks', e: '🛫', desc: '+1 simultaneous mission', max: 3, res: 'alloy' as Res, base: 100 },
 ];
-export const GATES = { fleetMach: 'press', fleetLvl: 3, warp: 1e14 };
+export const GATES = { fleetMach: 'fab', fleetLvl: 1, warp: 1e14 };

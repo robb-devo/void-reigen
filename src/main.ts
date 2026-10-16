@@ -152,9 +152,9 @@ function renderFac() {
     row.btn.addEventListener('click', ev => {
       const k = G.machK(j), c = G.machCostK(j, k); if (s.cash < c) return deny(row.btn);
       const lb = Math.floor(s.mach[j] / 10), first = s.mach[j] === 0; s.cash -= c; s.mach[j] += k; sfx.buy(); sfx.clank(); buzz(14); burst(ev.clientX, ev.clientY, 16, 0, RES[d.out].color);
-      if (first) { celebrate(`${d.e} ${d.name} built!`); renderFac(); spotlight(); return; }
+      if (first) { celebrate(d.id === 'fab' ? '🚀 Shipyard online! Check the Fleet tab' : `${d.e} ${d.name} built!`); renderFac(); spotlight(); return; }
       if (Math.floor(s.mach[j] / 10) > lb) celebrate(`${d.e} ${d.name} Lv ${s.mach[j]}: output ×2!`);
-      if (d.id === 'press' && s.mach[j] >= 3 && s.mach[j] - k < 3) celebrate('🚀 Shipyard unlocked! Check the Fleet tab');
+      
     });
     row.tog.addEventListener('click', () => { s.on[j] = !s.on[j]; sfx.tap(); buzz(8); });
   });
@@ -207,7 +207,7 @@ function renderCrew() {
 let greed = 1.4;
 function renderFleet() {
   const s = st();
-  if (!G.fleetOpen()) { main.innerHTML = `<div class="gate card"><div class="hero">🔒🚀</div><h2 class="h">Shipyard offline</h2><p>Upgrade the <b>Parts Press to Lv 3</b> to build ships. Salvage runs bring back goods; conquered planets boost profit and ore forever.</p><div class="gbar"><i style="width:${Math.min(100, s.mach[2] / 3 * 100)}%"></i></div><small>${s.mach[2]}/3</small></div>`; return; }
+  if (!G.fleetOpen()) { main.innerHTML = `<div class="gate card"><div class="hero">🔒🚀</div><h2 class="h">Shipyard offline</h2><p>Build the <b>Chip Fab</b> in your factory to bring the shipyard online. Salvage runs bring back goods; conquered planets boost profit and ore forever.</p><div class="gbar"><i style="width:${Math.min(100, Math.log10(G.allTime() + 1) / Math.log10(MACHINES[4].unlock) * 100)}%"></i></div><small>Chip Fab unlocks at $${fmt(MACHINES[4].unlock)} lifetime</small></div>`; return; }
   main.innerHTML = `<div class="power card"><div><small>FLEET POWER</small><b class="h" id="fp"></b></div><div class="docks" id="docks"></div></div>
   <div class="seg"><span>Send</span>${[[1, 'Lean ×1'], [1.4, 'Safe ×1.4'], [2, 'Overwhelming ×2']].map(([g, n]) => `<button data-greed="${g}" class="${greed === g ? 'on' : ''}">${n}</button>`).join('')}</div>
   <div id="missions"></div>
