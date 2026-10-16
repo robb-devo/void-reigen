@@ -39,7 +39,8 @@ export const prevMs = (n: number) => { const m = msIdx(n); return m ? MILESTONES
 export const cycle = (i: number) => MINES[i].t / Math.pow(2, Math.min(msIdx(S.mines[i].n), 6));
 export const planetMul = () => PLANETS.reduce((a, p) => S.conquered.includes(p.id) ? a * p.bonus : a, 1);
 export const achMul = () => 1 + S.ach.length * 0.02;
-export const globalMul = () => (1 + S.dm * 0.02) * planetMul() * achMul();
+export const dmMul = () => 1 + 0.1 * Math.pow(S.dm, 0.75);
+export const globalMul = () => dmMul() * planetMul() * achMul();
 export const revMul = (i: number) => { let m = globalMul() * Math.pow(2, Math.max(0, msIdx(S.mines[i].n) - 6)); for (const t of TECH) if ((t.tgt === i || t.tgt === -1) && S.tech.includes(t.id)) m *= t.x; return m; };
 export const revenue = (i: number) => MINES[i].rev * S.mines[i].n * revMul(i);
 export const oreMul = () => (1 + S.conquered.length * 0.5) * (1 + S.dm * 0.01);
