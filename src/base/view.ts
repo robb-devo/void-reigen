@@ -109,7 +109,9 @@ export class BaseView {
   /** fly the camera between asteroids */
   travel(r: number) { if (this.travelT >= 0 || r === this.rock) return; this.travelTo = r; this.travelT = 0; this.cam = null; }
   setRock(r: number) { this.rock = r; SLOTS = ALL_SLOTS.filter(s => (s.rock || 0) === r); this.workers = []; this.drones = []; this.gcache = null; this.sel = null; this.cam = null; this.ox = this.w / 2; this.oy = this.h * .52; if (r) { this.zMain = this.z; this.z = Math.max(this.z, .95); } else this.z = this.zMain || this.z; this.onTravel(r); }
-  private zMain = 0; private lsig = '';
+  private zMain = 0; private lsig = ''; drops = new Map<string, number>();
+  /** drop a building onto its pad (move confirm): falls, squashes, settles */
+  drop(key: string) { this.drops.set(key, this.t); }
   // ---- placement mode (Build menu / Move): a ghost that snaps to the grid, green when it fits ----
   place: { key: string; gx: number; gy: number; mode: 'new' | 'move'; ok: boolean; from?: [number, number]; t: number } | null = null;
   onPlace: (moved: boolean) => void = () => {};
@@ -130,6 +132,7 @@ export class BaseView {
     q(1.5); c.fillStyle = `rgba(${col},.28)`; c.fill(); c.lineWidth = 3; c.strokeStyle = `rgba(${col},.95)`; c.setLineDash([10, 6]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
     // tile grid inside the footprint
     c.strokeStyle = `rgba(${col},.45)`; c.lineWidth = 1.5; for (const k of [-.5, .5]) { let [a, b] = iso(p.gx + k, p.gy - 1.5), [d, e] = iso(p.gx + k, p.gy + 1.5); c.beginPath(); c.moveTo(a, b); c.lineTo(d, e); c.stroke(); [a, b] = iso(p.gx - 1.5, p.gy + k); [d, e] = iso(p.gx + 1.5, p.gy + k); c.beginPath(); c.moveTo(a, b); c.lineTo(d, e); c.stroke(); }
+    c.beginPath(); c.ellipse(x, y, TW * .9, TH * .9, 0, 0, 7); c.fillStyle = 'rgba(10,4,30,.28)'; c.fill();
     // the building itself, lifted and see-through
     c.save(); c.globalAlpha = p.ok ? .88 : .6; c.translate(0, -10 - Math.sin(t * 4) * 3 - hop * 10); this.building(sl, x, y); c.restore();
     // move arrows on the four sides
@@ -343,10 +346,13 @@ export class BaseView {
       let wsc = 1; if (this.warpT >= 0 && sl.key !== 'gate') { const f = Math.max(0, (this.warpT - .8) / 1.4); wsc = Math.max(0, 1 - f * f); }
       const scl = pop * wsc;
       if (scl !== 1) { c.save(); c.translate(x, y); c.scale((2 - pop) * wsc, pop * pop * wsc); c.translate(-x, -y); }
+      const dt0 = this.drops.get(sl.key); let dy = 0; if (dt0 !== undefined) { const f = (t - dt0) / .55; if (f >= 1) this.drops.delete(sl.key); else if (f < .45) dy = -70 * (1 - (f / .45) ** 2); else { const g = (f - .45) / .55; dy = 0; if (!this.punches.has(sl.key) && g < .1) this.punches.set(sl.key, t); } }
+      if (dy) { c.save(); c.translate(0, dy); }
       const pt = this.punches.get(sl.key); let pk = 0; if (pt !== undefined) { const f = (t - pt) / .28; if (f >= 1) this.punches.delete(sl.key); else pk = Math.sin(f * Math.PI * 2) * (1 - f) * .13; }
       if (pk) { c.save(); c.translate(x, y); c.scale(1 + pk * .6, 1 - pk); c.translate(-x, -y); }
       this.building(sl, x, y);
       if (pk) c.restore();
+      if (dy) c.restore();
       if (scl !== 1) c.restore();
     }
     for (const f of post) f();

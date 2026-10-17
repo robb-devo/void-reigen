@@ -160,7 +160,7 @@ function confirmPlace(ev: MouseEvent) {
   bv.endPlace(); setPos(sl.key, p.gx, p.gy); document.body.classList.remove('placing'); updatePlacebar();
   const [x, y] = bv.slotScreen(sl.key);
   if (p.mode === 'new') { bv.construct(sl.key); sfx.place(); buzz([20, 20, 40]); burst(x, y + 30, 18); setTimeout(() => { celebrate(sl.kind === 'mach' && MACHINES[sl.idx].id === 'fab' ? 'Shipyard unlocked!' : `${slotName(sl)} built!`, x, y); spotlight(); }, 900); }
-  else { bv.puff(sl.key); sfx.place(); buzz(14); burst(x, y + 30, 10, 0, '#5cf2ff'); }
+  else { bv.drop(sl.key); setTimeout(() => { bv?.puff(sl.key); sfx.place(); buzz(14); }, 250); burst(x, y + 30, 10, 0, '#5cf2ff'); }
   void ev; G.save();
 }
 
