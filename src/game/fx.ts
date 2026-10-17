@@ -38,12 +38,14 @@ const kick = (at = 0, vol = .5) => v({ f: 160, to: 45, d: .16, type: 'sine', vol
 const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
 const st2 = (base: number, k: number) => base * Math.pow(2, PENTA[Math.min(PENTA.length - 1, k)] / 12);
 let trim = 1;
+/** pentatonic step for the tap sound: rises with the tap combo */
+let tapStep = 0; export const setTapStep = (k: number) => { tapStep = Math.max(0, Math.min(10, k)); };
 // loudness trims from the offline analysis (audio_an.py): keeps every SFX in its category's LU window
 export const TRIM: Record<string, number> = {blip: 16, build: 1.549, buy: 2.917, claim: 1.641, clank: 4.297, coin: 3.548, drill: 6.457, fanfare: 2.318, land: 1.244, launch: 5.433, lode: 1.659, no: 7.079, pBarrel: 4.027, pCrystal: 1.531, pFlag: 3.63, pLamp: 4.169, pMetal: 6.761, pRadar: 7.161, rank: 1.84, select: 2.884, tap: 4.467, warp: 1.758};
 let lastCoin = 0, combo = 0, comboT = 0, lastFan = 0, lastBlip = 0;
 const raw = {
   // bright 'tick' transient (4-11 kHz) on top of a higher-pitched body: reads crisp on phone speakers
-  tap: () => { click(0, .13); pop(760, 0, .15); v({ f: 5300, to: 4100, d: .03, type: 'sine', vol: .1, att: .0008 }); noise(.016, 1, 9000, 0, 'ui', 1.2); },
+  tap: () => { click(0, .13); pop(st2(760, tapStep), 0, .15); v({ f: 5300, to: 4100, d: .03, type: 'sine', vol: .1, att: .0008 }); noise(.016, 1, 9000, 0, 'ui', 1.2); },
   select: () => { click(0, .12); pop(560, 0, .2); pop(1120, .042, .12); v({ f: 6272, d: .05, type: 'sine', vol: .04, at: .042, att: .001 }); noise(.014, .45, 9500, .042, 'ui', 1.4); },
   drill: () => { pop(300, 0, .28, 'world'); noise(.07, .07, 1800, 0, 'world', 1.2); v({ f: 90, to: 60, d: .12, type: 'square', vol: .03, bus: 'world' }); },
   coin: () => { const n = performance.now(); if (n - lastCoin < 70) return; combo = n - comboT < 700 ? Math.min(combo + 1, 10) : 0; comboT = n; lastCoin = n; chime(st2(1046, combo), 0, .1); },
@@ -64,6 +66,7 @@ const raw = {
   pBarrel: () => { pop(240, 0, .26); v({ f: 120, to: 70, d: .1, type: 'sine', vol: .14 }); click(0, .08); },
   pMetal: () => { click(0, .12); v({ f: 1180, to: 1120, d: .16, type: 'square', vol: .018 }); v({ f: 1770, d: .12, type: 'sine', vol: .04 }); },
   pRadar: () => { v({ f: 1760, d: .05, type: 'square', vol: .02 }); v({ f: 2349, d: .07, type: 'square', vol: .018, at: .08 }); click(0, .08); },
+  rushUp: () => { [0, 2, 4].forEach((k, j) => v({ f: st2(1046, k + tapStep), d: .09, type: 'triangle', vol: .09, at: j * .045, bus: 'reward', wet: true })); click(0, .12); },
   lode: () => { kick(0, .5); for (let k = 0; k < 8; k++) chime(st2(1046, k + 1), k * .035, .09); },
   rank: () => { kick(0, .5); [392, 523, 659, 784, 1047].forEach((f, k) => v({ f, d: .35, type: 'triangle', vol: .12, at: k * .07, bus: 'reward', wet: true })); chime(2093, .4, .14); chime(2637, .48, .1); },
 };

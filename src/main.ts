@@ -9,7 +9,7 @@ import { art, ri } from './game/art';
 import { BaseView, SLOTS, Slot, level, tier, nextTierAt, visible, cost as slotCost, slotByKey } from './base/view';
 import { setBusy } from './base/render';
 import { I } from './design';
-import { renderSfx, setToastGate } from './game/fx';
+import { renderSfx, setToastGate, setTapStep } from './game/fx';
 import { SKILLS, BRANCHES, LEVEL_GATE, XP } from './game/skills';
 import { TIER_NAMES } from './base/render';
 import { say, talking, setGate } from './commander';
@@ -159,15 +159,27 @@ function baseEvent(i: number, v: number, ct: number, now: number) {
   bv!.drone('m' + i, 'hq', col, () => { const [x, y] = bv!.slotScreen('hq'); popup(x, y - 20, '+$' + fmt(v)); fly(x, y - 10, ...center(cashEl), 3, 1, '#ffc94a', () => bump(cashEl)); fly(x, y, ...center(resEl(MINES[i].res)), 1, 2, col, () => bump(resEl(MINES[i].res))); sfx.coin(); });
 }
 function baseTap(sl: Slot | null, x: number, y: number) {
-  if (talking()) { if (sl?.kind === 'mine' && visible(sl) === 'built') { const b = st().mines[sl.idx]; st().taps++; if (!b.run && !b.m) { b.run = true; sfx.drill(); buzz(10); burst(x, y, 10, 0, `hsl(${MINES[sl.idx].hue} 100% 65%)`); } } return; }
+  if (talking()) { if (sl?.kind === 'mine' && visible(sl) === 'built') { const b = st().mines[sl.idx]; st().taps++; tapRush(sl, x, y); if (!b.run && !b.m) { b.run = true; sfx.drill(); buzz(10); burst(x, y, 10, 0, `hsl(${MINES[sl.idx].hue} 100% 65%)`); } } return; }
   if (!sl) { closeSheet(); return; }
   $('#bhint')?.remove();
   if (sl.kind === 'mine' && G.sk('mHand') && visible(sl) === 'built') { const b = st().mines[sl.idx]; if (b.run && !b.m) { b.p = Math.min(.999, b.p + .35); burst(x, y, 6, 0, '#ffd23f'); } }
-  if (sl.kind === 'mine' && visible(sl) === 'built') { const b = st().mines[sl.idx]; st().taps++; if (!b.run && !b.m) { b.run = true; sfx.drill(); buzz(10); burst(x, y, 10, 0, `hsl(${MINES[sl.idx].hue} 100% 65%)`); } else sfx.tap(); }
+  if (sl.kind === 'mine' && visible(sl) === 'built') { const b = st().mines[sl.idx]; st().taps++; tapRush(sl, x, y); if (!b.run && !b.m) { b.run = true; sfx.drill(); buzz(10); burst(x, y, 10, 0, `hsl(${MINES[sl.idx].hue} 100% 65%)`); } else sfx.tap(); }
   else sfx.select();
   openSheet(sl.key);
 }
 const slotOf = (k: string) => slotByKey(k)!;
+// ---------- tap rush: the most frequent action gets a combo ----------
+// Taps within 0.7s chain. Every tap nudges a running mine (+6%), punches the building, rises in pitch.
+// Each 6 chained taps = +1 rush level (max 5): all mine payouts ×(1 + 5%·level) while the chain lasts.
+let rushN = 0, rushT = 0, rushL = 0; const rushEl = document.createElement('div'); rushEl.id = 'rush'; document.body.appendChild(rushEl);
+function tapRush(sl: Slot, x: number, y: number) {
+  const now = performance.now(), b = st().mines[sl.idx]; rushN = now - rushT < 700 ? rushN + 1 : 1; rushT = now;
+  if (b.run || b.m) b.p = Math.min(.999, b.p + .06);
+  const L = Math.min(5, Math.floor(rushN / 6)); bv?.punch(sl.key); setTapStep(Math.min(10, rushN >> 1)); burst(x, y, 3 + L * 2, 0, L ? '#ffd23f' : `hsl(${MINES[sl.idx].hue} 100% 70%)`); buzz(6 + L * 2);
+  if (L > rushL) { rushL = L; G.setRush(1 + .05 * L); popup(x, y - 70, `RUSH ×${(1 + .05 * L).toFixed(2)}`, '#ffd23f'); sfx.rushUp(); if (L >= 3 && bv) bv.shake = .12; }
+  rushEl.innerHTML = rushL ? `${I.bolt}<b>RUSH ×${(1 + .05 * rushL).toFixed(2)}</b><i><u></u></i>` : ''; rushEl.classList.toggle('on', rushL > 0); rushEl.style.setProperty('--lv', String(rushL));
+}
+setInterval(() => { if (!rushN) return; const idle = performance.now() - rushT; const u = rushEl.querySelector('u') as HTMLElement | null; if (u) u.style.width = Math.max(0, 100 - idle / 12) + '%'; if (idle > 1200) { rushN = 0; rushL = 0; G.setRush(1); setTapStep(0); rushEl.classList.remove('on'); } }, 50);
 const AUX: Record<string, number> = { hangar: 1, dock: 0, turret: 2, fuel: 2 };
 function closeSheet() { sheetKey = null; if (bv) bv.sel = null; $('#sheet')?.classList.remove('open'); }
 /** "Earn $X" goals point at the best-value mine upgrade (income gained per $), not at HQ. */

@@ -78,3 +78,9 @@ body.vex .toast,body.fg-sheet .toast,body.fg-modal .toast{display:none}
 @keyframes toast{0%{transform:translate(-50%,30px) scale(.7);opacity:0}12%{transform:translate(-50%,0) scale(1);opacity:1}85%{opacity:1}100%{opacity:0;transform:translate(-50%,10px)}}
 .bhint{animation:hintout 1s 9s forwards}@keyframes hintout{to{opacity:0;visibility:hidden}}
 .sart img{width:118%;height:118%;margin:-9%;object-fit:contain;filter:drop-shadow(0 3px 0 rgba(18,10,36,.6))}.sart{overflow:visible}
+/* tap rush meter: minimal HUD pill under the rate line, only while a chain is alive */
+#rush{position:fixed;left:50%;top:calc(var(--st) + 86px);transform:translate(-50%,-6px) scale(.8);z-index:6;display:flex;align-items:center;gap:6px;padding:3px 10px 3px 8px;border-radius:999px;background:linear-gradient(#ffd23f,#ff9f1a);color:#2a1606;border:3px solid var(--ink);box-shadow:0 3px 0 var(--ink);font:800 12px Fredoka,sans-serif;opacity:0;pointer-events:none;transition:opacity .15s,transform .2s cubic-bezier(.3,1.8,.5,1)}
+#rush.on{opacity:1;transform:translate(-50%,0) scale(calc(1 + var(--lv,1)*.04))}
+#rush svg.ic{width:14px;height:14px}
+#rush i{display:block;width:38px;height:5px;border-radius:3px;background:rgba(42,22,6,.3);overflow:hidden}#rush u{display:block;height:100%;background:#2a1606;width:100%}
+body.fg-modal #rush{opacity:0}

@@ -104,6 +104,7 @@ export class BaseView {
   slotScreen(key: string): [number, number] { const sl = SLOTS.find(s => s.key === key)!; const [x, y] = this.screen(sl.gx, sl.gy); return [x, y - 40 * this.z]; }
   focus(key: string, z = this.z, yf = FRAME_Y, with2?: string) { if (!with2 && !this.rock && G.S.warps === 0 && G.S.goal < 14 && key !== 'm0' && key !== 'hq') with2 = 'm0'; const sl = SLOTS.find(s => s.key === key); if (!sl) return; let [x, y] = iso(sl.gx, sl.gy); const s2 = with2 && SLOTS.find(s => s.key === with2); if (s2) { const [x2, y2] = iso(s2.gx, s2.gy); x = (x + x2) / 2; y = (y + y2) / 2; } const lx = 330 * z, ly = 200 * z; this.cam = { x: Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.w / 2 - x * z)), y: Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.h * yf - y * z)), z }; }
   construct(key: string) { this.cons.set(key, this.t); }
+  punches = new Map<string, number>(); punch(key: string) { this.punches.set(key, this.t); }
   private portraits = new Map<string, string>();
   /** Building portrait for panels — the real in-world art at its current tier. */
   portrait(key: string): string | null { const sl = slotByKey(key); if (!sl || visible(sl) !== 'built') return null; const tr = tier(sl), id = idOf(sl), k = `${id}|${tr}`; let u = this.portraits.get(k); if (u) return u;
@@ -177,7 +178,10 @@ export class BaseView {
       let wsc = 1; if (this.warpT >= 0 && sl.key !== 'gate') { const f = Math.max(0, (this.warpT - .8) / 1.4); wsc = Math.max(0, 1 - f * f); }
       const scl = pop * wsc;
       if (scl !== 1) { c.save(); c.translate(x, y); c.scale((2 - pop) * wsc, pop * pop * wsc); c.translate(-x, -y); }
+      const pt = this.punches.get(sl.key); let pk = 0; if (pt !== undefined) { const f = (t - pt) / .28; if (f >= 1) this.punches.delete(sl.key); else pk = Math.sin(f * Math.PI * 2) * (1 - f) * .13; }
+      if (pk) { c.save(); c.translate(x, y); c.scale(1 + pk * .6, 1 - pk); c.translate(-x, -y); }
       this.building(sl, x, y);
+      if (pk) c.restore();
       if (scl !== 1) c.restore();
     }
     while (di < dec.length) this.prop(dec[di++], t);
