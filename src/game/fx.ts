@@ -5,31 +5,54 @@ import { S } from './state';
 // limiter; a short stereo-ish delay send adds sparkle to chimes. All levels set in MIX.
 let AC: AudioContext | null = null;
 const ac = () => (AC ??= new (window.AudioContext || (window as any).webkitAudioContext)());
-const MIX = { master: .85, ui: .55, reward: .7, world: .5, fx: .25 };
-type Bus = 'ui' | 'reward' | 'world';
-let buses: Record<Bus, GainNode> | null = null, send: GainNode | null = null;
+// Bus base levels (the internal mix); the player's sliders scale them (S.vol, 0..1).
+const MIX = { master: .85, ui: .55, reward: .7, world: .5, amb: .4, fx: .25 };
+type Bus = 'ui' | 'reward' | 'world' | 'amb';
+export type Vol = { master: number; ui: number; fx: number; amb: number };
+export const VOL_DEF: Vol = { master: .8, ui: .8, fx: .8, amb: .35 };
+export const vol = (): Vol => ({ ...VOL_DEF, ...(S.vol || {}) });
+let buses: Record<Bus, GainNode> | null = null, send: GainNode | null = null, masterG: GainNode | null = null;
+const busVol = (b: Bus) => { const o = vol(); return b === 'ui' ? o.ui : b === 'amb' ? o.amb : o.fx; };
+/** push slider values into the live graph (smoothly) */
+export function applyVol() {
+  if (!buses || !AC) return; const t = AC.currentTime, o = vol();
+  masterG!.gain.setTargetAtTime(S.mute ? 0 : MIX.master * o.master * o.master, t, .03); // squared: perceptual taper
+  for (const k of Object.keys(buses) as Bus[]) { const x = busVol(k); buses[k].gain.setTargetAtTime(MIX[k] * x * x, t, .03); }
+  send!.gain.setTargetAtTime(MIX.fx * Math.max(o.ui, o.fx) ** 2, t, .03);
+}
 function bus(b: Bus) {
   const c = ac();
   if (!buses) {
-    const m = c.createGain(); m.gain.value = MIX.master; const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = .003; comp.release.value = .12; m.connect(comp).connect(c.destination);
-    const d = c.createDelay(.5); d.delayTime.value = .11; const fb = c.createGain(); fb.gain.value = .28; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500; send = c.createGain(); send.gain.value = MIX.fx; send.connect(d); d.connect(lp).connect(fb).connect(d); lp.connect(m);
-    buses = { ui: c.createGain(), reward: c.createGain(), world: c.createGain() }; for (const k of ['ui', 'reward', 'world'] as Bus[]) { buses[k].gain.value = MIX[k]; buses[k].connect(m); }
+    const m = masterG = c.createGain(); const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = .003; comp.release.value = .12; m.connect(comp).connect(c.destination);
+    const d = c.createDelay(.5); d.delayTime.value = .11; const fb = c.createGain(); fb.gain.value = .28; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500; send = c.createGain(); { const o = vol(); send.gain.value = MIX.fx * Math.max(o.ui, o.fx) ** 2; } send.connect(d); d.connect(lp).connect(fb).connect(d); lp.connect(m);
+    buses = { ui: c.createGain(), reward: c.createGain(), world: c.createGain(), amb: c.createGain() };
+    // ambient bus is low-passed a touch so background machinery sits behind the UI
+    const alp = c.createBiquadFilter(); alp.type = 'lowpass'; alp.frequency.value = 5200; buses.amb.connect(alp).connect(m);
+    for (const k of ['ui', 'reward', 'world'] as Bus[]) buses[k].connect(m);
+    const o = vol(); m.gain.value = S.mute ? 0 : MIX.master * o.master * o.master; for (const k of Object.keys(buses) as Bus[]) { const x = busVol(k); buses[k].gain.value = MIX[k] * x * x; }
   }
   return buses[b];
 }
+// routing overrides used while an ambient (automated) sound plays: forced bus, gain and stereo pan
+let busO: Bus | null = null, gainO = 1, panO = 0;
+function out(c: AudioContext, g: AudioNode, b: Bus) {
+  const dst = bus(busO || b);
+  if (panO && c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = panO; g.connect(p).connect(dst); } else g.connect(dst);
+}
 type V = { f: number; d?: number; type?: OscillatorType; vol?: number; to?: number; at?: number; bus?: Bus; wet?: boolean; att?: number };
 export function tone(f: number, d = 0.08, type: OscillatorType = 'sine', vol = 0.12, slide = 0, delay = 0) { v({ f, d, type, vol, to: slide ? f * slide : 0, at: delay }); }
+const live = () => { if (S.mute) return null; const c = ac(); if (c.state === 'suspended') c.resume(); return c; };
 function v(o: V) {
-  if (S.mute) return; const c = ac(); if (c.state === 'suspended') c.resume();
+  const c = live(); if (!c) return;
   const t = c.currentTime + (o.at || 0), d = o.d ?? .08, os = c.createOscillator(), g = c.createGain();
   os.type = o.type || 'sine'; os.frequency.setValueAtTime(o.f, t); if (o.to) os.frequency.exponentialRampToValueAtTime(Math.max(20, o.to), t + d * .9);
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime((o.vol ?? .2) * trim, t + (o.att ?? .004)); g.gain.exponentialRampToValueAtTime(.0001, t + d);
-  os.connect(g); g.connect(bus(o.bus || 'ui')); if (o.wet && send) g.connect(send); os.start(t); os.stop(t + d + .03);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime((o.vol ?? .2) * trim * gainO, t + (o.att ?? .004)); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  os.connect(g); out(c, g, o.bus || 'ui'); if (o.wet && send && !busO) g.connect(send); os.start(t); os.stop(t + d + .03);
 }
 function noise(d = 0.3, vol = 0.08, freq = 800, at = 0, b: Bus = 'world', q = 1) {
-  if (S.mute) return; const c = ac(); const t = c.currentTime + at; const buf = c.createBuffer(1, Math.ceil(c.sampleRate * d), c.sampleRate), a = buf.getChannelData(0); for (let k = 0; k < a.length; k++) a[k] = Math.random() * 2 - 1;
-  const src = c.createBufferSource(); src.buffer = buf; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(vol * trim, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
-  src.connect(f).connect(g).connect(bus(b)); src.start(t); src.stop(t + d + .02);
+  const c = live(); if (!c) return; const t = c.currentTime + at; const buf = c.createBuffer(1, Math.ceil(c.sampleRate * d), c.sampleRate), a = buf.getChannelData(0); for (let k = 0; k < a.length; k++) a[k] = Math.random() * 2 - 1;
+  const src = c.createBufferSource(); src.buffer = buf; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(vol * trim * gainO, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  src.connect(f).connect(g); out(c, g, b); src.start(t); src.stop(t + d + .02);
 }
 // building blocks
 const pop = (f = 520, at = 0, vol = .32, b: Bus = 'ui') => { v({ f: f * 1.9, to: f * .7, d: .09, type: 'sine', vol, at, bus: b }); v({ f: f * 4, to: f * 2, d: .03, type: 'triangle', vol: vol * .45, at, bus: b }); };
@@ -73,8 +96,25 @@ const raw = {
   rank: () => { kick(0, .5); [392, 523, 659, 784, 1047].forEach((f, k) => v({ f, d: .35, type: 'triangle', vol: .12, at: k * .07, bus: 'reward', wet: true })); chime(2093, .4, .14); chime(2637, .48, .1); },
 };
 export const sfx = Object.fromEntries(Object.entries(raw).map(([k, fn]) => [k, () => { trim = TRIM[k] ?? 1; try { fn(); } finally { trim = 1; } }])) as typeof raw;
+/** Automated/background sounds (idle mines, drones, auto rockets): own 'amb' bus, globally rate-limited,
+ *  and spatialised by the caller: g = 0..1 loudness from on-screen position + zoom, pan = -1..1. */
+let ambT = 0, ambN = 0;
+export function ambient(k: keyof typeof raw, g = 1, pan = 0) {
+  if (S.mute || document.hidden || g < .04) return; const n = performance.now();
+  if (n - ambT > 1000) { ambT = n; ambN = 0; } if (ambN >= 4) return; ambN++; // at most 4 per second
+  busO = 'amb'; gainO = Math.min(1, g); panO = Math.max(-1, Math.min(1, pan));
+  try { sfx[k](); } finally { busO = null; gainO = 1; panO = 0; }
+}
+/** loudness/pan for a sound at screen point (x, y): quieter towards / beyond the edges and when zoomed out (z<1) */
+export function spatial(x: number, y: number, z = 1): [number, number] {
+  const W = innerWidth, H = innerHeight, dx = (x - W / 2) / (W / 2), dy = (y - H / 2) / (H / 2), d = Math.hypot(dx, dy * .8);
+  const edge = d <= 1 ? 1 - .35 * d : Math.max(0, .65 - .5 * (d - 1)); // off-screen falls off quickly
+  return [edge * Math.max(.3, Math.min(1, z)), Math.max(-.7, Math.min(.7, dx * .7))];
+}
+/** preview helper for the settings sliders */
+export function previewBus(b: 'master' | 'ui' | 'fx' | 'amb') { if (b === 'ui') sfx.tap(); else if (b === 'fx') sfx.coin(); else if (b === 'amb') { busO = 'amb'; try { sfx.coin(); } finally { busO = null; } } else sfx.select(); }
 
-export const buzz = (p: number | number[]) => { try { if ((navigator as any).userActivation?.hasBeenActive === false) return; vibrate(p); } catch {} }; // native haptics in the app, navigator.vibrate on the web
+export const buzz = (p: number | number[]) => { if (S.nohap) return; try { if ((navigator as any).userActivation?.hasBeenActive === false) return; vibrate(p); } catch {} }; // native haptics in the app, navigator.vibrate on the web
 
 // ---------- canvas particles ----------
 type P = { x: number; y: number; vx: number; vy: number; l: number; ml: number; k: number; c: string; s: number; tx?: number; ty?: number; done?: () => void };

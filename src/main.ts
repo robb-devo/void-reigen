@@ -15,7 +15,7 @@ import { SKILLS, BRANCHES, LEVEL_GATE, XP } from './game/skills';
 import { TIER_NAMES } from './base/render';
 import { say, talking, setGate } from './commander';
 import { isNative, mirrorNow } from './native';
-import { sfx, buzz, initFx, stepFx, burst, fly, popup, toast, rocket, flash } from './game/fx';
+import { sfx, buzz, initFx, stepFx, burst, fly, popup, toast, rocket, flash, ambient, spatial, applyVol, previewBus, vol, VOL_DEF } from './game/fx';
 
 const rawSave = localStorage.getItem(G.KEY); G.load(); G.migrateSeen(rawSave);
 const st = () => G.S;
@@ -158,7 +158,7 @@ function baseEvent(i: number, v: number, ct: number, now: number) {
   if (ct < 0.3 && now - lastDrone < 500) { acc += v; return; }
   if (now - lastDrone < 120) { acc += v; return; } lastDrone = now;
   const col = RES[MINES[i].res].color;
-  bv!.drone('m' + i, 'hq', col, () => { const [x, y] = bv!.slotScreen('hq'); popup(x, y - 20, '+$' + fmt(v)); fly(x, y - 10, ...center(cashEl), 3, 1, '#ffc94a', () => bump(cashEl)); fly(x, y, ...center(resEl(MINES[i].res)), 1, 2, col, () => bump(resEl(MINES[i].res))); sfx.coin(); });
+  bv!.drone('m' + i, 'hq', col, () => { const [x, y] = bv!.slotScreen('hq'); popup(x, y - 20, '+$' + fmt(v)); fly(x, y - 10, ...center(cashEl), 3, 1, '#ffc94a', () => bump(cashEl)); fly(x, y, ...center(resEl(MINES[i].res)), 1, 2, col, () => bump(resEl(MINES[i].res))); if (st().mines[i].m) { const [sx, sy] = bv!.slotScreen('m' + i); ambient('coin', ...spatial(sx, sy, bv!.z / .7)); } else sfx.coin(); });
 }
 function baseTap(sl: Slot | null, x: number, y: number) {
   if (talking()) { if (sl?.kind === 'mine' && visible(sl) === 'built') { const b = st().mines[sl.idx]; st().taps++; tapRush(sl, x, y); if (!b.run && !b.m) { b.run = true; sfx.drill(); buzz(10); burst(x, y, 10, 0, `hsl(${MINES[sl.idx].hue} 100% 65%)`); } } return; }
@@ -447,8 +447,36 @@ function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(
 const RENDER: Record<string, () => void> = { base: renderBase, mine: renderMine, fac: renderFac, crew: renderCrew, fleet: renderFleet, warp: renderWarp };
 function setTab(t: string) { tab = t; app.classList.toggle('sub', t !== 'base'); main.classList.toggle('basemode', t === 'base'); app.classList.toggle('basemode', t === 'base'); if (t !== 'base') closeSheet(); document.querySelectorAll<HTMLElement>('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); main.scrollTop = 0; cards = []; facRows = []; techBtns = []; RENDER[t](); renderGoal(); spotlight(); main.classList.remove('enter'); void main.offsetWidth; main.classList.add('enter'); }
 document.querySelectorAll<HTMLElement>('nav button').forEach(b => b.addEventListener('click', () => { if (tab !== b.dataset.t) { sfx.tap(); buzz(6); setTab(b.dataset.t!); } }));
-const muteBtn = $('#mute'); const setMute = () => muteBtn.innerHTML = st().mute ? `<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#8b84b0" stroke="#24163a" stroke-width="2" stroke-linejoin="round"/><path d="M16 9l5 6M21 9l-5 6" stroke="#ff5b5b" stroke-width="2.5" stroke-linecap="round"/></svg>` : `<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#5cf2ff" stroke="#24163a" stroke-width="2" stroke-linejoin="round"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>`; setMute();
-muteBtn.addEventListener('click', () => { st().mute = !st().mute; setMute(); sfx.tap(); buzz(8); G.save(); });
+const muteBtn = $('#mute'); const GEAR = `<svg viewBox="0 0 24 24"><path d="M10.2 2.5h3.6l.5 2.6 1.9.8 2.2-1.5 2.5 2.5-1.5 2.2.8 1.9 2.6.5v3.6l-2.6.5-.8 1.9 1.5 2.2-2.5 2.5-2.2-1.5-1.9.8-.5 2.6h-3.6l-.5-2.6-1.9-.8-2.2 1.5-2.5-2.5 1.5-2.2-.8-1.9-2.6-.5v-3.6l2.6-.5.8-1.9-1.5-2.2 2.5-2.5 2.2 1.5 1.9-.8z" fill="#b9b2dd" stroke="#24163a" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.6" fill="#5cf2ff" stroke="#24163a" stroke-width="1.8"/></svg>`;
+const setMute = () => { muteBtn.innerHTML = GEAR + (st().mute ? '<i class="mutedot"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg></i>' : ''); muteBtn.setAttribute('aria-label', 'Settings'); }; setMute();
+const VOLS: [keyof typeof VOL_DEF, string, string, string][] = [
+  ['master', 'Master', 'Everything at once', '#ffd23f'],
+  ['ui', 'Interface', 'Buttons, menus, taps', '#5cf2ff'],
+  ['fx', 'Effects & World', 'Coins, rewards, ships, building', '#ff9a5c'],
+  ['amb', 'Automated mines', 'Idle drills & drones in the background', '#b08cff'],
+];
+function settings() {
+  sfx.select(); buzz(8); const s = st();
+  const m = modal(`<h2 class="h"><span class="hico">${GEAR}</span> Settings</h2>
+  <div class="setsec"><div class="setrow swrow"><div><b>Sound</b><small>All game audio</small></div><button class="switch ${s.mute ? '' : 'on'}" data-mute aria-label="Sound on/off"><i></i></button></div>
+  ${VOLS.map(([k, n, d, c]) => `<div class="setrow vol ${s.mute ? 'dim' : ''}" style="--c:${c}"><div class="vl"><b>${n}</b><small>${d}</small></div><div class="vr"><input type="range" min="0" max="100" step="1" value="${Math.round(vol()[k] * 100)}" data-vol="${k}" aria-label="${n} volume"><output>${Math.round(vol()[k] * 100)}</output></div></div>`).join('')}
+  <div class="setnote">No music yet: the game's soundtrack is its machines.</div></div>
+  <div class="setsec"><div class="setrow swrow"><div><b>Haptics</b><small>Vibration on taps & rewards</small></div><button class="switch ${s.nohap ? '' : 'on'}" data-hap aria-label="Haptics on/off"><i></i></button></div></div>
+  <div class="setbtns"><button class="btn ghost" data-reset>Reset volumes</button><button class="btn big" data-x>Done</button></div>`);
+  m.classList.add('settings');
+  const fill = (inp: HTMLInputElement) => { inp.style.setProperty('--p', inp.value + '%'); (inp.nextElementSibling as HTMLElement).textContent = inp.value; };
+  let pv = 0;
+  m.querySelectorAll<HTMLInputElement>('[data-vol]').forEach(inp => { fill(inp);
+    inp.addEventListener('input', () => { const k = inp.dataset.vol as keyof typeof VOL_DEF; s.vol = { ...vol(), [k]: +inp.value / 100 }; fill(inp); applyVol(); const n = performance.now(); if (n - pv > 160) { pv = n; previewBus(k); } if (+inp.value % 25 === 0) buzz(4); });
+    inp.addEventListener('change', () => G.save()); });
+  const sw = m.querySelector<HTMLElement>('[data-mute]')!;
+  sw.addEventListener('click', () => { s.mute = !s.mute; sw.classList.toggle('on', !s.mute); m.querySelectorAll('.setrow.vol').forEach(r => r.classList.toggle('dim', s.mute)); applyVol(); setMute(); if (!s.mute) sfx.select(); buzz(8); G.save(); });
+  const hs = m.querySelector<HTMLElement>('[data-hap]')!;
+  hs.addEventListener('click', () => { s.nohap = !s.nohap; hs.classList.toggle('on', !s.nohap); sfx.tap(); buzz(20); G.save(); });
+  m.querySelector('[data-reset]')!.addEventListener('click', () => { s.vol = { ...VOL_DEF }; m.querySelectorAll<HTMLInputElement>('[data-vol]').forEach(inp => { inp.value = String(Math.round(VOL_DEF[inp.dataset.vol as keyof typeof VOL_DEF] * 100)); fill(inp); }); applyVol(); sfx.select(); G.save(); });
+  m.querySelector('[data-x]')!.addEventListener('click', () => { sfx.tap(); m.remove(); });
+}
+muteBtn.addEventListener('click', settings);
 function dots() {
   const s = st(), dot = (t: string, on: boolean) => document.querySelector(`nav button[data-t="${t}"] .dot`)?.classList.toggle('show', on);
   dot('fac', MACHINES.some((mm, j) => G.machUnlocked(j) && !s.mach[j] && s.cash >= mm.cost));
@@ -476,7 +504,7 @@ function frame(now: number) {
       const [x, y] = center(c.ico); popup(x, y - 40, '+$' + fmt(e.v));
       fly(x, y, ...center(cashEl), Math.min(6, 2 + (e.i >> 1)), 1, '#ffc94a', () => bump(cashEl));
       if (now - oreFlyT > 150) { oreFlyT = now; fly(x, y, ...center(resEl(d.res)), 2, 2, RES[d.res].color, () => bump(resEl(d.res))); }
-      sfx.coin(); if (e.i >= 3 && e.ct > 4) { rocket(x, y - 10); sfx.launch(); }
+      if (s.mines[e.i].m) ambient('coin', ...spatial(x, y)); else sfx.coin(); if (e.i >= 3 && e.ct > 4) { rocket(x, y - 10); ambient('launch', ...spatial(x, y)); }
     } else if (!c && tab !== 'mine' && now - navFlyT > 900) { navFlyT = now; const [x, y] = center(navBtn('mine')); fly(x, y - 10, ...center(resEl(d.res)), 2, 2, RES[d.res].color, () => bump(resEl(d.res))); acc += e.v; }
     else acc += e.v;
   }

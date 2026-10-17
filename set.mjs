@@ -1,0 +1,16 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch(); const errs=[];
+const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+const z={ore:0,quartz:0,ingot:0,glass:0,part:0,alloy:0,chip:0,hull:0};
+const mid={v:2,cash:3.2e7,life:9e7,total:0,dm:0,warps:0,mines:[[160,1],[90,1],[64,1],[40,1],[12,0],[0,0],[0,0],[0,0]].map(([n,m])=>({n,p:0,m:!!m,run:false})),tech:[],res:{...z,ore:52000},made:{...z},mach:[38,30,14,6,1,0],on:[true,true,true,true,true,true],gen:22,ships:{scout:14},conquered:['p1'],missions:[],fupg:{},uid:2,ach:[],goal:20,last:Date.now(),taps:640,played:3000};
+await ctx.addInitScript(s=>{if(!sessionStorage.seed){sessionStorage.seed=1;localStorage.setItem('starforge.v2',s)}},JSON.stringify(mid));
+const p=await ctx.newPage(); p.on('console',m=>m.type()==='error'&&errs.push(m.text())); p.on('pageerror',e=>errs.push(e.message));
+await p.goto('http://localhost:4190/'); await p.waitForTimeout(1500); console.log('pre',JSON.stringify(errs), await p.evaluate(()=>document.body.innerHTML.length));
+await p.tap('#mute',{force:true}); await p.waitForTimeout(600);
+await p.screenshot({path:'shots/s11-settings.png'});
+const sl=await p.$('[data-vol=amb]'); await sl.evaluate(e=>{e.value=10;e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'))});
+await p.tap('[data-mute]',{force:true}); await p.waitForTimeout(400); await p.screenshot({path:'shots/s11-settings-muted.png'});
+await p.tap('.modal [data-x]',{force:true}); await p.waitForTimeout(300);
+console.log(JSON.stringify(await p.evaluate(()=>{const o=JSON.parse(localStorage.getItem('starforge.v2'));return {vol:o.vol,mute:o.mute}})), 'errs', JSON.stringify(errs));
+await p.screenshot({path:'shots/s11-hud.png'});
+await b.close();
