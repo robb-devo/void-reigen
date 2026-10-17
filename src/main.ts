@@ -448,6 +448,7 @@ const shown = Object.fromEntries(RES_ORDER.map(r => [r, 0])) as Record<Res, numb
 const lastRes = { ...st().res };
 let lastFr = false;
 function frame(now: number) {
+  if (document.hidden) { prev = now; requestAnimationFrame(frame); return; } // background time is credited by offline() on return
   const dt = Math.min(0.25, (now - prev) / 1000); prev = now; const s = st();
   const ev = G.tick(dt);
   for (const e of ev) {
