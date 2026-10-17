@@ -645,7 +645,7 @@ setInterval(() => {
   if (talking() || document.querySelector('.modal, .tree')) { nextShower = now + 8e3; return; }
   nextShower = now + (4 + Math.random() * 3) * 60e3;
   if (lastEv === 'meteor' && traderOK() && traderArrive()) return;
-  lastEv = 'meteor'; bv.shower(5 + Math.floor(Math.random() * 3)); sfx.launch();
+  lastEv = 'meteor'; bv.shower(5 + Math.floor(Math.random() * 3)); sfx.launch(); if (!seen('trader')) nextShower = now + (2.5 + Math.random()) * 60e3; // first trader follows the first shower quickly
   if (!seen('meteor')) intro('meteor', [{ h: 'METEOR SHOWER', t: 'Incoming rocks! Meteors are packed with <b>ore and cash</b> – <b>tap them</b> before they cool off.' }]); else toast(`${I.boom} Meteor shower! Tap the glowing rocks`);
 }, 1000);
 (window as any).__shower = (n = 6) => bv?.shower(n);
