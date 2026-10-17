@@ -468,7 +468,7 @@ function frame(now: number) {
   if (now - lastSlow > 600) { lastSlow = now; if (acc > 0 && tab === 'mine' && G.perSec() > 0) { const r = cashEl.getBoundingClientRect(); popup(r.right + 14, r.top + 22, '+$' + fmt(acc), '#5cf2ff'); } acc = 0; }
   // header
   setT(cashEl, '$' + fmt(s.cash));
-  setT(rateEl, G.perSec() > 0 ? `+$${fmt(G.perSec())}/s` : !s.taps ? 'Tap a mine to start' : s.life < 500 ? 'Tap mines to earn' : 'Hire a foreman on a mine to automate it');
+  setT(rateEl, G.perSec() > 0 ? `+$${fmt(G.perSec())}/s` : !s.taps ? 'Tap a mine to start' : ''); // later hints live in the goal bar – no duplicate line
   setT($('#dm'), fmt(s.dm, 0));
   const fr = !!bv?.rock && tab === 'base'; $('#res').classList.toggle('fleet', fr); const snap = fr !== lastFr; lastFr = fr; RES_ORDER.forEach(r => { const src = fr ? s.fstock : s.res; if (snap) shown[r] = src[r]; shown[r] += (src[r] - shown[r]) * Math.min(1, dt * 10); if (fr && !G.FLEET_RES.includes(r)) { resEl(r).classList.add('hide'); return; } const el = resEl(r); setT($('span', el), fmt(shown[r])); el.classList.toggle('hide', fr ? src[r] < .5 && s.made[r] === 0 : s.res[r] < 0.5 && s.made[r] === 0 && !MINES.some((m, i) => m.res === r && s.mines[i].n)); });
   if (tab === 'base' && bv) { bv.draw(dt); updateSheet(); }
