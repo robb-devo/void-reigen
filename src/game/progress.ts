@@ -29,6 +29,8 @@ export const GOALS: Goal[] = [
   { text: 'Earn $500K this sector', done: () => S.life >= 5e5, prog: () => [S.life, 5e5], reward: 6e4, tab: 'base', focus: '@hq' },
   { text: 'Build the Alloy Forge', done: () => mach('forge') >= 1, reward: 2e4, tab: 'base', focus: '@f3' },
   { text: 'Parts Press reaches Lv 10', done: () => mach('press') >= 10, prog: () => [mach('press'), 10], reward: 3e4, tab: 'base', focus: '@f2' },
+  { text: 'Iron Asteroid Rig reaches 30', done: () => mine(2) >= 30, prog: () => [mine(2), 30], reward: 6e4, tab: 'base', focus: '@m2' },
+  { text: 'Alloy Forge reaches Lv 5', done: () => mach('forge') >= 5, prog: () => [mach('forge'), 5], reward: 8e4, tab: 'base', focus: '@f3' },
   { text: 'Earn $10M this sector', done: () => S.life >= 1e7, prog: () => [S.life, 1e7], reward: 2e5, tab: 'base', focus: '@hq' },
   { text: 'Quartz Harvester reaches 50', done: () => mine(1) >= 50, prog: () => [mine(1), 50], reward: 1e5, tab: 'base', focus: '@m1' },
   { text: 'Build a Plasma Excavator', done: () => mine(4) >= 1, reward: 2e5, tab: 'base', focus: '@m4' },
