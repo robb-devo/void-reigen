@@ -104,6 +104,28 @@ export class BaseView {
   slotScreen(key: string): [number, number] { const sl = SLOTS.find(s => s.key === key)!; const [x, y] = this.screen(sl.gx, sl.gy); return [x, y - 40 * this.z]; }
   focus(key: string, z = this.z, yf = FRAME_Y, with2?: string) { if (!with2 && !this.rock && G.S.warps === 0 && G.S.goal < 14 && key !== 'm0' && key !== 'hq') with2 = 'm0'; const sl = SLOTS.find(s => s.key === key); if (!sl) return; let [x, y] = iso(sl.gx, sl.gy); const s2 = with2 && SLOTS.find(s => s.key === with2); if (s2) { const [x2, y2] = iso(s2.gx, s2.gy); x = (x + x2) / 2; y = (y + y2) / 2; } const lx = 330 * z, ly = 200 * z; this.cam = { x: Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.w / 2 - x * z)), y: Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.h * yf - y * z)), z }; }
   construct(key: string) { this.cons.set(key, this.t); }
+  // ---- meteor shower (mid-game random event): rocks streak in, land glowing, tap to crack for a payout ----
+  meteors: { gx: number; gy: number; t: number; st: 0 | 1 | 2; ct: number }[] = []; onMeteor: (x: number, y: number) => void = () => {};
+  shower(n: number) { const R = this.rock ? 6 : 9; let tries = 0; while (n > 0 && tries++ < 200) { const a = Math.random() * 6.283, r = 2 + Math.random() * (R - 2.5), gx = Math.cos(a) * r, gy = Math.sin(a) * r; if (SLOTS.some(s2 => Math.abs(s2.gx - gx) < 1.3 && Math.abs(s2.gy - gy) < 1.3) || this.meteors.some(m => Math.hypot(m.gx - gx, m.gy - gy) < 1.2)) continue; const [sx, sy] = iso(gx, gy); if (Math.abs(this.ox + sx * this.z - this.w / 2) > this.w * .45 || this.oy + sy * this.z < 220 || this.oy + sy * this.z > this.h - 120) continue; this.meteors.push({ gx, gy, t: this.t + n * .55 + Math.random() * .3, st: 0, ct: 0 }); n--; } }
+  private meteorAt(lx: number, ly: number) { return this.meteors.find(m => { if (m.st !== 1) return false; const [x, y] = iso(m.gx, m.gy); return Math.abs(lx - x) < 22 && ly < y + 10 && ly > y - 30; }); }
+  private drawMeteors(front: boolean) {
+    const c = this.c, t = this.t;
+    this.meteors = this.meteors.filter(m => { const [x, y] = iso(m.gx, m.gy), age = t - m.t;
+      if (age < 0) return true;
+      if (m.st === 0) { if (!front) return true; const f = Math.min(1, age / .8), e = f * f, px = x + 300 * (1 - e), py = y - 560 * (1 - e);
+        const g = c.createLinearGradient(px, py, px + 90, py - 170); g.addColorStop(0, 'rgba(255,240,180,.95)'); g.addColorStop(.3, 'rgba(255,140,40,.7)'); g.addColorStop(1, 'rgba(255,80,40,0)'); c.strokeStyle = g; c.lineWidth = 10; c.lineCap = 'round'; c.beginPath(); c.moveTo(px, py); c.lineTo(px + 90, py - 170); c.stroke();
+        glow(c, px, py, 30, '#ffb347', .9); c.beginPath(); c.arc(px, py, 8, 0, 7); c.fillStyle = '#ffe9a0'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke();
+        if (f >= 1) { m.st = 1; m.ct = t; this.shake = Math.max(this.shake, .14); this.onImpact(); } return true; }
+      if (m.st === 1) { if (front) { const k = t - m.ct; if (k < .4) { const f = k / .4; c.beginPath(); c.ellipse(x, y, 20 + f * 60, (20 + f * 60) * .5, 0, 0, 7); c.strokeStyle = `rgba(255,190,90,${1 - f})`; c.lineWidth = 6 * (1 - f) + 1; c.stroke(); } const b = Math.abs(Math.sin(t * 4 + m.gx)) * 6; this.bubble(x, y - 40 - b, 'TAP!'); return true; }
+        const k = t - m.ct, life = 16, cool = Math.max(0, (k - life + 3) / 3); if (k > life) return false;
+        c.beginPath(); c.ellipse(x, y + 2, 20, 9, 0, 0, 7); c.fillStyle = 'rgba(20,8,40,.45)'; c.fill(); c.globalAlpha = 1 - cool;
+        glow(c, x, y - 8, 34, '#ff8a2e', (.45 + Math.sin(t * 5) * .15) * (1 - cool));
+        c.beginPath(); c.moveTo(x - 15, y); c.quadraticCurveTo(x - 16, y - 16, x - 2, y - 19); c.quadraticCurveTo(x + 15, y - 17, x + 15, y - 2); c.quadraticCurveTo(x, y + 5, x - 15, y); c.fillStyle = '#4a3a5e'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke();
+        c.strokeStyle = `rgba(255,${150 + Math.sin(t * 6) * 60},60,1)`; c.lineWidth = 2.5; c.beginPath(); c.moveTo(x - 8, y - 4); c.lineTo(x - 3, y - 11); c.lineTo(x + 3, y - 8); c.lineTo(x + 8, y - 14); c.moveTo(x - 3, y - 11); c.lineTo(x - 5, y - 16); c.stroke(); c.globalAlpha = 1; return true; }
+      // cracked: shards fly out, then gone
+      if (!front) return true; const k = (t - m.ct) / .5; if (k >= 1) return false; for (let q = 0; q < 7; q++) { const a = q / 7 * 6.283, d = 10 + k * 46; c.globalAlpha = 1 - k; c.fillStyle = q % 2 ? '#ffb347' : '#6a5a7e'; c.beginPath(); c.arc(x + Math.cos(a) * d, y - 10 + Math.sin(a) * d * .6 - k * 20, 5 * (1 - k) + 1, 0, 7); c.fill(); } c.globalAlpha = 1; return true; });
+  }
+  onImpact: () => void = () => {};
   punches = new Map<string, number>(); punch(key: string) { this.punches.set(key, this.t); }
   private portraits = new Map<string, string>();
   /** Building portrait for panels — the real in-world art at its current tier. */
@@ -115,6 +137,7 @@ export class BaseView {
   private tap(cx: number, cy: number) {
     if (this.travelT >= 0) return;
     const r = this.cv.getBoundingClientRect(); const lx = (cx - r.left - this.ox) / this.z, ly = (cy - r.top - this.oy) / this.z;
+    { const m = this.meteorAt(lx, ly); if (m) { m.st = 2; m.ct = this.t; this.shake = Math.max(this.shake, .1); this.onMeteor(cx, cy); return; } }
     let best: Slot | null = null, bd = -1e9, onPad = false;
     for (const sl of SLOTS) {
       if (visible(sl) === 'hidden') continue;
@@ -165,6 +188,7 @@ export class BaseView {
     this.drawWorkers(dt);
     // buildings back-to-front
     guideKey = this.guide; const order = SLOTS.filter(sl => visible(sl) === 'built' || (visible(sl) === 'plot' && relevantPlot(sl))).sort((a, b) => a.gx + a.gy - (b.gx + b.gy));
+    this.drawMeteors(false);
     const dec = this.decor(); let di = 0; const dings: number[][] = [];
     for (const sl of order) {
       while (di < dec.length && dec[di][0] + dec[di][1] < sl.gx + sl.gy + 1.4) this.prop(dec[di++], t);
@@ -185,6 +209,7 @@ export class BaseView {
       if (scl !== 1) c.restore();
     }
     while (di < dec.length) this.prop(dec[di++], t);
+    this.drawMeteors(true);
     // completion "ding": light pillar, double shock ring, star burst — drawn above every building
     for (const [x, y, f, sz] of dings) { const e = 1 - Math.pow(1 - f, 3), a = 1 - f, R = sz * TW * .5;
       c.save(); c.globalCompositeOperation = 'lighter'; const gp = c.createLinearGradient(0, y - 220, 0, y); gp.addColorStop(0, 'rgba(255,240,170,0)'); gp.addColorStop(1, `rgba(255,236,150,${.75 * a})`); c.fillStyle = gp; c.fillRect(x - R * .55 * (1 - f * .6), y - 220, R * 1.1 * (1 - f * .6), 220); glow(c, x, y - 30, 120, '#fff0a0', a * .9); c.restore();

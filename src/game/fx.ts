@@ -67,6 +67,7 @@ const raw = {
   pMetal: () => { click(0, .12); v({ f: 1180, to: 1120, d: .16, type: 'square', vol: .018 }); v({ f: 1770, d: .12, type: 'sine', vol: .04 }); },
   pRadar: () => { v({ f: 1760, d: .05, type: 'square', vol: .02 }); v({ f: 2349, d: .07, type: 'square', vol: .018, at: .08 }); click(0, .08); },
   rushUp: () => { [0, 2, 4].forEach((k, j) => v({ f: st2(1046, k + tapStep), d: .09, type: 'triangle', vol: .09, at: j * .045, bus: 'reward', wet: true })); click(0, .12); },
+  land2: () => { kick(0, .45); noise(.25, .09, 700, 0, 'world', .8); pop(260, .02, .2, 'world'); },
   lode: () => { kick(0, .5); for (let k = 0; k < 8; k++) chime(st2(1046, k + 1), k * .035, .09); },
   rank: () => { kick(0, .5); [392, 523, 659, 784, 1047].forEach((f, k) => v({ f, d: .35, type: 'triangle', vol: .12, at: k * .07, bus: 'reward', wet: true })); chime(2093, .4, .14); chime(2637, .48, .1); },
 };

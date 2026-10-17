@@ -146,7 +146,7 @@ function updateMine() {
 let ySeg = 0;
 let bv: BaseView | null = null; let bwrap: HTMLElement | null = null; let sheetKey: string | null = null; let lastDrone = 0;
 function renderBase() {
-  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); { const nb = SLOTS.filter(x => visible(x) === 'built').length; bv.z = nb <= 4 ? 1.08 : nb <= 9 ? 1 : Math.max(.62, Math.min(.95, 1 - nb * .03)); } bv.onTap = baseTap; bv.onProp = (k, r) => { (r ? [sfx.pMetal, sfx.pBarrel, sfx.pRadar, sfx.pMetal] : [sfx.pLamp, sfx.pCrystal, sfx.pFlag, sfx.pBarrel])[k](); buzz(8); }; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`);
+  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); { const nb = SLOTS.filter(x => visible(x) === 'built').length; bv.z = nb <= 4 ? 1.08 : nb <= 9 ? 1 : Math.max(.62, Math.min(.95, 1 - nb * .03)); } bv.onTap = baseTap; bv.onMeteor = meteorHit; bv.onImpact = () => { sfx.land2(); buzz(12); }; bv.onProp = (k, r) => { (r ? [sfx.pMetal, sfx.pBarrel, sfx.pRadar, sfx.pMetal] : [sfx.pLamp, sfx.pCrystal, sfx.pFlag, sfx.pBarrel])[k](); buzz(8); }; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`);
     bv.onConstruct = () => sfx.build();
     bv.onTravel = () => { sfx.land(); };
     const sh = $('#sheet'); let y0 = -1; sh.addEventListener('pointerdown', e => { y0 = e.clientY; }); sh.addEventListener('pointerup', e => { if (y0 < 0) return; const dy = e.clientY - y0; y0 = -1; if (dy < -30) { sh.classList.remove('compact'); sfx.select(); } else if (dy > 40) { if (sh.classList.contains('compact')) closeSheet(); else sh.classList.add('compact'); sfx.select(); } }); }
@@ -628,3 +628,21 @@ function dailyCheck() {
   });
 }
 setInterval(dailyCheck, 1000);
+
+// ---------- meteor shower: a mid-game random event ----------
+// From goal 12, every 4–7 minutes of foreground play on the mining rock, 5–7 meteors streak in and land glowing.
+// Tapping one cracks it: ~8s of income + a pile of the best ore. They cool off after 16s, so it's a short, optional burst.
+let nextShower = performance.now() + (3 + Math.random() * 2) * 60e3;
+function meteorHit(x: number, y: number) {
+  const s = st(), cash = Math.max(60, G.perSec() * 8), mi = Math.max(0, s.mines.map((m, i) => m.n ? i : -1).reduce((a, b) => Math.max(a, b), 0)), r = MINES[mi].res, ore = Math.max(5, G.orePerCycle(mi) * 4);
+  G.earn(cash); s.res[r] += ore; s.meteors++; sfx.drill(); sfx.coin(); buzz([15, 20, 30]); burst(x, y, 22, 0, '#ffb347'); popup(x, y - 40, '+$' + fmt(cash), '#ffd23f');
+  fly(x, y, ...center(cashEl), 6, 1, '#ffc94a', () => bump(cashEl)); fly(x, y, ...center(resEl(r)), 3, 2, RES[r].color, () => bump(resEl(r)));
+}
+setInterval(() => {
+  const s = st(), now = performance.now(); if (document.hidden || tab !== 'base' || !bv || bv.rock || bv.travelT !== -1 || s.goal < 12) { nextShower = Math.max(nextShower, now + 20e3); return; }
+  if (now < nextShower || bv.meteors.length) return;
+  if (talking() || document.querySelector('.modal, .tree')) { nextShower = now + 8e3; return; }
+  nextShower = now + (4 + Math.random() * 3) * 60e3; bv.shower(5 + Math.floor(Math.random() * 3)); sfx.launch();
+  if (!seen('meteor')) intro('meteor', [{ h: 'METEOR SHOWER', t: 'Incoming rocks! Meteors are packed with <b>ore and cash</b> – <b>tap them</b> before they cool off.' }]); else toast(`${I.boom} Meteor shower! Tap the glowing rocks`);
+}, 1000);
+(window as any).__shower = (n = 6) => bv?.shower(n);

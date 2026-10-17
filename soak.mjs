@@ -15,6 +15,7 @@ const health=async(tag)=>{ const s=Date.now(); const h=await p.evaluate(()=>new 
 const play=async secs=>{ const end=Date.now()+secs*1000; while(Date.now()<end){
   const cm=await p.$('.cmdr.open .cbub'); if(cm){ await cm.evaluate(e=>e.click()).catch(()=>{}); await p.waitForTimeout(250); continue; }
   const m=await p.$('.modal #col, .modal [data-close], .modal .x'); if(m){ await m.evaluate(e=>e.click()).catch(()=>{}); await p.waitForTimeout(200); }
+  const dc=await p.$('#dopen:not([disabled])'); if(dc){ log&&typeof log.push==='function'&&log.push(`${Math.round((Date.now()-t0)/1000)}s [daily crate]`); await dc.evaluate(e=>e.click()); await p.waitForTimeout(900); const d2=await p.$('#dopen:not([disabled])'); if(d2) await d2.evaluate(e=>e.click()); await p.waitForTimeout(300); continue; }
   const c=await p.$('#claim'); if(c){ await c.click({force:true}).catch(()=>{}); await p.waitForTimeout(200); continue; }
   const idle=await p.evaluate(()=>window.G.S.mines.map((m,i)=>m.n&&!m.m&&!m.run?i:-1).filter(i=>i>=0)).catch(()=>[]);
   for(const i of idle){ const [x,y]=await p.evaluate(k=>window.bv.slotScreen(k),'m'+i); if(y>200&&y<700&&x>10&&x<380) await p.touchscreen.tap(x,y+25); }
