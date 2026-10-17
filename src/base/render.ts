@@ -3,7 +3,8 @@
 //   static (MODE 0) -> cached to a bitmap per (building, tier, zoom)   |   anim (MODE 1) -> drawn live every frame.
 export const TW = 72, TH = 36;
 export const iso = (x: number, y: number): [number, number] => [(x - y) * TW / 2, (x + y) * TH / 2];
-export const INK = '#24163a';
+import { T } from '../design';
+export const INK = T.ink;
 type C = CanvasRenderingContext2D;
 export const hsl = (h: number, s: number, l: number, a = 1) => `hsla(${h},${s}%,${l}%,${a})`;
 let MODE: 0 | 1 = 0; const S = () => MODE === 0, A = () => MODE === 1;

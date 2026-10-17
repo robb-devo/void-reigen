@@ -1,6 +1,7 @@
 // Base view: camera (pan / pinch / wheel zoom), layout, conveyors, drones, labels, hit-testing.
 import { MINES, MACHINES, RES, Res } from '../game/data';
 import * as G from '../game/state';
+import { outlinedText } from '../design';
 import { drawBuilding, drawPlot, iso, TW, TH, Kind, hsl, scaffold, ship, glow, INK, box } from './render';
 
 export type Slot = { key: string; kind: Kind; idx: number; gx: number; gy: number; s: number; rock?: number };
@@ -296,14 +297,14 @@ export class BaseView {
   }
   private pill(x: number, y: number, txt: string, fg: string, bg: string) {
     const c = this.c; c.font = '700 15px Fredoka, sans-serif'; const w = c.measureText(txt).width + 16;
-    c.fillStyle = bg; rr(c, x - w / 2, y - 10, w, 20, 10); c.fill(); c.strokeStyle = 'rgba(255,255,255,.25)'; c.lineWidth = 1.5; c.stroke();
-    c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, x, y + 1);
+    c.fillStyle = bg; rr(c, x - w / 2, y - 11, w, 22, 11); c.fill(); c.strokeStyle = '#120a24'; c.lineWidth = 3; c.stroke(); c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 1.5; rr(c, x - w / 2 + 3, y - 8, w - 6, 8, 4); c.stroke();
+    outlinedText(c, txt, x, y + 1, 14, fg);
   }
   private bubble(x: number, y: number, txt: string, bg = '#ffd23f') {
     const c = this.c; c.font = '700 14px Fredoka, sans-serif'; const w = c.measureText(txt).width + 18;
     c.fillStyle = bg; c.strokeStyle = '#24163a'; c.lineWidth = 3; rr(c, x - w / 2, y - 13, w, 24, 12); c.fill(); c.stroke();
     c.beginPath(); c.moveTo(x - 6, y + 10); c.lineTo(x, y + 18); c.lineTo(x + 6, y + 10); c.fill(); c.stroke(); c.fillRect(x - 5, y + 8, 10, 3);
-    c.fillStyle = '#24163a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, x, y);
+    outlinedText(c, txt, x, y, 14, '#fff');
   }
 }
 function bakeShadow(g: CanvasRenderingContext2D, s: number) {

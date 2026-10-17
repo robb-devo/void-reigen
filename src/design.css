@@ -1,0 +1,61 @@
+/* ===================== VOID REIGEN DESIGN SYSTEM ===================== */
+/* Tokens — mirror src/design.ts */
+:root{
+  --ink:#24163a;--ink2:#120a24;--gold:#ffd23f;--gold-hi:#fff1a8;--gold-lo:#e8941a;--mint:#5cff9d;--cyan:#5cf2ff;--pink:#ff7bd5;--red:#ff5b5b;--violet:#b06bff;--orange:#ff9f43;
+  --panel:#3a2c6c;--panel-lo:#24183f;--panel-hi:#5a4a9a;--txt:#fff;--dim:#c9bff5;
+  --ol:3px;--r-s:10px;--r-m:14px;--r-l:18px;--r-xl:24px;--sp1:4px;--sp2:8px;--sp3:12px;--sp4:16px;
+  --drop:0 4px 0 var(--ink2);--drop-sm:0 3px 0 var(--ink2);--hi:inset 0 2px 0 rgba(255,255,255,.35);--lo:inset 0 -4px 0 rgba(0,0,0,.22);
+  --font:Fredoka,Nunito,sans-serif;
+  --tx:-1.5px -1.5px 0 var(--ink2),1.5px -1.5px 0 var(--ink2),-1.5px 1.5px 0 var(--ink2),1.5px 1.5px 0 var(--ink2),0 3px 0 var(--ink2);
+}
+/* Typography: every display string is outlined with a drop */
+.h,h2,h3,#cash,.tx,.btn,.pop,.toast,.tbadge,.cmdbadge b,.tierb,.rc span,.seg button,.mk2 b,.tpts b{font-family:var(--font)}
+#cash{text-shadow:var(--tx),0 6px 14px rgba(0,0,0,.4);-webkit-text-stroke:0;color:var(--gold)}
+.h,h2.h,h3.h,.bsheet h3,.ti2 b,.trank b,.tbr b{text-shadow:var(--tx);color:#fff;letter-spacing:.02em}
+.title.h{text-shadow:var(--tx);letter-spacing:.14em}
+.pop{font:700 19px var(--font);text-shadow:var(--tx)}
+#rate,.rc span{text-shadow:0 2px 0 var(--ink2)}
+/* Buttons: chunky bevel, thick outline, press-down */
+.btn{border:var(--ol) solid var(--ink2)!important;border-radius:var(--r-m);font:700 15px var(--font);color:#fff;text-shadow:0 2px 0 rgba(18,10,36,.7);
+  background:linear-gradient(#7ad8ff,#3a9cf0);box-shadow:var(--drop),var(--hi),var(--lo)!important;transition:transform .08s,filter .15s;position:relative}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink2),var(--hi),var(--lo)!important}
+.btn.gold{background:linear-gradient(#ffe46a,#ffb21f 60%,#f29a14);color:#fff}
+.btn.ghost{background:linear-gradient(#5a4a9a,#43347a);color:#fff}
+.btn.big{font-size:19px;padding:13px 16px;border-radius:var(--r-l)}
+.btn b{opacity:1;font-weight:700}
+.btn:disabled,.btn[disabled]{filter:grayscale(.75) brightness(.8);opacity:1;cursor:default}
+.btn:disabled:active{transform:none}
+/* Panels: one look for sheets, modals, cards, bubbles */
+.bsheet,.modal .sheet,.tinfo,.cbub,.goal,.fstock{border:var(--ol) solid var(--ink2)!important;box-shadow:var(--drop),inset 0 2px 0 rgba(255,255,255,.12)!important}
+.bsheet,.modal .sheet{background:linear-gradient(#45358a,#2a1f56 60%,#24183f)!important;border-radius:var(--r-xl)!important}
+.goal{background:linear-gradient(#3e2f78,#2a1f56)!important;border-radius:var(--r-l)!important}
+.goal.ready{background:linear-gradient(#ffcf4a,#f29a14)!important}.goal.ready b,.goal.ready small{color:#fff;text-shadow:0 2px 0 rgba(18,10,36,.6)}
+.cbub{border-radius:var(--r-l)!important}
+/* Chips (resources / stats) */
+.rc{border:2px solid var(--ink2)!important;background:linear-gradient(#3a2c6c,#2a1f52)!important;box-shadow:var(--drop-sm),inset 0 1px 0 rgba(255,255,255,.15);border-radius:999px;font:700 13px var(--font)}
+.iconbtn{border:var(--ol) solid var(--ink2)!important;background:linear-gradient(#5a4a9a,#3a2c6c)!important;border-radius:var(--r-m)!important;box-shadow:var(--drop),var(--hi)!important;width:42px;height:42px}
+.iconbtn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink2)!important}
+/* Close buttons everywhere */
+.bsheet .x,.thead .x,.modal .x{border:var(--ol) solid var(--ink2)!important;background:linear-gradient(#ff8a8a,#e63c3c)!important;box-shadow:var(--drop-sm),var(--hi)!important;color:#fff;text-shadow:0 2px 0 var(--ink2)}
+/* Segmented control */
+.seg{background:var(--ink2);border-radius:var(--r-m);padding:4px;gap:4px!important}
+.seg button{border:0!important;border-radius:var(--r-s);background:transparent;color:var(--dim);font:700 13px var(--font)}
+.seg button.on{background:linear-gradient(#ffe46a,#f29a14);color:#fff;text-shadow:0 2px 0 rgba(18,10,36,.6);box-shadow:inset 0 2px 0 rgba(255,255,255,.4),0 2px 0 rgba(0,0,0,.3)}
+/* List rows inside panels */
+.trow{border:var(--ol) solid var(--ink2)!important;border-radius:var(--r-m)!important;background:linear-gradient(#4a3a86,#35286a)!important;box-shadow:var(--drop-sm),inset 0 2px 0 rgba(255,255,255,.1)!important}
+.trow:active:not(:disabled){transform:translateY(2px)}
+.trow .tc.go{background:linear-gradient(#8dffb8,#2fd673);border:2px solid var(--ink2);border-radius:var(--r-s);color:#fff;text-shadow:0 2px 0 rgba(18,10,36,.6);box-shadow:0 2px 0 var(--ink2)}
+/* Tier badge */
+.tierb{border:2px solid var(--ink2);text-shadow:0 1px 0 var(--ink2);box-shadow:0 2px 0 var(--ink2)}
+/* Toasts & popups */
+.toast{border:var(--ol) solid var(--ink2);box-shadow:var(--drop),var(--hi);background:linear-gradient(#ffe46a,#f29a14)!important;color:#fff!important;text-shadow:0 2px 0 rgba(18,10,36,.6);border-radius:var(--r-l)!important}
+/* Trophies grid */
+.ach{border:var(--ol) solid var(--ink2)!important;border-radius:var(--r-m)!important;background:linear-gradient(#3a2c6c,#2a1f52)!important;box-shadow:var(--drop-sm);opacity:.7}
+.ach.got{background:linear-gradient(#ffcf4a,#e8941a)!important;opacity:1}.ach.got b,.ach.got small{color:#fff;text-shadow:0 1px 0 var(--ink2)}
+/* Market + skill nodes already chunky; align radii */
+.mk2,.tn2{border-radius:var(--r-m)!important}
+.split input{accent-color:var(--gold)}
+/* back + rock buttons */
+#back{background:linear-gradient(#ffe46a,#f29a14)!important;color:#fff!important;text-shadow:0 2px 0 rgba(18,10,36,.6);box-shadow:var(--drop),var(--hi)!important}
+.rockbtn{text-shadow:0 2px 0 var(--ink2)}
+.ach i svg{width:24px;height:24px}

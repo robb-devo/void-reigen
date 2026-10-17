@@ -1,32 +1,60 @@
 import { S } from './state';
+// ---------- Sound: one consistent, poppy synth kit ----------
+// Mix buses: ui (taps/selects), reward (coins/claims), world (machines, ships), each into a soft
+// limiter; a short stereo-ish delay send adds sparkle to chimes. All levels set in MIX.
 let AC: AudioContext | null = null;
 const ac = () => (AC ??= new (window.AudioContext || (window as any).webkitAudioContext)());
-let master: GainNode | null = null;
-function out() { const c = ac(); if (!master) { master = c.createGain(); master.gain.value = 0.9; const comp = c.createDynamicsCompressor(); master.connect(comp).connect(c.destination); } return master; }
-export function tone(f: number, d = 0.08, type: OscillatorType = 'sine', vol = 0.12, slide = 0, delay = 0) {
-  if (S.mute) return; const c = ac(); if (c.state === 'suspended') c.resume();
-  const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
-  o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(f * slide, t + d);
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
-  o.connect(g).connect(out()); o.start(t); o.stop(t + d + 0.02);
+const MIX = { master: .85, ui: .55, reward: .7, world: .5, fx: .25 };
+type Bus = 'ui' | 'reward' | 'world';
+let buses: Record<Bus, GainNode> | null = null, send: GainNode | null = null;
+function bus(b: Bus) {
+  const c = ac();
+  if (!buses) {
+    const m = c.createGain(); m.gain.value = MIX.master; const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = .003; comp.release.value = .12; m.connect(comp).connect(c.destination);
+    const d = c.createDelay(.5); d.delayTime.value = .11; const fb = c.createGain(); fb.gain.value = .28; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500; send = c.createGain(); send.gain.value = MIX.fx; send.connect(d); d.connect(lp).connect(fb).connect(d); lp.connect(m);
+    buses = { ui: c.createGain(), reward: c.createGain(), world: c.createGain() }; for (const k of ['ui', 'reward', 'world'] as Bus[]) { buses[k].gain.value = MIX[k]; buses[k].connect(m); }
+  }
+  return buses[b];
 }
-function noise(d = 0.3, vol = 0.08, freq = 800) { if (S.mute) return; const c = ac(); const b = c.createBuffer(1, c.sampleRate * d, c.sampleRate), a = b.getChannelData(0); for (let k = 0; k < a.length; k++) a[k] = (Math.random() * 2 - 1) * (1 - k / a.length); const s = c.createBufferSource(); s.buffer = b; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq; const g = c.createGain(); g.gain.value = vol; s.connect(f).connect(g).connect(out()); s.start(); }
-let lastCoin = 0, combo = 0, comboT = 0, lastFan = 0;
+type V = { f: number; d?: number; type?: OscillatorType; vol?: number; to?: number; at?: number; bus?: Bus; wet?: boolean; att?: number };
+export function tone(f: number, d = 0.08, type: OscillatorType = 'sine', vol = 0.12, slide = 0, delay = 0) { v({ f, d, type, vol, to: slide ? f * slide : 0, at: delay }); }
+function v(o: V) {
+  if (S.mute) return; const c = ac(); if (c.state === 'suspended') c.resume();
+  const t = c.currentTime + (o.at || 0), d = o.d ?? .08, os = c.createOscillator(), g = c.createGain();
+  os.type = o.type || 'sine'; os.frequency.setValueAtTime(o.f, t); if (o.to) os.frequency.exponentialRampToValueAtTime(Math.max(20, o.to), t + d * .9);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(o.vol ?? .2, t + (o.att ?? .004)); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  os.connect(g); g.connect(bus(o.bus || 'ui')); if (o.wet && send) g.connect(send); os.start(t); os.stop(t + d + .03);
+}
+function noise(d = 0.3, vol = 0.08, freq = 800, at = 0, b: Bus = 'world', q = 1) {
+  if (S.mute) return; const c = ac(); const t = c.currentTime + at; const buf = c.createBuffer(1, Math.ceil(c.sampleRate * d), c.sampleRate), a = buf.getChannelData(0); for (let k = 0; k < a.length; k++) a[k] = Math.random() * 2 - 1;
+  const src = c.createBufferSource(); src.buffer = buf; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  src.connect(f).connect(g).connect(bus(b)); src.start(t); src.stop(t + d + .02);
+}
+// building blocks
+const pop = (f = 520, at = 0, vol = .32, b: Bus = 'ui') => { v({ f: f * 1.9, to: f * .7, d: .09, type: 'sine', vol, at, bus: b }); v({ f: f * 4, to: f * 2, d: .025, type: 'triangle', vol: vol * .25, at, bus: b }); };
+const click = (at = 0, vol = .12) => noise(.018, vol, 3800, at, 'ui', 2.5);
+const chime = (f: number, at = 0, vol = .14) => { v({ f, d: .32, type: 'sine', vol, at, bus: 'reward', wet: true }); v({ f: f * 2.76, d: .12, type: 'sine', vol: vol * .35, at, bus: 'reward', wet: true }); v({ f: f * 5.4, d: .05, type: 'sine', vol: vol * .15, at, bus: 'reward' }); };
+const kick = (at = 0, vol = .5) => v({ f: 160, to: 45, d: .16, type: 'sine', vol, at, bus: 'world', att: .002 });
+const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+const st2 = (base: number, k: number) => base * Math.pow(2, PENTA[Math.min(PENTA.length - 1, k)] / 12);
+let lastCoin = 0, combo = 0, comboT = 0, lastFan = 0, lastBlip = 0;
 export const sfx = {
-  tap: () => tone(440, 0.05, 'triangle', 0.07, 1.8),
-  drill: () => { tone(110, 0.1, 'triangle', 0.08, 0.55); noise(0.06, 0.035, 2200); },
-  coin: () => { const n = performance.now(); if (n - lastCoin < 60) return; combo = n - comboT < 600 ? Math.min(combo + 1, 12) : 0; comboT = n; lastCoin = n; const f = 990 * Math.pow(2, combo / 24); tone(f, 0.07, 'triangle', 0.04); tone(f * 1.5, 0.16, 'sine', 0.045, 1, 0.03); },
-  buy: () => { tone(620, 0.06, 'triangle', 0.08); tone(930, 0.1, 'triangle', 0.07, 1, 0.05); },
-  no: () => tone(160, 0.12, 'sawtooth', 0.05, 0.7),
-  fanfare: () => { const n = performance.now(); if (n - lastFan < 350) return; lastFan = n; [523, 659, 784, 1047].forEach((f, k) => tone(f, 0.25, 'triangle', 0.07, 1, k * 0.08)); },
-  claim: () => { for (let k = 0; k < 6; k++) tone(1200 + k * 160, 0.09, 'square', 0.025, 1, k * 0.045); tone(784, 0.35, 'triangle', 0.08, 1, 0.28); },
-  launch: () => { noise(0.9, 0.06, 600); tone(120, 0.8, 'sawtooth', 0.03, 3); },
-  warp: () => { tone(80, 1.6, 'sawtooth', 0.08, 12); noise(1.5, 0.08, 1200); [523, 784, 1047, 1568].forEach((f, k) => tone(f, 0.6, 'sine', 0.09, 1, 0.6 + k * 0.1)); },
-  clank: () => { tone(300, 0.05, 'square', 0.04, 0.5); },
-  blip: () => tone(880 + Math.random() * 220, 0.025, 'square', 0.012),
-  select: () => { tone(260, 0.07, 'triangle', 0.09, 0.6); tone(520, 0.05, 'sine', 0.04, 1.2, 0.02); },
-  build: () => { for (let k = 0; k < 3; k++) { tone(180 + k * 20, 0.06, 'square', 0.035, 0.4, k * 0.22); noise(0.04, 0.03, 3000); } [784, 988, 1319].forEach((f, k) => tone(f, 0.18, 'triangle', 0.07, 1, 0.9 + k * 0.06)); },
-  land: () => { tone(500, 0.9, 'sine', 0.03, 0.3); noise(0.5, 0.04, 500); tone(90, 0.15, 'triangle', 0.1, 0.6, 1.5); },
+  tap: () => { click(0, .1); pop(620, 0, .16); },
+  select: () => { click(0, .1); pop(440, 0, .24); pop(880, .045, .12); },
+  drill: () => { pop(300, 0, .28, 'world'); noise(.07, .07, 1800, 0, 'world', 1.2); v({ f: 90, to: 60, d: .12, type: 'square', vol: .03, bus: 'world' }); },
+  coin: () => { const n = performance.now(); if (n - lastCoin < 70) return; combo = n - comboT < 700 ? Math.min(combo + 1, 10) : 0; comboT = n; lastCoin = n; chime(st2(1046, combo), 0, .1); },
+  buy: () => { pop(500, 0, .3); chime(1318, .04, .08); },
+  no: () => { v({ f: 220, to: 150, d: .12, type: 'square', vol: .05 }); v({ f: 180, to: 120, d: .14, type: 'square', vol: .05, at: .09 }); },
+  fanfare: () => { const n = performance.now(); if (n - lastFan < 350) return; lastFan = n; kick(0, .35); [523, 659, 784, 1047].forEach((f, k) => { v({ f, d: .28, type: 'triangle', vol: .12, at: k * .075, bus: 'reward', wet: true }); }); chime(2093, .32, .1); },
+  claim: () => { kick(0, .4); for (let k = 0; k < 6; k++) chime(st2(784, k + 2), k * .045, .08); pop(392, .3, .25, 'reward'); chime(1568, .34, .14); },
+  launch: () => { noise(.9, .12, 500, 0, 'world', .7); v({ f: 70, to: 260, d: .8, type: 'sawtooth', vol: .04, bus: 'world' }); kick(0, .4); },
+  warp: () => { v({ f: 60, to: 900, d: 1.6, type: 'sawtooth', vol: .07, bus: 'world' }); noise(1.5, .1, 1200, 0, 'world', .6); [523, 784, 1047, 1568].forEach((f, k) => chime(f, .6 + k * .1, .14)); kick(.6, .6); },
+  clank: () => { click(0, .14); v({ f: 900, to: 600, d: .03, type: 'square', vol: .03 }); },
+  blip: () => { const n = performance.now(); if (n - lastBlip < 45) return; lastBlip = n; v({ f: 700 + Math.random() * 300, d: .03, type: 'triangle', vol: .05 }); },
+  build: () => { for (let k = 0; k < 3; k++) { click(k * .2, .16); v({ f: 240 - k * 20, to: 140, d: .06, type: 'square', vol: .04, at: k * .2, bus: 'world' }); } kick(.85, .5); [784, 988, 1319, 1568].forEach((f, k) => chime(f, .88 + k * .055, .1)); },
+  land: () => { noise(.6, .07, 400, 0, 'world', .8); v({ f: 420, to: 140, d: .8, type: 'sine', vol: .05, bus: 'world' }); kick(1.4, .45); pop(260, 1.42, .2, 'world'); },
+  lode: () => { kick(0, .5); for (let k = 0; k < 8; k++) chime(st2(1046, k + 1), k * .035, .09); },
+  rank: () => { kick(0, .5); [392, 523, 659, 784, 1047].forEach((f, k) => v({ f, d: .35, type: 'triangle', vol: .12, at: k * .07, bus: 'reward', wet: true })); chime(2093, .4, .14); chime(2637, .48, .1); },
 };
 export const buzz = (p: number | number[]) => { try { if ((navigator as any).userActivation?.hasBeenActive === false) return; navigator.vibrate?.(p); } catch {} };
 
@@ -61,7 +89,7 @@ export function stepFx(dt: number, t: number) {
 let popN = 0;
 export function popup(x: number, y: number, txt: string, color?: string) { if (popN > 14) return; popN++; setTimeout(() => popN--, 900); const d = document.createElement('div'); d.className = 'pop'; d.textContent = txt; d.style.left = x + 'px'; d.style.top = y + 'px'; if (color) d.style.color = color; document.body.appendChild(d); setTimeout(() => d.remove(), 900); }
 const tq: string[] = []; let tbusy = false;
-function nextToast() { const t = tq.shift(); if (!t) { tbusy = false; return; } tbusy = true; const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2400); setTimeout(nextToast, tq.length ? 1100 : 2000); }
+function nextToast() { const t = tq.shift(); if (!t) { tbusy = false; return; } tbusy = true; document.querySelectorAll('.toast').forEach(e => e.remove()); const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2400); setTimeout(nextToast, tq.length ? 1100 : 2000); }
 export function toast(t: string) { if (tq.includes(t)) return; if (tq.length > 3) tq.shift(); tq.push(t); if (!tbusy) nextToast(); }
 let lastRocket = 0;
 export function rocket(x: number, y: number, force = false) { const n = performance.now(); if (!force && n - lastRocket < 700) return; lastRocket = n; const d = document.createElement('div'); d.className = 'rocket'; d.textContent = '🚀'; d.style.left = x + 'px'; d.style.top = y + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1400); for (let k = 0; k < 8; k++) setTimeout(() => burst(x, y + 10 - k * 18, 3, 0, k % 2 ? '#ff9f43' : '#ffd84a'), k * 40); }

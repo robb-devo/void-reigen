@@ -1,5 +1,6 @@
 import './fonts';
 import './style.css';
+import './design.css';
 import { MINES, MACHINES, TECH, SHIPS, PLANETS, RUNS, RES, RES_ORDER, GEN, FLEET_UPG, MILESTONES, PERKS, SECTORS, Res } from './game/data';
 const mk = (id: string) => (id === 'hull' ? 'hullworks' : id);
 import * as G from './game/state';
@@ -420,7 +421,7 @@ function confirmModal(icon: string, title: string, txt: string, ok: string, fn: 
   const m = modal(`<div class="hero">${icon}</div><h2 class="h">${title}</h2><p>${txt}</p><div class="two"><button class="btn big ghost" data-x>Cancel</button><button class="btn gold big" data-ok>${ok}</button></div>`);
   m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('[data-ok]')!.addEventListener('click', () => { m.remove(); fn(); });
 }
-$('#trophy').addEventListener('click', () => { sfx.tap(); const s = st(); const m = modal(`<h2 class="h"><span class="hico">${$('#trophy svg')?.outerHTML || ''}</span> Trophies <small>${s.ach.length}/${ACHS.length}</small></h2><p>Each trophy: <b style="color:var(--mint)">+2% profit</b> forever</p><div class="achs">${ACHS.map(a => `<div class="ach ${s.ach.includes(a.id) ? 'got' : ''}"><i>${s.ach.includes(a.id) ? a.e : '🔒'}</i><b>${a.name}</b><small>${a.desc}</small></div>`).join('')}</div><button class="btn big" data-x>Close</button>`); m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('.sheet')!.classList.add('tall'); });
+$('#trophy').addEventListener('click', () => { sfx.tap(); const s = st(); const m = modal(`<h2 class="h"><span class="hico">${$('#trophy svg')?.outerHTML || ''}</span> Trophies <small>${s.ach.length}/${ACHS.length}</small></h2><p>Each trophy: <b style="color:var(--mint)">+2% profit</b> forever</p><div class="achs">${ACHS.map(a => `<div class="ach ${s.ach.includes(a.id) ? 'got' : ''}"><i>${s.ach.includes(a.id) ? ($('#trophy svg')?.outerHTML || '') : `<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3" fill="#8b84b0" stroke="#24163a" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#24163a" stroke-width="2.5"/><circle cx="12" cy="15.5" r="1.8" fill="#24163a"/></svg>`}</i><b>${a.name}</b><small>${a.desc}</small></div>`).join('')}</div><button class="btn big" data-x>Close</button>`); m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('.sheet')!.classList.add('tall'); });
 function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); xp(XP.ach); if (s.goal < 9) continue; sfx.fanfare(); buzz([20, 40, 20, 40]); toast(`🏆 ${a.name} · +2% profit`); bump($('#trophy')); burst(...center($('#trophy')), 24); } }
 
 // ---------- tabs ----------
@@ -448,7 +449,7 @@ function frame(now: number) {
   const ev = G.tick(dt);
   for (const e of ev) {
     const c = cards[e.i], d = MINES[e.i];
-    if (e.lode && tab === 'base' && bv && !bv.rock) { const [x, y] = bv.slotScreen('m' + e.i); popup(x, y - 30, 'MOTHERLODE ×10', '#ffd23f'); burst(x, y, 24, 0, '#ffd23f'); sfx.claim(); }
+    if (e.lode && tab === 'base' && bv && !bv.rock) { const [x, y] = bv.slotScreen('m' + e.i); popup(x, y - 30, 'MOTHERLODE ×10', '#ffd23f'); burst(x, y, 24, 0, '#ffd23f'); sfx.lode(); }
     if (tab === 'base' && bv) { if (!bv.rock) baseEvent(e.i, e.v, e.ct, now); else acc += e.v; continue; }
     if (c && e.ct > 0.3) {
       const [x, y] = center(c.ico); popup(x, y - 40, '+$' + fmt(e.v));
@@ -533,7 +534,7 @@ void MILESTONES;
 // ---------- Commander rank + skill tree ----------
 function xp(n: number, x = 60, y = 60) {
   const up = G.gainXp(n); const b = $('#cmdbadge'); if (st().goal >= 2) { fly(x, y, ...center(b), 3, 1, '#7affd1', () => bump(b)); }
-  if (up) setTimeout(() => { sfx.fanfare(); buzz([30, 40, 80]); const [bx, by] = center(b); burst(bx, by, 40, 0, '#7affd1'); toast(`Commander rank ${G.cmdLevel().lv}! +1 skill point`); bump(b); }, 700);
+  if (up) setTimeout(() => { sfx.rank(); buzz([30, 40, 80]); const [bx, by] = center(b); burst(bx, by, 40, 0, '#7affd1'); toast(`Commander rank ${G.cmdLevel().lv}! +1 skill point`); bump(b); }, 700);
   cmdHud();
 }
 function cmdHud() {
@@ -548,10 +549,10 @@ function openTree() {
   const draw = () => {
     const s = st(), L = G.cmdLevel(), pts = G.skillPoints();
     const node = (id: string) => { const d = SKILLS.find(x => x.id === id)!, br = BRANCHES[d.br], has = G.sk(id), can = G.canLearn(id), lockLv = L.lv < LEVEL_GATE[d.tier];
-      return `<button class="tn2 ${has ? 'has' : can ? 'can' : 'lock'} ${treeSel === id ? 'sel' : ''}" data-sk="${id}" style="--c:${br.color}"><span class="ta">${art(d.art)}</span>${lockLv && !has ? `<em>Lv ${LEVEL_GATE[d.tier]}</em>` : ''}</button>`; };
+      return `<button class="tn2 ${has ? 'has' : can ? 'can' : 'lock'} ${treeSel === id ? 'sel' : ''}" data-sk="${id}" style="--c:${br.color}"><span class="ta">${art(d.art)}</span>${lockLv && !has ? `<em>Rank ${LEVEL_GATE[d.tier]}</em>` : ''}</button>`; };
     const d = treeSel ? SKILLS.find(x => x.id === treeSel)! : null;
     m.innerHTML = `<div class="thead"><button class="x" data-tx>✕</button><div class="trank"><div class="tbadge">${L.lv}</div><div><small>COMMANDER RANK</small><b>Vex's Protégé</b><div class="tbar"><i style="width:${L.into / L.need * 100}%"></i></div><small>${fmt(L.into, 0)} / ${fmt(L.need, 0)} XP</small></div></div><div class="tpts ${pts ? 'on' : ''}"><b>${pts}</b><small>points</small></div></div>
-    <div class="tgrid">${BRANCHES.map((br, bi) => `<div class="tcol" style="--c:${br.color}"><div class="tbr">${art(br.art)}<b>${br.name}</b></div>${SKILLS.filter(x => x.br === bi).map((x, k) => (k ? `<div class="tlink ${G.sk(x.id) ? 'on' : ''}"></div>` : '') + node(x.id)).join('')}</div>`).join('')}</div>
+    <div class="tgrid">${BRANCHES.map((br, bi) => `<div class="tcol" style="--c:${br.color}"><div class="tbr">${art(br.art)}<b>${br.name}</b></div>${SKILLS.filter(x => x.br === bi).sort((a, b) => a.tier - b.tier).map((x, k) => (k ? `<div class="tlink ${G.sk(x.id) ? 'on' : ''}"></div>` : '') + node(x.id)).join('')}</div>`).join('')}</div>
     <div class="tinfo">${d ? `<div class="ti2" style="--c:${BRANCHES[d.br].color}"><span class="ta">${art(d.art)}</span><div><small>${BRANCHES[d.br].name.toUpperCase()} · TIER ${d.tier + 1}</small><b>${d.name}</b><p>${d.desc}</p></div></div>${G.sk(d.id) ? '<button class="btn big" disabled>Learned ✓</button>' : `<button class="btn gold big" data-learn ${G.canLearn(d.id) ? '' : 'disabled'}>${L.lv < LEVEL_GATE[d.tier] ? `Reach rank ${LEVEL_GATE[d.tier]}` : d.tier && !SKILLS.some(x => x.br === d.br && x.tier === d.tier - 1 && G.sk(x.id)) ? 'Learn the skill above first' : pts ? 'Learn · 1 point' : 'No points – rank up!'}</button>`}` : `<p class="muted">Rank up by claiming goals, earning trophies, conquering planets and warping. Each rank = 1 skill point. Skills are permanent.</p>`}</div>`;
     m.querySelector('[data-tx]')!.addEventListener('click', () => { sfx.tap(); m.classList.add('out'); setTimeout(() => m.remove(), 200); cmdHud(); });
     m.querySelectorAll<HTMLElement>('[data-sk]').forEach(b => b.addEventListener('click', () => { treeSel = b.dataset.sk!; sfx.select(); draw(); }));
