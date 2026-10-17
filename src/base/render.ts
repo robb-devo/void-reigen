@@ -443,7 +443,7 @@ export function wreck(c: C, x: number, y: number, t: number, dmg: number) {
   c.save(); c.translate(x - 4, y - 6); c.rotate(-.42);
   // hull capsule
   c.beginPath(); c.moveTo(-40, 0); c.quadraticCurveTo(-40, -22, -10, -24); c.lineTo(30, -20); c.quadraticCurveTo(46, -10, 34, 6); c.lineTo(-30, 10); c.quadraticCurveTo(-42, 8, -40, 0); c.closePath();
-  c.fillStyle = lg(c, 0, -24, 0, 10, '#8f9ab8', '#454c66'); c.fill(); c.strokeStyle = INK; c.lineWidth = 3; c.stroke();
+  c.fillStyle = lg(c, 0, -24, 0, 10, '#7d86a6', '#353a52'); c.fill(); c.strokeStyle = INK; c.lineWidth = 3; c.stroke();
   // rust + scorch patches
   c.fillStyle = 'rgba(200,110,50,.55)'; c.beginPath(); c.ellipse(-18, -6, 9, 5, .3, 0, 7); c.fill(); c.beginPath(); c.ellipse(16, 0, 7, 4, -.2, 0, 7); c.fill(); c.fillStyle = 'rgba(20,10,30,.45)'; c.beginPath(); c.ellipse(26, -10, 8, 6, 0, 0, 7); c.fill();
   // hull plates (fall away with damage) / exposed ribs underneath

@@ -23,6 +23,7 @@ export const ALL_SLOTS: Slot[] = [
   { key: 'lab', kind: 'lab', idx: 0, gx: -3, gy: -3, s: 2 },
 ];
 const tierOf = (n: number, steps: number[]) => Math.max(0, steps.filter(v => n >= v).length - 1);
+const TRADER_SC = 1.35, WRECK_SC = 1.45;
 export let SLOTS: Slot[] = ALL_SLOTS.filter(s => !s.rock);
 export const slotByKey = (k: string) => ALL_SLOTS.find(s => s.key === k);
 export const TIER_STEPS: Record<string, number[]> = { mine: [1, 25, 100, 300, 1000], mach: [1, 10, 25, 50, 100], gen: [1, 5, 15, 30, 60], lab: [0, 3, 10, 25, 50], hangar: [1, 5, 15, 40, 100], yard: [1, 3, 6, 10, 15], lift: [1, 3, 6, 10, 15] };
@@ -130,30 +131,30 @@ export class BaseView {
   private freeSpot(clear: number, minR: number, maxR: number): [number, number] | null {
     let best: [number, number] | null = null, bs = -1e9;
     for (let k = 0; k < 160; k++) { const a = Math.random() * 6.283, r = minR + Math.random() * (maxR - minR), gx = Math.cos(a) * r, gy = Math.sin(a) * r;
-      const d = Math.min(99, ...SLOTS.map(s2 => Math.max(Math.abs(s2.gx - gx), Math.abs(s2.gy - gy)) - s2.s / 2)); if (d < clear) continue;
+      const d = Math.min(99, ...SLOTS.filter(s2 => visible(s2) !== 'hidden').map(s2 => Math.max(Math.abs(s2.gx - gx), Math.abs(s2.gy - gy)) - s2.s / 2)); if (d < clear) continue;
       if (this.meteors.some(m => Math.hypot(m.gx - gx, m.gy - gy) < 2)) continue;
-      const [sx, sy] = iso(gx, gy), X = this.ox + sx * this.z, Y = this.oy + sy * this.z; if (Math.abs(X - this.w / 2) > this.w * .36 || Y < this.h * .36 || Y > this.h * .74) continue;
-      const sc = d - Math.abs(Y - this.h * .58) / 200; if (sc > bs) { bs = sc; best = [gx, gy]; } }
+      const [sx, sy] = iso(gx, gy), X = this.ox + sx * this.z, Y = this.oy + sy * this.z; if (Math.abs(X - this.w / 2) > this.w * .3 || Y < this.h * .38 || Y > this.h * .72) continue;
+      const sc = Math.min(d, 1.6) - Math.abs(X - this.w / 2) / 140 - Math.abs(Y - this.h * .58) / 220; if (sc > bs) { bs = sc; best = [gx, gy]; } }
     return best;
   }
   // ---- visiting trader (mining rock): lands, opens its ramp, waits, lifts off ----
   trader: { gx: number; gy: number; t: number; st: 0 | 1 | 2; lt: number; left: number } | null = null; onTrader: () => void = () => {}; onTraderLand: () => void = () => {};
-  traderCome() { if (this.trader || this.rock) return false; const p = this.freeSpot(1.1, 2, 7.5); if (!p) return false; this.trader = { gx: p[0], gy: p[1], t: this.t, st: 0, lt: 0, left: 1 }; return true; }
+  traderCome() { if (this.trader || this.rock) return false; const p = this.freeSpot(.7, 1.5, 7.5); if (!p) return false; { const [x, y] = iso(p[0], p[1]); this.cam = { x: this.w / 2 - x * this.z, y: this.h * .6 - y * this.z, z: this.z }; } this.trader = { gx: p[0], gy: p[1], t: this.t, st: 0, lt: 0, left: 1 }; return true; }
   traderGo() { if (this.trader && this.trader.st !== 2) { this.trader.st = 2; this.trader.lt = this.t; } }
   private traderPose() { const tr = this.trader!, [x, y] = iso(tr.gx, tr.gy), t = this.t;
     if (tr.st === 0) { const f = Math.min(1, (t - tr.t) / 2.4), e = 1 - Math.pow(1 - f, 3); return { x: x + 170 * (1 - e), y, alt: 540 * (1 - e), flame: 1, legs: Math.max(0, (f - .55) / .45), ramp: 0, f }; }
     if (tr.st === 1) return { x, y, alt: Math.sin(t * 2) * .8 + .8, flame: 0, legs: 1, ramp: Math.min(1, (t - tr.lt) / .5), f: 1 };
     const k = t - tr.lt, a = Math.max(0, k - .45); return { x: x - a * a * 120, y, alt: a * a * 520, flame: k > .3 ? 1 : 0, legs: Math.max(0, 1 - (k - .15) / .3), ramp: Math.max(0, 1 - k / .25), f: 1 };
   }
-  private traderAt(lx: number, ly: number) { if (!this.trader || this.trader.st !== 1 || this.rock) return false; const p = this.traderPose(); return Math.abs(lx - p.x) < 50 && ly < p.y + 24 && ly > p.y - 150; }
+  private traderAt(lx: number, ly: number) { if (!this.trader || this.trader.st !== 1 || this.rock) return false; const p = this.traderPose(); return Math.abs(lx - p.x) < 50 * TRADER_SC && ly < p.y + 24 * TRADER_SC && ly > p.y - 150 * TRADER_SC; }
   private drawTrader() {
     const tr = this.trader; if (!tr || this.rock) return; const c = this.c, t = this.t, p = this.traderPose();
     if (tr.st === 0 && p.f >= 1) { tr.st = 1; tr.lt = t; this.shake = Math.max(this.shake, .12); for (let k = 0; k < 16; k++) this.puffs.push({ x: p.x + (Math.random() - .5) * 110, y: p.y + (Math.random() - .5) * 40, t: -Math.random() * .15, c: 'rgba(235,225,255,.85)' }); this.onTraderLand(); }
     if (tr.st === 2 && p.alt > 1100) { this.trader = null; return; }
     if (p.flame && p.alt < 90 && Math.random() < .5) this.puffs.push({ x: p.x + (Math.random() - .5) * 70, y: p.y + (Math.random() - .5) * 20, t: 0, c: 'rgba(235,225,255,.7)' });
-    traderShip(c, p.x, p.y, p.alt, t, p.flame, p.legs, p.ramp);
+    { const K = TRADER_SC; c.save(); c.translate(p.x, p.y); c.scale(K, K); c.translate(-p.x, -p.y); traderShip(c, p.x, p.y, p.alt / K, t, p.flame, p.legs, p.ramp); c.restore(); }
     if (tr.st === 1) { // holo shop sign with a countdown ring
-      const b = Math.sin(t * 3) * 4, sx = p.x, sy = p.y - 112 + b, k = Math.min(1, (t - tr.lt) / .35), r = 19 * (k < 1 ? 1 - Math.pow(1 - k, 3) * (1 - k) : 1);
+      const b = Math.sin(t * 3) * 4, sx = p.x, sy = p.y - 92 * TRADER_SC + b, k = Math.min(1, (t - tr.lt) / .35), r = 19 * (k < 1 ? 1 - Math.pow(1 - k, 3) * (1 - k) : 1);
       c.beginPath(); c.moveTo(sx, sy + r + 9); c.lineTo(sx - 7, sy + r - 1); c.lineTo(sx + 7, sy + r - 1); c.closePath(); c.fillStyle = INK; c.fill();
       c.beginPath(); c.arc(sx, sy, r + 4, 0, 7); c.fillStyle = INK; c.fill(); c.beginPath(); c.arc(sx, sy, r, 0, 7); c.fillStyle = '#ffd23f'; c.fill();
       c.beginPath(); c.arc(sx, sy, r + 1.5, -Math.PI / 2, -Math.PI / 2 + 6.283 * tr.left); c.strokeStyle = tr.left < .25 ? '#ff5b5b' : '#5cff8a'; c.lineWidth = 3.5; c.stroke();
@@ -163,22 +164,22 @@ export class BaseView {
   }
   // ---- derelict wreck (fleet rock): crashes into the ice, tap it apart for salvage ----
   wreckE: { gx: number; gy: number; t: number; st: 0 | 1 | 2; hits: number; ht: number; ct: number } | null = null; onWreck: (final: boolean, x: number, y: number) => void = () => {};
-  wreckCome(landed = false) { if (this.wreckE) return false; let p = this.rock === 1 ? this.freeSpot(1, 1.6, 4.6) : null; if (!p) { const a = Math.random() * 6.283; p = [Math.cos(a) * 3.2, Math.sin(a) * 3.2]; } this.wreckE = { gx: p[0], gy: p[1], t: this.t - (landed ? 9 : 0), st: landed ? 1 : 0, hits: 0, ht: -9, ct: 0 }; return true; }
-  private wreckAt(lx: number, ly: number) { const w = this.wreckE; if (!w || w.st !== 1 || this.rock !== 1) return false; const [x, y] = iso(w.gx, w.gy); return Math.abs(lx - x) < 50 && ly < y + 22 && ly > y - 60; }
+  wreckCome(landed = false) { if (this.wreckE) return false; let p = this.rock === 1 ? this.freeSpot(.8, 1.6, 4.6) : null; if (!p) { const a = Math.random() * 6.283; p = [Math.cos(a) * 3.2, Math.sin(a) * 3.2]; } this.wreckE = { gx: p[0], gy: p[1], t: this.t - (landed ? 9 : 0), st: landed ? 1 : 0, hits: 0, ht: -9, ct: 0 }; return true; }
+  private wreckAt(lx: number, ly: number) { const w = this.wreckE; if (!w || w.st !== 1 || this.rock !== 1) return false; const [x, y] = iso(w.gx, w.gy); return Math.abs(lx - x) < 50 * WRECK_SC && ly < y + 22 * WRECK_SC && ly > y - 70 * WRECK_SC; }
   private drawWreck() {
     const w = this.wreckE; if (!w || this.rock !== 1) return; const c = this.c, t = this.t, [x, y] = iso(w.gx, w.gy), age = t - w.t;
     if (w.st === 0) { const f = Math.min(1, age / 1.3), e = f * f, px = x - 380 * (1 - e), py = y - 600 * (1 - e);
       for (let k = 0; k < 6; k++) { const q = k / 6; glow(c, px - 380 * q * .25, py - 600 * q * .25, 26 - k * 3, k ? '#8a8fa8' : '#ffb347', .5 - q * .4); }
-      c.save(); c.translate(px, py); c.scale(.6, .6); c.translate(-px, -py); wreck(c, px, py, t, 0); c.restore(); glow(c, px, py - 10, 40, '#ff7a2e', .7);
+      c.save(); c.translate(px, py); c.scale(.9, .9); c.translate(-px, -py); wreck(c, px, py, t, 0); c.restore(); glow(c, px, py - 10, 40, '#ff7a2e', .7);
       if (f >= 1) { w.st = 1; w.ct = t; this.shake = Math.max(this.shake, .22); for (let k = 0; k < 18; k++) this.puffs.push({ x: x + (Math.random() - .5) * 120, y: y + (Math.random() - .5) * 40, t: -Math.random() * .2, c: 'rgba(225,240,255,.9)' }); this.onImpact(); }
       return; }
     if (w.st === 1) { const k = t - w.ct; if (k < .5) { const f = k / .5; c.beginPath(); c.ellipse(x, y, 30 + f * 90, (30 + f * 90) * .5, 0, 0, 7); c.strokeStyle = `rgba(200,235,255,${1 - f})`; c.lineWidth = 7 * (1 - f) + 1; c.stroke(); }
       const hk = (t - w.ht) / .25, jig = hk < 1 ? Math.sin(hk * Math.PI * 3) * (1 - hk) * 5 : 0;
       if (Math.random() < .06) this.puffs.push({ x: x + 8 + (Math.random() - .5) * 20, y: y - 26, t: 0, c: 'rgba(110,105,130,.55)' }); // smoulder
-      c.save(); c.translate(jig, 0); wreck(c, x, y, t, w.hits / this.wreckHits); c.restore();
+      c.save(); c.translate(x + jig, y); c.scale(WRECK_SC, WRECK_SC); c.translate(-x, -y); wreck(c, x, y, t, w.hits / this.wreckHits); c.restore();
       // salvage pips + pulsing "tap me" ring
-      const ph = (t * 1.2) % 1; c.beginPath(); c.ellipse(x, y + 2, 40 + ph * 26, (40 + ph * 26) * .45, 0, 0, 7); c.strokeStyle = `rgba(122,232,255,${(1 - ph) * .8})`; c.lineWidth = 3; c.stroke();
-      for (let q = 0; q < this.wreckHits; q++) { const px = x - (this.wreckHits - 1) * 7 + q * 14, py = y - 74; c.beginPath(); c.arc(px, py, 5.5, 0, 7); c.fillStyle = q < w.hits ? '#5cff8a' : 'rgba(36,22,58,.6)'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(); }
+      const ph = (t * 1.2) % 1; c.beginPath(); c.ellipse(x, y + 2, (40 + ph * 26) * WRECK_SC, (40 + ph * 26) * .45 * WRECK_SC, 0, 0, 7); c.strokeStyle = `rgba(122,232,255,${(1 - ph) * .8})`; c.lineWidth = 3; c.stroke();
+      for (let q = 0; q < this.wreckHits; q++) { const px = x - (this.wreckHits - 1) * 8 + q * 16, py = y - 70 * WRECK_SC; c.beginPath(); c.arc(px, py, 6.5, 0, 7); c.fillStyle = q < w.hits ? '#5cff8a' : 'rgba(36,22,58,.75)'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(); }
       return; }
     const k = (t - w.ct) / .7; if (k >= 1) { this.wreckE = null; return; } // final crack: plates + sparks scatter
     for (let q = 0; q < 12; q++) { const a = q / 12 * 6.283, d = 14 + k * 80; c.globalAlpha = 1 - k; c.fillStyle = q % 3 ? '#8f9ab8' : '#ffb347'; c.save(); c.translate(x + Math.cos(a) * d, y - 20 + Math.sin(a) * d * .6 - k * 30); c.rotate(k * 6 + q); c.fillRect(-5, -3, 10, 6); c.restore(); } c.globalAlpha = 1; glow(c, x, y - 20, 90 * (1 - k) + 20, '#fff0a0', 1 - k);

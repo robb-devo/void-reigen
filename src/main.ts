@@ -655,7 +655,7 @@ setInterval(() => {
 // boost paid in goods, and a rotating third slot (ore surge or rare cargo for cash). Taking all three sends it off early.
 const TRADER_STAY = 120; let offers: EV.Offer[] = [], traderEnd = 0, traderMod: HTMLElement | null = null;
 function traderArrive() { if (!bv || !bv.traderCome()) return false; lastEv = 'trader'; offers = EV.traderOffers(); traderEnd = 0; sfx.launch(); buzz(10);
-  if (seen('trader')) toast(`${art('cruiser')} A trader is landing – tap the ship to deal`); return true; }
+  if (seen('trader')) toast(`${I.coin} A trader is landing – tap the ship to deal`); return true; }
 function traderLanded() { sfx.land2(); sfx.clank(); buzz([20, 30]); traderEnd = performance.now() + TRADER_STAY * 1e3;
   if (!seen('trader')) intro('trader', [{ h: 'VOID TRADER', t: 'A trader just docked! Tap the ship for <b>one-time deals</b> – goods you\'re short of and <b>income boosts</b>. It leaves in 2 minutes.' }]); }
 function traderLeave() { if (!bv?.trader) return; traderMod?.remove(); traderMod = null; bv.traderGo(); setTimeout(() => { sfx.launch(); if (bv) bv.shake = Math.max(bv.shake, .1); }, 350); }
@@ -671,19 +671,19 @@ function openTrader() {
       const e = ev as MouseEvent, card = b.closest('.offer') as HTMLElement; sfx.claim(); sfx.coin(); buzz([20, 30, 50]); burst(e.clientX, e.clientY, 24, 0, '#ffd23f'); xp(5, e.clientX, e.clientY); G.save(); boostHud();
       if (o.get.r) { const re = document.querySelector<HTMLElement>(`.rc[data-r="${o.get.r}"]`); if (re) fly(e.clientX, e.clientY, ...center(re), 6, 2, RES[o.get.r].color, () => bump(re)); }
       draw(); (box.querySelector(`[data-i="${offers.indexOf(o)}"]`) as HTMLElement)?.classList.add('stamp'); void card;
-      if (offers.every(x => x.done)) setTimeout(() => { toast(`${art('cruiser')} "Pleasure doing business!"`); traderLeave(); }, 900); })); };
+      if (offers.every(x => x.done)) setTimeout(() => { toast(`${I.coin} "Pleasure doing business!"`); traderLeave(); }, 900); })); };
   draw(); $('[data-x]', m).addEventListener('click', () => { sfx.tap(); m.remove(); traderMod = null; });
   const obs = new MutationObserver(() => { if (!m.isConnected) { traderMod = null; obs.disconnect(); } }); obs.observe(document.body, { childList: true });
 }
 setInterval(() => { const tr = bv?.trader; if (!tr || tr.st !== 1 || !traderEnd) return; const left = Math.max(0, (traderEnd - performance.now()) / 1e3); tr.left = left / TRADER_STAY;
   const ck = traderMod?.querySelector('#tclk'); if (ck) { ck.textContent = fmtT(left); ck.classList.toggle('late', left < 30); }
   if (traderMod) traderMod.querySelectorAll<HTMLButtonElement>('[data-take]').forEach(b => { const o = offers[+b.dataset.take!]; if (!o.done) { const ok = EV.canTake(o); b.disabled = !ok; b.textContent = ok ? 'Trade' : 'Not enough'; } });
-  if (left <= 0) { toast(`${art('cruiser')} The trader lifted off`); traderLeave(); } }, 250);
+  if (left <= 0) { toast(`${I.coin} The trader lifted off`); traderLeave(); } }, 250);
 (window as any).__trader = () => traderArrive();
 
 // ---------- timed boost HUD ----------
 const boostEl = document.createElement('div'); boostEl.id = 'boost'; document.body.appendChild(boostEl); let boostKey = '';
-function boostHud() { const b = st().boost; if (!b || b.left <= 0) { if (boostKey) { boostEl.classList.remove('on'); boostKey = ''; } return; }
+function boostHud() { const b = st().boost; document.body.classList.toggle('boosted', !!b && b.left > 0); if (!b || b.left <= 0) { if (boostKey) { boostEl.classList.remove('on'); boostKey = ''; } return; }
   const k = b.kind + b.m; if (k !== boostKey) { boostKey = k; boostEl.innerHTML = `${b.kind === 'cash' ? I.coin : ri('ore')}<b>×${b.m} ${b.kind === 'cash' ? 'INCOME' : 'ORE'}</b><span></span><i><u></u></i>`; boostEl.classList.add('on'); bump(boostEl); }
   (boostEl.querySelector('span') as HTMLElement).textContent = fmtT(b.left); (boostEl.querySelector('u') as HTMLElement).style.transform = `scaleX(${b.left / b.dur})`; }
 setInterval(boostHud, 250);
@@ -703,6 +703,6 @@ setInterval(() => { if (!bv) return; const now = performance.now();
   if (now < nextWreck || bv.wreckE) return; if (talking() || document.querySelector('.modal, .tree')) { nextWreck = now + 8e3; return; }
   nextWreck = now + (5 + Math.random() * 3) * 60e3; wreckBorn = now; const here = bv.rock === 1; bv.wreckCome(!here);
   if (here) { if (!seen('wreck')) intro('wreck', [{ h: 'DERELICT', t: 'A derelict just crashed into the ice! <b>Tap it 5 times</b> to strip it for cash and fleet goods.' }]); else toast(`${I.boom} A derelict crashed – tap it to salvage!`); }
-  else toast(`${art('cruiser')} Derelict spotted on the Fleet Rock!`);
+  else toast(`${I.boom} Derelict spotted on the Fleet Rock!`);
 }, 1000);
 (window as any).__wreck = () => { if (bv) { bv.wreckE = null; wreckBorn = performance.now(); bv.wreckCome(bv.rock !== 1); } };
