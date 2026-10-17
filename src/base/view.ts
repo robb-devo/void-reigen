@@ -102,6 +102,10 @@ export class BaseView {
   slotScreen(key: string): [number, number] { const sl = SLOTS.find(s => s.key === key)!; const [x, y] = this.screen(sl.gx, sl.gy); return [x, y - 40 * this.z]; }
   focus(key: string, z = this.z, yf = .45, with2?: string) { if (!with2 && !this.rock && G.S.warps === 0 && G.S.goal < 14 && key !== 'm0' && key !== 'hq') with2 = 'm0'; const sl = SLOTS.find(s => s.key === key); if (!sl) return; let [x, y] = iso(sl.gx, sl.gy); const s2 = with2 && SLOTS.find(s => s.key === with2); if (s2) { const [x2, y2] = iso(s2.gx, s2.gy); x = (x + x2) / 2; y = (y + y2) / 2; } const lx = 330 * z, ly = 200 * z; this.cam = { x: Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.w / 2 - x * z)), y: Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.h * yf - y * z)), z }; }
   construct(key: string) { this.cons.set(key, this.t); }
+  private portraits = new Map<string, string>();
+  /** Building portrait for panels — the real in-world art at its current tier. */
+  portrait(key: string): string | null { const sl = slotByKey(key); if (!sl || visible(sl) !== 'built') return null; const tr = tier(sl), id = idOf(sl), k = `${id}|${tr}`; let u = this.portraits.get(k); if (u) return u;
+    const cv = document.createElement('canvas'); cv.width = 200; cv.height = 200; const g = cv.getContext('2d')!; g.setTransform(.95, 0, 0, .95, 100, 150); drawBuilding(g, 0, sl.kind, id, hueOf(sl), tr, 0, 0, sl.s, 0, true, accentOf(sl)); drawBuilding(g, 1, sl.kind, id, hueOf(sl), tr, 0, 0, sl.s, 1.3, true, accentOf(sl)); u = cv.toDataURL(); this.portraits.set(k, u); return u; }
   launch(n: number) { const [x, y] = this.pad(); for (let k = 0; k < Math.min(8, n); k++) this.ships.push({ x: x + (k % 3 - 1) * 26, y: y - 14, vy: 0, t: -k * .18, dir: 1, sc: .7 + Math.random() * .3 }); this.shake = .25; }
   land(n: number) { const [x, y] = this.pad(); for (let k = 0; k < Math.min(6, n); k++) this.ships.push({ x: x + (k % 3 - 1) * 26, y: y - 700, vy: 0, t: -k * .25, dir: -1, sc: .8 }); }
   warp(cb: () => void) { if (this.rock) this.setRock(0); this.warpT = 0; this.warpCb = cb; this.focus('gate', .8); }
@@ -162,6 +166,7 @@ export class BaseView {
       if (v === 'plot') { const k = cost(sl); drawPlot(c, x, y, sl.s, t + sl.gx, k !== null && G.S.cash >= k); continue; }
       const ct = this.cons.get(sl.key), ce = ct === undefined ? 9 : t - ct;
       if (ce < .9) { scaffold(c, x, y, sl.s, ce / .9, t); continue; }
+      if (ce >= .9 && ce < 1.4) { const f = (ce - .9) / .5; c.beginPath(); c.ellipse(x, y, (40 + f * 90), (20 + f * 45), 0, 0, 7); c.strokeStyle = `rgba(255,230,120,${1 - f})`; c.lineWidth = 6 * (1 - f) + 1; c.stroke(); for (let q = 0; q < 8; q++) { const a = q / 8 * 6.283 + ce, r = 30 + f * 80; const sx2 = x + Math.cos(a) * r, sy2 = y - 40 + Math.sin(a) * r * .55 - f * 30; star(c, sx2, sy2, 7 * (1 - f) + 1); } }
       const pop = ce < 1.5 ? 1 + Math.sin((ce - .9) / .6 * Math.PI) * .18 * (1 - (ce - .9) / .6) : 1; if (ce >= 1.5 && ct !== undefined) this.cons.delete(sl.key);
       let wsc = 1; if (this.warpT >= 0 && sl.key !== 'gate') { const f = Math.max(0, (this.warpT - .8) / 1.4); wsc = Math.max(0, 1 - f * f); }
       const scl = pop * wsc;
@@ -255,6 +260,8 @@ export class BaseView {
     // subtle tile grid
     c.strokeStyle = 'rgba(255,255,255,.05)'; c.lineWidth = 1;
     for (let k = -11; k <= 11; k++) { let [a, b] = iso(k, -11), [d, e] = iso(k, 11); c.beginPath(); c.moveTo(a, b); c.lineTo(d, e); c.stroke(); [a, b] = iso(-11, k); [d, e] = iso(11, k); c.beginPath(); c.moveTo(a, b); c.lineTo(d, e); c.stroke(); }
+    // tonal patches for richer ground
+    { let sd2 = 5; const r2 = () => (sd2 = (sd2 * 16807) % 2147483647) / 2147483647; for (let k = 0; k < 18; k++) { const a = r2() * 6.28, rr = r2() * (R - 2), [px, py] = iso(Math.cos(a) * rr, Math.sin(a) * rr), w = 60 + r2() * 120; const gg = c.createRadialGradient(px, py, 0, px, py, w); const tone = r2() < .5 ? (ice ? '180,230,255' : '220,170,240') : (ice ? '40,70,120' : '60,30,90'); gg.addColorStop(0, `rgba(${tone},.22)`); gg.addColorStop(1, `rgba(${tone},0)`); c.fillStyle = gg; c.save(); c.scale(1, 1); c.fillRect(px - w, py - w, w * 2, w * 2); c.restore(); } }
     // craters
     for (const [cx, cy, r] of this.craters) { if (Math.hypot(cx, cy) > R - 1) continue; const [x, y] = iso(cx, cy); c.beginPath(); c.ellipse(x, y, r * TW / 2, r * TH / 2, 0, 0, 7); c.fillStyle = 'rgba(40,16,60,.35)'; c.fill(); c.beginPath(); c.ellipse(x, y + 2, r * TW / 2, r * TH / 2, 0, .2, Math.PI - .2); c.strokeStyle = 'rgba(255,220,255,.18)'; c.lineWidth = 3; c.stroke(); }
     // surface details: boulders, crystal clusters, beacon posts (kept off building plots)
@@ -301,17 +308,19 @@ export class BaseView {
     outlinedText(c, txt, x, y + 1, 14, fg);
   }
   private bubble(x: number, y: number, txt: string, bg = '#ffd23f') {
-    const c = this.c; c.font = '700 14px Fredoka, sans-serif'; const w = c.measureText(txt).width + 18;
+    const c = this.c; c.font = '700 14px Fredoka, sans-serif'; const bolt = txt === '⚡'; const w = bolt ? 28 : c.measureText(txt).width + 18;
     c.fillStyle = bg; c.strokeStyle = '#24163a'; c.lineWidth = 3; rr(c, x - w / 2, y - 13, w, 24, 12); c.fill(); c.stroke();
     c.beginPath(); c.moveTo(x - 6, y + 10); c.lineTo(x, y + 18); c.lineTo(x + 6, y + 10); c.fill(); c.stroke(); c.fillRect(x - 5, y + 8, 10, 3);
-    outlinedText(c, txt, x, y, 14, '#fff');
+    if (bolt) { c.beginPath(); c.moveTo(x + 2, y - 9); c.lineTo(x - 6, y + 2); c.lineTo(x - 1, y + 2); c.lineTo(x - 3, y + 9); c.lineTo(x + 6, y - 2); c.lineTo(x + 1, y - 2); c.closePath(); c.fillStyle = '#ffd23f'; c.fill(); c.strokeStyle = '#24163a'; c.lineWidth = 2; c.stroke(); } else outlinedText(c, txt, x, y, 14, '#fff');
   }
 }
 function bakeShadow(g: CanvasRenderingContext2D, s: number) {
   // soft cast shadow (toward bottom-right, away from the warm key light) + contact ambient occlusion
   const hw = s * TW / 2, hh = s * TH / 2;
-  g.save(); g.filter = 'blur(7px)'; g.fillStyle = 'rgba(16,4,36,.42)'; g.beginPath(); g.ellipse(18, 14, hw * 1.05, hh * 1.1, 0, 0, 7); g.fill(); g.restore();
-  const ao = g.createRadialGradient(0, 0, hw * .5, 0, 0, hw * 1.15); ao.addColorStop(0, 'rgba(16,4,36,.35)'); ao.addColorStop(1, 'rgba(16,4,36,0)'); g.save(); g.scale(1, .5); g.fillStyle = ao; g.beginPath(); g.arc(0, 0, hw * 1.15, 0, 7); g.fill(); g.restore();
+  g.save(); g.filter = 'blur(7px)'; g.fillStyle = 'rgba(16,4,36,.55)'; g.beginPath(); g.ellipse(18, 14, hw * 1.05, hh * 1.1, 0, 0, 7); g.fill(); g.restore();
+  const ao = g.createRadialGradient(0, 0, hw * .5, 0, 0, hw * 1.15); ao.addColorStop(0, 'rgba(16,4,36,.45)'); ao.addColorStop(1, 'rgba(16,4,36,0)'); g.save(); g.scale(1, .5); g.fillStyle = ao; g.beginPath(); g.arc(0, 0, hw * 1.15, 0, 7); g.fill(); g.restore();
 }
 function rr(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) { c.beginPath(); c.roundRect(x, y, w, h, r); }
 function short(v: number) { const s = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx']; let e = 0; while (v >= 1000 && e < s.length - 1) { v /= 1000; e++; } return (v >= 100 || e === 0 ? Math.floor(v).toString() : v.toFixed(1)) + s[e]; }
+
+function star(c: CanvasRenderingContext2D, x: number, y: number, r: number) { c.beginPath(); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, rr2 = k % 2 ? r * .38 : r; c.lineTo(x + Math.cos(a) * rr2, y + Math.sin(a) * rr2); } c.closePath(); c.fillStyle = '#fff6c0'; c.fill(); c.strokeStyle = '#24163a'; c.lineWidth = 1.5; c.stroke(); }

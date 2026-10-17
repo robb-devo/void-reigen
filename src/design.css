@@ -59,3 +59,22 @@
 #back{background:linear-gradient(#ffe46a,#f29a14)!important;color:#fff!important;text-shadow:0 2px 0 rgba(18,10,36,.6);box-shadow:var(--drop),var(--hi)!important}
 .rockbtn{text-shadow:0 2px 0 var(--ink2)}
 .ach i svg{width:24px;height:24px}
+svg.ic{width:1.05em;height:1.05em;vertical-align:-.17em;display:inline-block;margin:0 .06em}
+.toast svg.ic{width:1.2em;height:1.2em}
+#app.sub .biz .name{font-size:13px;white-space:normal;line-height:1.05;overflow:visible;text-overflow:clip;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+/* ---- overlay manager: Vex takes the goal bar's slot; panels hide non-critical HUD ---- */
+.cmdr{top:calc(var(--st) + 112px);bottom:auto!important;transform:translateY(-30px) scale(.96);opacity:0;transition:transform .3s cubic-bezier(.3,1.4,.5,1),opacity .2s;align-items:flex-start}
+.cmdr.open{transform:none;opacity:1}
+.cmdr.held{opacity:0!important;pointer-events:none!important;transform:translateY(-20px)!important}
+.cmdr .cport{width:52px;height:52px;flex:none}.cmdr .cport svg{width:52px;height:52px}
+.cmdr .cbub{padding:8px 12px!important}.cmdr .cbub p{margin:2px 0;font-size:14px;line-height:1.3}
+body.vex #goal{opacity:0;pointer-events:none;transform:translateY(-8px)}
+#goal{transition:opacity .2s,transform .2s}
+body.fg-sheet #goal,body.fg-sheet #rate,body.fg-sheet .rockbtn,body.vex .rockbtn,body.fg-modal .rockbtn{opacity:0;pointer-events:none}
+#rate,.rockbtn{transition:opacity .2s}
+body:has(.bsheet.open) .cmdr.open{top:calc(var(--st) + 112px)}
+body.vex .toast,body.fg-sheet .toast,body.fg-modal .toast{display:none}
+.toast{top:auto!important;bottom:calc(var(--sb) + 64px)}
+@keyframes toast{0%{transform:translate(-50%,30px) scale(.7);opacity:0}12%{transform:translate(-50%,0) scale(1);opacity:1}85%{opacity:1}100%{opacity:0;transform:translate(-50%,10px)}}
+.bhint{animation:hintout 1s 9s forwards}@keyframes hintout{to{opacity:0;visibility:hidden}}
+.sart img{width:118%;height:118%;margin:-9%;object-fit:contain;filter:drop-shadow(0 3px 0 rgba(18,10,36,.6))}.sart{overflow:visible}

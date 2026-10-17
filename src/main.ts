@@ -8,9 +8,11 @@ import { GOALS, goalReward, ACHS } from './game/progress';
 import { art, ri } from './game/art';
 import { BaseView, SLOTS, Slot, level, tier, nextTierAt, visible, cost as slotCost, slotByKey } from './base/view';
 import { setBusy } from './base/render';
+import { I } from './design';
+import { renderSfx, setToastGate } from './game/fx';
 import { SKILLS, BRANCHES, LEVEL_GATE, XP } from './game/skills';
 import { TIER_NAMES } from './base/render';
-import { say, talking } from './commander';
+import { say, talking, setGate } from './commander';
 import { sfx, buzz, initFx, stepFx, burst, fly, popup, toast, rocket, flash } from './game/fx';
 
 const rawSave = localStorage.getItem(G.KEY); G.load(); G.migrateSeen(rawSave);
@@ -116,7 +118,7 @@ function buyMine(i: number, ev: MouseEvent) {
   st().cash -= c; st().mines[i].n += k; sfx.buy(); buzz(12);
   burst(ev.clientX, ev.clientY, 10); popup(ev.clientX, ev.clientY - 10, `+${k}`, '#5cf2ff'); if (cards[i]) bump(cards[i].ico); else bv?.puff('m' + i);
   const n = G.msIdx(st().mines[i].n);
-  if (n > before) celebrate(`${MINES[i].e} ${MINES[i].name}: ${n <= 6 ? 'Speed' : 'Profit'} ×2!`);
+  if (n > before) celebrate(`${MINES[i].name}: ${n <= 6 ? 'Speed' : 'Profit'} ×2!`);
   if (wasZero) { celebrate(`${MINES[i].name} online!`, ev.clientX, ev.clientY); if (tab === 'mine') renderMine(); spotlight(); }
 }
 function updateMine() {
@@ -134,8 +136,8 @@ function updateMine() {
     setT(c.time, b.n ? (active ? fmtT(ct * (1 - Math.min(1, b.p))) : 'TAP') : '');
     const lo = G.prevMs(b.n), hi = G.nextMs(b.n);
     c.ms.style.width = (hi ? (b.n - lo) / (hi - lo) * 100 : 100) + '%';
-    setT(c.msl, hi ? `${b.n}/${hi} ${G.msIdx(b.n) < 6 ? '⚡' : '💰'}` : 'MAX');
-    setT(c.mgr, b.m ? '🤖' : '');
+    setT(c.msl, hi ? `${b.n}/${hi} ${G.msIdx(b.n) < 6 ? I.bolt : I.coin}` : 'MAX', true);
+    setT(c.mgr, b.m ? I.bot : '', true);
   });
 }
 
@@ -157,6 +159,7 @@ function baseEvent(i: number, v: number, ct: number, now: number) {
   bv!.drone('m' + i, 'hq', col, () => { const [x, y] = bv!.slotScreen('hq'); popup(x, y - 20, '+$' + fmt(v)); fly(x, y - 10, ...center(cashEl), 3, 1, '#ffc94a', () => bump(cashEl)); fly(x, y, ...center(resEl(MINES[i].res)), 1, 2, col, () => bump(resEl(MINES[i].res))); sfx.coin(); });
 }
 function baseTap(sl: Slot | null, x: number, y: number) {
+  if (talking()) { if (sl?.kind === 'mine' && visible(sl) === 'built') { const b = st().mines[sl.idx]; st().taps++; if (!b.run && !b.m) { b.run = true; sfx.drill(); buzz(10); burst(x, y, 10, 0, `hsl(${MINES[sl.idx].hue} 100% 65%)`); } } return; }
   if (!sl) { closeSheet(); return; }
   $('#bhint')?.remove();
   if (sl.kind === 'mine' && G.sk('mHand') && visible(sl) === 'built') { const b = st().mines[sl.idx]; if (b.run && !b.m) { b.p = Math.min(.999, b.p + .35); burst(x, y, 6, 0, '#ffd23f'); } }
@@ -183,7 +186,7 @@ function openSheet(key: string): void {
   else if (sl.kind === 'lift') actions = `<div class="fstock" id="lstock"></div><button class="btn gold big" data-act="buy"></button><div class="row2"><button class="btn" data-act="fly">Fly to Fleet Rock ›</button><button class="btn ghost" data-act="ltog"></button></div>`;
   else actions = `<button class="btn gold big" data-act="buy"></button><div class="mkt" id="mkt"></div>${G.autoOK() ? `<button class="btn ghost" data-act="auto">Auto-export: ${s.auto ? 'ON' : 'OFF'}</button>` : ''}<div class="row2"><button class="btn ghost" data-act="list">All mines ›</button><button class="btn ghost" data-act="crew">Crew ›</button></div><div class="row2"><button class="btn ghost" data-act="trophy">Trophies ›</button><button class="btn ghost" data-act="warp">Stats &amp; settings ›</button></div>`;
   const compactable = sl.kind === 'mine' || sl.kind === 'mach' || sl.kind === 'gen';
-  sh.innerHTML = `<div class="grab" data-act="expand"></div><button class="x" data-act="close">✕</button><div class="shead"><div class="sart">${slotArt(sl)}</div><div class="smid"><h3 class="h">${slotName(sl)}</h3><div class="slv"></div><div class="stier"></div></div></div><div class="sstats"></div><div class="sact">${actions}</div>`;
+  sh.innerHTML = `<div class="grab" data-act="expand"></div><button class="x" data-act="close">✕</button><div class="shead"><div class="sart">${(bv?.portrait(k0.kind in AUX ? key : sheetKey!) && `<img src="${bv!.portrait(k0.kind in AUX ? key : sheetKey!)}" alt="">`) || slotArt(sl)}</div><div class="smid"><h3 class="h">${slotName(sl)}</h3><div class="slv"></div><div class="stier"></div></div></div><div class="sstats"></div><div class="sact">${actions}</div>`;
   if (newKey) sh.classList.toggle('compact', compactable); else if (!compactable) sh.classList.remove('compact');
   sh.classList.add('open'); sh.classList.remove('spop'); void sh.offsetWidth; sh.classList.add('spop');
   sh.querySelectorAll<HTMLElement>('[data-act]').forEach(b => b.addEventListener('click', ev => sheetAct(b.dataset.act!, ev as MouseEvent, b)));
@@ -232,8 +235,8 @@ function updateSheet(force = false) {
   sset('.stier', v === 'plot' ? '' : `<span class="tierb t${tier(sl)}">${TIER_NAMES[tier(sl)]}</span>${nt ? `<small>new look at Lv ${nt}</small>` : ''}`);
   let stats: [string, string][] = [];
   if (sl.kind === 'mine') { const i = sl.idx, d = MINES[i]; stats = [['Profit / cycle', '$' + fmt(G.revenue(i))], [RES[d.res].name + ' / cycle', fmt(G.orePerCycle(i))], ['Cycle', fmtT(G.cycle(i))], ['Next ×2 at', G.nextMs(s.mines[i].n) ? 'Lv ' + G.nextMs(s.mines[i].n) : 'MAX'], ['Foreman', s.mines[i].m ? d.mname : 'none – tap to drill']]; }
-  else if (sl.kind === 'mach') { const j = sl.idx, d = MACHINES[j], ms = G.machStats[j]; stats = [['Recipe', `${(Object.keys(d.inp) as Res[]).map(r => `${d.inp[r]}${ri(r)}`).join(' + ')} → 1${ri(d.out)}`], ['Output', `${fmt(G.machRate(j))}/s`], ['Power', `${fmt(d.power * s.mach[j])}⚡`], ['Status', !s.mach[j] ? 'not built' : ms.reason === '' ? `running ${Math.round(ms.eff * 100)}%` : ms.reason === 'starved' ? `starved${ms.need ? ' of ' + RES[ms.need].name : ''}` : ms.reason === 'power' ? 'low power – upgrade generator' : ms.reason]]; }
-  else if (sl.kind === 'gen') stats = [['Supply', fmt(G.powerSupply()) + '⚡'], ['Demand', fmt(G.powerDemand()) + '⚡'], ['Efficiency', Math.round(G.powerEff() * 100) + '%']];
+  else if (sl.kind === 'mach') { const j = sl.idx, d = MACHINES[j], ms = G.machStats[j]; stats = [['Recipe', `${(Object.keys(d.inp) as Res[]).map(r => `${d.inp[r]}${ri(r)}`).join(' + ')} → 1${ri(d.out)}`], ['Output', `${fmt(G.machRate(j))}/s`], ['Power', `${fmt(d.power * s.mach[j])}${I.bolt}`], ['Status', !s.mach[j] ? 'not built' : ms.reason === '' ? `running ${Math.round(ms.eff * 100)}%` : ms.reason === 'starved' ? `starved${ms.need ? ' of ' + RES[ms.need].name : ''}` : ms.reason === 'power' ? 'low power – upgrade generator' : ms.reason]]; }
+  else if (sl.kind === 'gen') stats = [['Supply', fmt(G.powerSupply()) + '' + I.bolt + ''], ['Demand', fmt(G.powerDemand()) + '' + I.bolt + ''], ['Efficiency', Math.round(G.powerEff() * 100) + '%']];
   else if (sl.kind === 'hq') stats = [['Income', '$' + fmt(G.perSec()) + '/s'], ['Earned this sector', '$' + fmt(s.life)], ['Dark Matter', fmt(s.dm, 0)]];
   else if (sl.kind === 'lift') stats = [['Hauls', `${Math.round(G.liftFrac() * 100)}% spare/s`], ['Delivered', fmt(s.lifted)]];
   else if (sl.kind === 'yard') stats = v === 'built' ? [['Docks', String(G.docks())], ['Fleet power', fmt(G.totalPower())]] : [['Unlock', 'Build a Chip Fab']];
@@ -246,12 +249,12 @@ function updateSheet(force = false) {
   if (sl.kind === 'mine') { const h = $<HTMLButtonElement>('#sheet [data-act="hire"]'); if (h) { sset('[data-act="hire"]', `Hire ${MINES[sl.idx].mname}<b>$${fmt(MINES[sl.idx].mgr)}</b>`); h.disabled = s.cash < MINES[sl.idx].mgr; h.classList.toggle('coach', /^Hire/.test(GOALS[s.goal]?.text || '')); } }
   if (sl.kind === 'hq') { const rs = RES_ORDER.filter(r => s.made[r] > 0 || s.res[r] >= 1); sset('#mkt', rs.map(r => { const v2 = G.sellable(r) * G.price(r); return `<button class="mk2" data-act="sell:${r}" style="--c:${RES[r].color}" ${v2 >= 1 ? '' : 'disabled'}>${ri(r)}<b>$${fmt(v2)}</b></button>`; }).join('')); bindActs('#mkt'); }
   if (sl.kind === 'lab') { const list = TECH.filter(t => G.techAvail(t) && !s.tech.includes(t.id)).slice(0, 3); sset('#llist', list.length ? list.map(t => `<button class="trow" data-act="tech:${t.id}" ${s.cash >= t.cash && s.res[t.res] >= t.amt ? '' : 'disabled'}><span class="ti">${art(t.tgt < 0 ? 'star' : MINES[t.tgt].id)}</span><span class="tn"><b>${t.name}</b><small>${t.tgt < 0 ? 'All mines' : MINES[t.tgt].name} profit ×${t.x}</small></span><span class="tc">$${fmt(t.cash)}<small>${ri(t.res)}${fmt(t.amt)}</small></span></button>`).join('') : '<p class="muted">All research complete for this sector.</p>'); bindActs('#llist'); }
-  if (sl.kind === 'yard' && v === 'built') { const now = G.clock(); const busy = s.missions.map(m => { const d = m.kind === 'run' ? RUNS.find(r => r.id === m.target)! : PLANETS.find(p => p.id === m.target)!; return `<div class="trow busy"><span class="ti">${art(m.kind === 'run' ? d.id : d.id)}</span><span class="tn"><b>${d.name}</b><small>${Math.round(m.chance * 100)}% · ${m.power}⚔</small></span><span class="tc">${fmtT(Math.max(0, (m.end - now) / 1000))}</span></div>`; }).join('');
+  if (sl.kind === 'yard' && v === 'built') { const now = G.clock(); const busy = s.missions.map(m => { const d = m.kind === 'run' ? RUNS.find(r => r.id === m.target)! : PLANETS.find(p => p.id === m.target)!; return `<div class="trow busy"><span class="ti">${art(m.kind === 'run' ? d.id : d.id)}</span><span class="tn"><b>${d.name}</b><small>${Math.round(m.chance * 100)}% · ${m.power}${I.sword}</small></span><span class="tc">${fmtT(Math.max(0, (m.end - now) / 1000))}</span></div>`; }).join('');
     const opts = [...RUNS.filter(r => G.idlePower() >= r.need && !s.missions.some(m => m.target === r.id)).slice(-2).map(r => ['run', r] as const), ...PLANETS.filter(p => G.avail(p as never) && !s.conquered.includes(p.id) && !s.missions.some(m => m.target === p.id) && G.idlePower() >= p.need).slice(0, 1).map(p => ['planet', p] as const)];
     const free = s.missions.length < G.docks();
-    if (ySeg === 1) { sset('#ylist', G.shipsAvail().map(sh => { const c = G.shipCost(sh.id); return `<button class="trow" data-act="ship:${sh.id}" ${G.canAfford(c) ? '' : 'disabled'}><span class="ti">${art(sh.id)}</span><span class="tn"><b>${sh.name} <small>×${s.ships[sh.id] || 0}${G.away(sh.id) ? ` · ${G.away(sh.id)} away` : ''}</small></b><small>${sh.power}⚔ power</small></span><span class="tc">${costStr(c)}</span></button>`; }).join('')); bindActs('#ylist'); }
+    if (ySeg === 1) { sset('#ylist', G.shipsAvail().map(sh => { const c = G.shipCost(sh.id); return `<button class="trow" data-act="ship:${sh.id}" ${G.canAfford(c) ? '' : 'disabled'}><span class="ti">${art(sh.id)}</span><span class="tn"><b>${sh.name} <small>×${s.ships[sh.id] || 0}${G.away(sh.id) ? ` · ${G.away(sh.id)} away` : ''}</small></b><small>${sh.power}${I.sword} power</small></span><span class="tc">${costStr(c)}</span></button>`; }).join('')); bindActs('#ylist'); }
     else if (ySeg === 2) { sset('#ylist', FLEET_UPG.map(u => { const lv = G.fu(u.id), mx = lv >= u.max, c = { [u.res]: G.fuCost(u.id) }; return `<button class="trow" data-act="fu:${u.id}" ${!mx && G.canAfford(c) ? '' : 'disabled'}><span class="ti">${art(({ engines: 'plasma', armor: 'hull', docks: 'scout' } as Record<string, string>)[u.id])}</span><span class="tn"><b>${u.name} <small>Lv ${lv}/${u.max}</small></b><small>${u.desc}</small></span><span class="tc">${mx ? 'MAX' : costStr(c)}</span></button>`; }).join('')); bindActs('#ylist'); }
-    else sset('#ylist', busy + (free ? opts.map(([k, d]) => `<button class="trow" data-act="go:${k}:${d.id}"><span class="ti">${art(d.id)}</span><span class="tn"><b>${k === 'planet' ? 'Conquer ' : ''}${d.name}</b><small>needs ${d.need}⚔ · ${fmtT(G.missionTime(d.time))}</small></span><span class="tc go">LAUNCH</span></button>`).join('') : '') + (!busy && !opts.length ? `<p class="muted">${free ? 'No mission you can crew yet – build ships in the <b>Ships</b> tab.' : 'All docks busy – ships are out flying.'}</p>` : '')); bindActs('#ylist'); }
+    else sset('#ylist', busy + (free ? opts.map(([k, d]) => `<button class="trow" data-act="go:${k}:${d.id}"><span class="ti">${art(d.id)}</span><span class="tn"><b>${k === 'planet' ? 'Conquer ' : ''}${d.name}</b><small>needs ${d.need}${I.sword} · ${fmtT(G.missionTime(d.time))}</small></span><span class="tc go">LAUNCH</span></button>`).join('') : '') + (!busy && !opts.length ? `<p class="muted">${free ? 'No mission you can crew yet – build ships in the <b>Ships</b> tab.' : 'All docks busy – ships are out flying.'}</p>` : '')); bindActs('#ylist'); }
   if (sl.kind === 'gate') { const ok = G.warpOpen() && G.dmGain() >= 1; const wb = $<HTMLButtonElement>('#sheet [data-act="dowarp"]'); if (wb) { sset('[data-act="dowarp"]', ok ? `ENGAGE WARP<b>+${fmt(G.dmGain(), 0)} DM</b>` : `Charging…<b>${Math.floor(Math.min(1, s.life / G.warpNeed()) * 100)}%</b>`); wb.disabled = !ok; } }
   if (sl.kind === 'lift' || sl.kind === 'yard') { sset(sl.kind === 'lift' ? '#lstock' : '#ystock', `<small>${sl.kind === 'lift' ? 'ON THE FLEET ROCK' : 'FLEET STOCK · delivered by the Cargo Lift'}</small><div>${G.FLEET_RES.filter(r => s.made[r] > 0 || s.fstock[r] >= 1).map(r => `<span style="--c:${RES[r].color}">${ri(r)}<b>${fmt(s.fstock[r])}</b>${G.liftRate(r) > .01 ? `<i>+${fmt(G.liftRate(r))}/s</i>` : ''}</span>`).join('') || '<em>Nothing yet – make Parts and Alloy</em>'}</div>`); }
   if (sl.kind === 'lift') { const bb = $<HTMLButtonElement>('#sheet [data-act="buy"]'); if (bb) { sset('[data-act="buy"]', `Upgrade lift<b>$${fmt(G.liftCost())}</b>`); bb.disabled = s.cash < G.liftCost(); } sset('[data-act="ltog"]', s.liftOn ? '⏸ Pause lift' : '▶ Run lift'); }
@@ -275,7 +278,7 @@ function renderFac() {
   MACHINES.forEach((d, j) => {
     if (!G.avail(d)) return;
     const el = document.createElement('div'); el.className = 'mach'; el.dataset.j = String(j); el.style.animationDelay = j * 40 + 'ms';
-    if (!G.machUnlocked(j)) { el.classList.add('locked'); el.innerHTML = `<div class="lockmsg">🔒 <b>${d.name}</b><br><small>unlocks at $${fmt(d.unlock)} lifetime earnings</small></div>`; chain.appendChild(el); return; }
+    if (!G.machUnlocked(j)) { el.classList.add('locked'); el.innerHTML = `<div class="lockmsg">${I.lock} <b>${d.name}</b><br><small>unlocks at $${fmt(d.unlock)} lifetime earnings</small></div>`; chain.appendChild(el); return; }
     const ins = (Object.keys(d.inp) as Res[]);
     el.innerHTML = `<div class="mhead"><div class="ico sm">${art(mk(d.id))}</div><div class="mid"><div class="name">${d.name} <small class="lv"></small></div><p class="info"></p></div><button class="tog"></button></div>
     <div class="line"><div class="ins">${ins.map(r => `<div class="node" data-in="${r}" style="--c:${RES[r].color}">${ri(r)}<small>×${d.inp[r]}</small></div>`).join('')}</div><div class="belt"><div class="items">${ins.map(r => `<i>${ri(r)}</i>`).join('').repeat(Math.ceil(6 / ins.length)).slice(0)}</div></div><div class="node machine">${art(mk(d.id))}<div class="eff"></div></div><div class="belt"><div class="items">${`<i>${ri(d.out)}</i>`.repeat(6)}</div></div><div class="node" style="--c:${RES[d.out].color}">${ri(d.out)}</div></div>
@@ -287,8 +290,8 @@ function renderFac() {
     row.btn.addEventListener('click', ev => {
       const k = G.machK(j), c = G.machCostK(j, k); if (s.cash < c) return deny(row.btn);
       const lb = Math.floor(s.mach[j] / 10), first = s.mach[j] === 0; s.cash -= c; s.mach[j] += k; sfx.buy(); sfx.clank(); buzz(14); burst(ev.clientX, ev.clientY, 16, 0, RES[d.out].color);
-      if (first) { celebrate(d.id === 'fab' ? '🚀 Shipyard online! Check the Fleet tab' : `${d.e} ${d.name} built!`); renderFac(); spotlight(); return; }
-      if (Math.floor(s.mach[j] / 10) > lb) celebrate(`${d.e} ${d.name} Lv ${s.mach[j]}: output ×2!`);
+      if (first) { celebrate(d.id === 'fab' ? 'Shipyard online! Fly to the Fleet Rock' : `${d.name} built!`); renderFac(); spotlight(); return; }
+      if (Math.floor(s.mach[j] / 10) > lb) celebrate(`${d.name} Lv ${s.mach[j]}: output ×2!`);
       
     });
     row.tog.addEventListener('click', () => { s.on[j] = !s.on[j]; sfx.tap(); buzz(8); });
@@ -300,21 +303,21 @@ function renderFac() {
   main.querySelectorAll<HTMLButtonElement>('[data-sell]').forEach(b => b.addEventListener('click', () => { const r = b.dataset.sell as Res; if (G.sellable(r) < 1) { toast('Nothing spare – your factory needs it'); return deny(b); } const v = G.sell(r); sfx.buy(); sfx.coin(); buzz(14); const [x, y] = center(b); popup(x, y - 20, '+$' + fmt(v)); fly(x, y, ...center(cashEl), 8, 1, '#ffc94a', () => bump(cashEl)); }));
   techBtns = [];
   const list = TECH.filter(t => G.techAvail(t) && !s.tech.includes(t.id)).slice(0, 8), tech = $('#tech');
-  tech.innerHTML = list.map(t => `<div class="row"><div class="ico sm" style="--h:${t.tgt < 0 ? 50 : MINES[t.tgt].hue}">${art(t.tgt < 0 ? 'star' : MINES[t.tgt].id)}</div><div class="mid"><div class="name sm">${t.name}</div><p>${t.tgt < 0 ? 'All mines' : MINES[t.tgt].name} profit <b class="x">×${t.x}</b></p></div><button class="btn gold tb" data-u="${t.id}">$${fmt(t.cash)}<b>${ri(t.res)}${fmt(t.amt)}</b></button></div>`).join('') || '<p class="empty">All research complete. 🏆</p>';
-  tech.querySelectorAll<HTMLButtonElement>('[data-u]').forEach(b => { const t = TECH.find(x => x.id === b.dataset.u)!; techBtns.push({ el: b, t }); b.addEventListener('click', ev => { if (s.cash < t.cash || s.res[t.res] < t.amt) return deny(b); s.cash -= t.cash; s.res[t.res] -= t.amt; s.tech.push(t.id); celebrate(`🔬 ${t.name}!`, ev.clientX, ev.clientY); renderFac(); }); });
+  tech.innerHTML = list.map(t => `<div class="row"><div class="ico sm" style="--h:${t.tgt < 0 ? 50 : MINES[t.tgt].hue}">${art(t.tgt < 0 ? 'star' : MINES[t.tgt].id)}</div><div class="mid"><div class="name sm">${t.name}</div><p>${t.tgt < 0 ? 'All mines' : MINES[t.tgt].name} profit <b class="x">×${t.x}</b></p></div><button class="btn gold tb" data-u="${t.id}">$${fmt(t.cash)}<b>${ri(t.res)}${fmt(t.amt)}</b></button></div>`).join('') || '<p class="empty">All research complete. ' + I.trophy + '</p>';
+  tech.querySelectorAll<HTMLButtonElement>('[data-u]').forEach(b => { const t = TECH.find(x => x.id === b.dataset.u)!; techBtns.push({ el: b, t }); b.addEventListener('click', ev => { if (s.cash < t.cash || s.res[t.res] < t.amt) return deny(b); s.cash -= t.cash; s.res[t.res] -= t.amt; s.tech.push(t.id); celebrate(`${I.flask} ${t.name}!`, ev.clientX, ev.clientY); renderFac(); }); });
 }
 function tone2() { sfx.clank(); }
 function updateFac() {
   const s = st(), pe = G.powerEff(), sup = G.powerSupply(), dem = G.powerDemand();
   const g = $('.gen'); if (g) {
     setT($('.glv', g), `Lv ${s.gen}`); const pb = $('.pbar', g); $('i', pb).style.width = Math.min(100, dem / Math.max(sup, 1e-9) * 100) + '%'; pb.classList.toggle('over', dem > sup);
-    setT($('span', pb), `⚡ ${fmt(dem)} / ${fmt(sup)}${dem > sup ? ` · machines at ${Math.round(pe * 100)}%` : ''}`);
-    const k = G.genK(), c = G.genCost(k), b = $<HTMLButtonElement>('.btn', g); setT(b, `+${fmt(GEN.power * k)}⚡<b>$${fmt(c)}</b>`, true); b.disabled = s.cash < c; g.classList.toggle('alert', dem > sup);
+    setT($('span', pb), `${I.bolt} ${fmt(dem)} / ${fmt(sup)}${dem > sup ? ` · machines at ${Math.round(pe * 100)}%` : ''}`, true);
+    const k = G.genK(), c = G.genCost(k), b = $<HTMLButtonElement>('.btn', g); setT(b, `+${fmt(GEN.power * k)}${I.bolt}<b>$${fmt(c)}</b>`, true); b.disabled = s.cash < c; g.classList.toggle('alert', dem > sup);
   }
   MACHINES.forEach((d, j) => {
     const r = facRows[j]; if (!r) return; const ms = G.machStats[j], rate = G.machRate(j);
     setT(r.lv, s.mach[j] ? `Lv ${s.mach[j]}` : '');
-    const reason = !s.mach[j] ? `Turns ${Object.keys(d.inp).map(x => RES[x as Res].name).join(' + ')} into ${RES[d.out].name} · ⚡${d.power}/lvl`
+    const reason = !s.mach[j] ? `Turns ${Object.keys(d.inp).map(x => RES[x as Res].name).join(' + ')} into ${RES[d.out].name} · ${I.bolt}${d.power}/lvl`
       : ms.reason === 'off' ? '<em>Paused</em> – inputs flow to other machines'
       : ms.reason === 'starved' ? `<em>Starved</em> – needs more ${ri(ms.need!)} ${RES[ms.need!].name}`
       : ms.reason === 'power' ? '<em class="pw">Low power</em> – upgrade the generator'
@@ -336,7 +339,7 @@ function updateFac() {
 function renderCrew() {
   const s = st();
   main.innerHTML = `<div class="sec">Foremen run mines forever – even offline</div>` + MINES.map((d, i) => `<div class="row ${s.mines[i].m ? 'done' : ''} ${!s.mines[i].n && !s.mines[i].m ? 'dim' : ''}"><div class="ico sm" style="--h:${d.hue}">${art(d.id)}</div><div class="mid"><div class="name">${d.mname}</div><p>${s.mines[i].n ? `Automates ${d.name}` : `Build ${d.name} first`}</p></div>${s.mines[i].m ? '<span class="ok">✓ Hired</span>' : `<button class="btn" data-m="${i}">$${fmt(d.mgr)}</button>`}</div>`).join('');
-  main.querySelectorAll<HTMLButtonElement>('[data-m]').forEach(b => b.addEventListener('click', ev => { const i = +b.dataset.m!; if (!s.mines[i].n) { toast('Build that mine first!'); return deny(b); } if (s.cash < MINES[i].mgr) return deny(b); s.cash -= MINES[i].mgr; s.mines[i].m = true; celebrate(`🤖 ${MINES[i].mname} hired!`, ev.clientX, ev.clientY); renderCrew(); }));
+  main.querySelectorAll<HTMLButtonElement>('[data-m]').forEach(b => b.addEventListener('click', ev => { const i = +b.dataset.m!; if (!s.mines[i].n) { toast('Build that mine first!'); return deny(b); } if (s.cash < MINES[i].mgr) return deny(b); s.cash -= MINES[i].mgr; s.mines[i].m = true; celebrate(`${I.bot} ${MINES[i].mname} hired!`, ev.clientX, ev.clientY); renderCrew(); }));
   spotlight();
 }
 
@@ -347,22 +350,22 @@ function renderFleet() {
   if (!G.fleetOpen()) { main.innerHTML = `<div class="gate card"><div class="hero art-hero">${art('scout')}</div><h2 class="h">Shipyard offline</h2><p>Build the <b>Chip Fab</b> in your factory to bring the shipyard online. Salvage runs bring back goods; conquered planets boost profit and ore forever.</p><div class="gbar"><i style="width:${Math.min(100, Math.log10(G.allTime() + 1) / Math.log10(MACHINES[4].unlock) * 100)}%"></i></div><small>Chip Fab unlocks at $${fmt(MACHINES[4].unlock)} lifetime</small></div>`; return; }
   main.innerHTML = `<div class="power card"><div><small>FLEET POWER</small><b class="h" id="fp"></b></div><div class="docks" id="docks"></div></div>
   <div id="missions"></div>
-  <div class="sec">Shipyard</div>${G.shipsAvail().map(sh => `<div class="row" data-ship="${sh.id}"><div class="ico sm">${art(sh.id)}</div><div class="mid"><div class="name">${sh.name} <small class="own"></small></div><p>⚔️ ${sh.power} power</p></div><button class="btn sb"></button></div>`).join('')}
-  <div class="sec">Salvage runs <span class="sech">repeatable</span></div>${RUNS.map(r => `<div class="row mis" data-run="${r.id}"><div class="ico sm">${art(r.id)}</div><div class="mid"><div class="name">${r.name}</div><p>⚔️${r.need} · ${fmtT(G.missionTime(r.time))} · <span class="lootp" data-loot="${r.id}"></span></p><p class="ch"></p></div><button class="btn"></button></div>`).join('')}
+  <div class="sec">Shipyard</div>${G.shipsAvail().map(sh => `<div class="row" data-ship="${sh.id}"><div class="ico sm">${art(sh.id)}</div><div class="mid"><div class="name">${sh.name} <small class="own"></small></div><p>${I.sword} ${sh.power} power</p></div><button class="btn sb"></button></div>`).join('')}
+  <div class="sec">Salvage runs <span class="sech">repeatable</span></div>${RUNS.map(r => `<div class="row mis" data-run="${r.id}"><div class="ico sm">${art(r.id)}</div><div class="mid"><div class="name">${r.name}</div><p>${I.sword}${r.need} · ${fmtT(G.missionTime(r.time))} · <span class="lootp" data-loot="${r.id}"></span></p><p class="ch"></p></div><button class="btn"></button></div>`).join('')}
   <div class="sec">Conquest <span class="sech">permanent bonuses</span></div>${s.conquered.length ? `<div class="card empire"><small>YOUR EMPIRE · profit ×${fmt(G.planetMul())}</small><div>${PLANETS.filter(p => s.conquered.includes(p.id)).map(p => `<span title="${p.name}">${art(p.id)}</span>`).join('')}</div></div>` : ''}${PLANETS.filter(G.avail).map((p, k, PL) => { const done = s.conquered.includes(p.id), open = k === 0 || s.conquered.includes(PL[k - 1].id); if (done) return ''; if (!open && k > 0 && !(k - 1 === 0 || s.conquered.includes(PL[k - 2].id))) return '';
-    return `<div class="row mis planet ${done ? 'done' : ''} ${!open ? 'dim' : ''}" data-planet="${p.id}"><div class="ico sm">${art(open ? p.id : 'unknown')}</div><div class="mid"><div class="name">${open ? p.name : 'Unknown world'}</div><p>${done ? `🏳️ Yours · profit ×${p.bonus}, ore +50%` : open ? `${p.desc}<br>⚔️${p.need} · ${fmtT(G.missionTime(p.time))} · profit <b class="x">×${p.bonus}</b>` : 'Conquer the previous planet'}</p><p class="ch"></p></div>${done ? '<span class="ok">🏳️</span>' : open ? '<button class="btn gold"></button>' : ''}</div>`; }).join('')}
+    return `<div class="row mis planet ${done ? 'done' : ''} ${!open ? 'dim' : ''}" data-planet="${p.id}"><div class="ico sm">${art(open ? p.id : 'unknown')}</div><div class="mid"><div class="name">${open ? p.name : 'Unknown world'}</div><p>${done ? `${I.flag} Yours · profit ×${p.bonus}, ore +50%` : open ? `${p.desc}<br>${I.sword}${p.need} · ${fmtT(G.missionTime(p.time))} · profit <b class="x">×${p.bonus}</b>` : 'Conquer the previous planet'}</p><p class="ch"></p></div>${done ? '<span class="ok">' + I.flag + '</span>' : open ? '<button class="btn gold"></button>' : ''}</div>`; }).join('')}
   <div class="sec">Fleet upgrades</div>${FLEET_UPG.map(u => `<div class="row" data-fu="${u.id}"><div class="ico sm">${art(({ engines: 'plasma', armor: 'hull', docks: 'scout' } as Record<string, string>)[u.id])}</div><div class="mid"><div class="name">${u.name} <small class="own"></small></div><p>${u.desc}</p></div><button class="btn gold sb"></button></div>`).join('')}`;
   main.querySelectorAll<HTMLElement>('[data-ship]').forEach(row => { const id = row.dataset.ship!, b = $<HTMLButtonElement>('button', row); b.addEventListener('click', ev => { const c = G.shipCost(id); if (!G.canAfford(c)) return deny(b); G.pay(c); s.ships[id] = (s.ships[id] || 0) + 1; sfx.launch(); buzz([20, 20, 40]); rocket(ev.clientX, ev.clientY - 20, true); burst(ev.clientX, ev.clientY, 14); }); });
-  main.querySelectorAll<HTMLElement>('[data-fu]').forEach(row => { const id = row.dataset.fu!, u = FLEET_UPG.find(x => x.id === id)!, b = $<HTMLButtonElement>('button', row); b.addEventListener('click', ev => { if (G.fu(id) >= u.max) return; const c = { [u.res]: G.fuCost(id) }; if (!G.canAfford(c)) return deny(b); G.pay(c); s.fupg[id] = G.fu(id) + 1; celebrate(`${u.e} ${u.name} Lv ${s.fupg[id]}`, ev.clientX, ev.clientY); renderFleet(); }); });
+  main.querySelectorAll<HTMLElement>('[data-fu]').forEach(row => { const id = row.dataset.fu!, u = FLEET_UPG.find(x => x.id === id)!, b = $<HTMLButtonElement>('button', row); b.addEventListener('click', ev => { if (G.fu(id) >= u.max) return; const c = { [u.res]: G.fuCost(id) }; if (!G.canAfford(c)) return deny(b); G.pay(c); s.fupg[id] = G.fu(id) + 1; celebrate(`${u.name} Lv ${s.fupg[id]}`, ev.clientX, ev.clientY); renderFleet(); }); });
   main.querySelectorAll<HTMLElement>('.mis').forEach(row => { const b = row.querySelector<HTMLButtonElement>('button'); if (!b) return; const kind = row.dataset.run ? 'run' : 'planet', id = (row.dataset.run || row.dataset.planet)!; b.addEventListener('click', () => { if (s.missions.length >= G.docks()) { toast('All docks busy – upgrade Launch Docks'); return deny(b); } sfx.tap(); shipSheet(kind, id); }); });
   updateFleet();
 }
 function shipSheet(kind: 'run' | 'planet', id: string) {
   const s = st(), def = kind === 'run' ? RUNS.find(r => r.id === id)! : PLANETS.find(p => p.id === id)!;
   let sel: Record<string, number> = { ...G.pickShips(Math.ceil(def.need * greed)).pick };
-  const m = modal(`<div class="shead"><div class="ico sm">${art(def.id)}</div><div><h2 class="h">${def.name}</h2><p>Needs ⚔️${def.need} · ${fmtT(G.missionTime(def.time))}</p></div></div>
+  const m = modal(`<div class="shead"><div class="ico sm">${art(def.id)}</div><div><h2 class="h">${def.name}</h2><p>Needs ${I.sword}${def.need} · ${fmtT(G.missionTime(def.time))}</p></div></div>
     <div class="seg">${[[1, 'Lean'], [1.4, 'Safe'], [2, 'Overwhelm'], [99, 'All']].map(([g, n]) => `<button data-pre="${g}">${n}</button>`).join('')}</div>
-    <div class="pick">${G.shipsAvail().filter(sh => G.idle(sh.id) > 0).map(sh => `<div class="prow" data-s="${sh.id}"><div class="ico sm">${art(sh.id)}</div><div class="mid"><b>${sh.name}</b><small>⚔️${sh.power} · ${G.idle(sh.id)} idle</small></div><button class="stp" data-d="-1">−</button><b class="cnt h">0</b><button class="stp" data-d="1">+</button></div>`).join('') || '<p>No idle ships – build some in the Shipyard.</p>'}</div>
+    <div class="pick">${G.shipsAvail().filter(sh => G.idle(sh.id) > 0).map(sh => `<div class="prow" data-s="${sh.id}"><div class="ico sm">${art(sh.id)}</div><div class="mid"><b>${sh.name}</b><small>${I.sword}${sh.power} · ${G.idle(sh.id)} idle</small></div><button class="stp" data-d="-1">−</button><b class="cnt h">0</b><button class="stp" data-d="1">+</button></div>`).join('') || '<p>No idle ships – build some in the Shipyard.</p>'}</div>
     <div class="odds"><div class="obar"><i></i></div><span></span></div>
     <div class="two"><button class="btn big ghost" data-x>Cancel</button><button class="btn gold big" data-go>Launch</button></div>`);
   m.querySelector('.sheet')!.classList.add('ships');
@@ -370,7 +373,7 @@ function shipSheet(kind: 'run' | 'planet', id: string) {
     let p = 0; m.querySelectorAll<HTMLElement>('.prow').forEach(r => { const sid = r.dataset.s!; sel[sid] = Math.max(0, Math.min(G.idle(sid), sel[sid] || 0)); p += sel[sid] * SHIPS.find(x => x.id === sid)!.power; setT($('.cnt', r), String(sel[sid])); });
     const ch = G.chanceFor(p, def.need), loss = Math.round((ch ? 0.05 * ch + 0.35 * (1 - ch) : 0) * (1 - 0.2 * G.fu('armor')) * 100);
     const o = $('.odds', m); ($('i', o) as HTMLElement).style.width = ch * 100 + '%'; o.className = 'odds ' + (ch > 0.9 ? 'good' : ch > 0.7 ? 'mid' : 'risk');
-    setT($('span', o), p < def.need ? `⚔️${p} / ${def.need} – not enough power` : `⚔️${p} · <b>${Math.round(ch * 100)}% success</b> · ~${loss}% ship losses expected`, true);
+    setT($('span', o), p < def.need ? `${I.sword}${p} / ${def.need} – not enough power` : `${I.sword}${p} · <b>${Math.round(ch * 100)}% success</b> · ~${loss}% ship losses expected`, true);
     ($('[data-go]', m) as HTMLButtonElement).disabled = p < def.need;
   };
   m.querySelectorAll<HTMLElement>('.stp').forEach(b => { let t: number | undefined; const go = () => { const sid = (b.closest('.prow') as HTMLElement).dataset.s!; sel[sid] = (sel[sid] || 0) + +b.dataset.d!; sfx.tap(); buzz(4); upd(); }; b.addEventListener('pointerdown', () => { go(); t = window.setTimeout(function rep() { go(); t = window.setTimeout(rep, 70); }, 380); }); ['pointerup', 'pointerleave', 'pointercancel'].forEach(e => b.addEventListener(e, () => clearTimeout(t))); });
@@ -383,10 +386,10 @@ function updateFleet() {
   const s = st(); if (!G.fleetOpen() || !$('#fp')) return;
   setT($('#fp'), `${fmt(G.idlePower())} / ${fmt(G.totalPower())}`);
   setT($('#docks'), Array.from({ length: G.docks() }, (_, k) => `<i class="${k < s.missions.length ? 'busy' : ''}"></i>`).join('') + `<small>docks</small>`, true);
-  setT($('#missions'), s.missions.map(m => { const def = m.kind === 'run' ? RUNS.find(r => r.id === m.target)! : PLANETS.find(p => p.id === m.target)!; const left = Math.max(0, (m.end - G.clock()) / 1000); return `<div class="active card"><div class="ico sm">${art(def.id)}</div><div class="mid"><div class="name">${def.name} <small>${Math.round(m.chance * 100)}% · ⚔️${m.power}</small></div><div class="bar thin"><div class="fill" style="transform:scaleX(${1 - left / m.dur})"></div></div></div><div class="time">${fmtT(left)}</div></div>`; }).join(''), true);
+  setT($('#missions'), s.missions.map(m => { const def = m.kind === 'run' ? RUNS.find(r => r.id === m.target)! : PLANETS.find(p => p.id === m.target)!; const left = Math.max(0, (m.end - G.clock()) / 1000); return `<div class="active card"><div class="ico sm">${art(def.id)}</div><div class="mid"><div class="name">${def.name} <small>${Math.round(m.chance * 100)}% · ${I.sword}${m.power}</small></div><div class="bar thin"><div class="fill" style="transform:scaleX(${1 - left / m.dur})"></div></div></div><div class="time">${fmtT(left)}</div></div>`; }).join(''), true);
   main.querySelectorAll<HTMLElement>('.mis').forEach(row => { const b = row.querySelector<HTMLButtonElement>('button'); if (!b) return; const id = (row.dataset.run || row.dataset.planet)!; const def = row.dataset.run ? RUNS.find(r => r.id === id)! : PLANETS.find(p => p.id === id)!; const busy = s.missions.some(m => m.target === id); const { power } = G.pickShips(Math.ceil(def.need * greed)); const ch = G.chanceFor(power, def.need);
     setT(b, busy ? 'En route' : s.missions.length >= G.docks() ? 'Docks full' : row.dataset.run ? 'Launch' : 'Invade'); b.disabled = busy || ch <= 0 || s.missions.length >= G.docks();
-    setT(row.querySelector('.ch'), busy ? '' : ch > 0 ? `<span class="${ch > 0.9 ? 'good' : ch > 0.7 ? 'mid' : 'risk'}">${Math.round(ch * 100)}% success</span> with ⚔️${power}` : `<span class="risk">Need ⚔️${def.need} idle</span>`, true); });
+    setT(row.querySelector('.ch'), busy ? '' : ch > 0 ? `<span class="${ch > 0.9 ? 'good' : ch > 0.7 ? 'mid' : 'risk'}">${Math.round(ch * 100)}% success</span> with ${I.sword}${power}` : `<span class="risk">Need ${I.sword}${def.need} idle</span>`, true); });
   main.querySelectorAll<HTMLElement>('[data-loot]').forEach(el => { const r = RUNS.find(x => x.id === el.dataset.loot)!; setT(el, Object.entries(r.loot).map(([k, v]) => ri(k as Res) + fmt(v! * (1 + s.conquered.length * 0.5) + G.prodRate(k as Res) * r.time * 1.5)).join(' '), true); });
   main.querySelectorAll<HTMLElement>('[data-ship]').forEach(row => { const id = row.dataset.ship!, b = $<HTMLButtonElement>('button', row), c = G.shipCost(id); setT(b, costStr(c), true); b.disabled = !G.canAfford(c); setT($('.own', row), (s.ships[id] || 0) ? `×${s.ships[id]}${G.away(id) ? ` · ${G.away(id)} away` : ''}` : ''); });
   main.querySelectorAll<HTMLElement>('[data-fu]').forEach(row => { const id = row.dataset.fu!, u = FLEET_UPG.find(x => x.id === id)!, b = $<HTMLButtonElement>('button', row); const max = G.fu(id) >= u.max; setT($('.own', row), `Lv ${G.fu(id)}/${u.max}`); setT(b, max ? 'MAX' : costStr({ [u.res]: G.fuCost(id) }), true); b.disabled = max || !G.canAfford({ [u.res]: G.fuCost(id) }); });
@@ -396,9 +399,9 @@ function missionsTick() {
     if (bv && tab === 'base') sfx.land(), bv.land(Object.values(o.m.ships).reduce((a, b) => a + b, 0) - Object.values(o.lost).reduce((a, b) => a + b, 0));
     const def = o.m.kind === 'run' ? RUNS.find(r => r.id === o.m.target)! : PLANETS.find(p => p.id === o.m.target)!;
     const lostN = Object.values(o.lost).reduce((a, b) => a + b, 0);
-    if (o.ok && o.m.kind === 'planet') { xp(XP.conquer); flash(); sfx.warp(); celebrate(`🏳️ ${def.name} conquered! Profit ×${(def as typeof PLANETS[number]).bonus}`); }
-    else if (o.ok) { sfx.fanfare(); buzz([20, 30]); toast(`${def.e} ${def.name}: loot secured!${lostN ? ` (−${lostN} ships)` : ''}`); if (o.loot) { const [x, y] = bv ? bv.slotScreen(bv.rock ? 'yard' : 'lift') : center(cashEl); for (const r in o.loot) fly(x, y, ...center(resEl(r as Res)), 6, 2, RES[r as Res].color, () => bump(resEl(r as Res))); } }
-    else { sfx.no(); buzz([60, 40, 60]); shakeEl(app); toast(`💥 ${def.name} failed – lost ${lostN} ship${lostN === 1 ? '' : 's'}`); }
+    if (o.ok && o.m.kind === 'planet') { xp(XP.conquer); flash(); sfx.warp(); celebrate(`${I.flag} ${def.name} conquered! Profit ×${(def as typeof PLANETS[number]).bonus}`); }
+    else if (o.ok) { sfx.fanfare(); buzz([20, 30]); toast(`${def.name}: loot secured!${lostN ? ` (−${lostN} ships)` : ''}`); if (o.loot) { const [x, y] = bv ? bv.slotScreen(bv.rock ? 'yard' : 'lift') : center(cashEl); for (const r in o.loot) fly(x, y, ...center(resEl(r as Res)), 6, 2, RES[r as Res].color, () => bump(resEl(r as Res))); } }
+    else { sfx.no(); buzz([60, 40, 60]); shakeEl(app); toast(`${I.boom} ${def.name} failed – lost ${lostN} ship${lostN === 1 ? '' : 's'}`); }
     if (tab === 'fleet') renderFleet(); G.save();
   }
 }
@@ -408,21 +411,21 @@ function renderWarp() {
   const s = st();
   if (!G.warpOpen()) { main.innerHTML = `<div class="gate card"><div class="hero art-hero">${art('hole')}</div><h2 class="h">Warp Drive dormant</h2><p>Earn <b>$${fmt(G.warpNeed())} this sector</b> to charge it. Warping resets this sector for <b>Dark Matter</b>: a permanent profit multiplier, plus +1% ore & factory speed each — and every warp opens a new sector with new tech.</p><div class="gbar"><i style="width:${Math.min(100, Math.log10(s.life + 1) / Math.log10(G.warpNeed()) * 100)}%"></i></div><small>$${fmt(s.life)} / $${fmt(G.warpNeed())}</small></div>` + perks() + stats(); return; }
   const g = G.dmGain();
-  main.innerHTML = `<div class="nova card"><div class="sun art-hero">${art('hole')}</div><h2 class="h">Warp to a new sector</h2><p>Resets mines, factory, fleet and planets. Keeps <b style="color:var(--violet)">Dark Matter</b> and trophies.</p><div class="h gain">+${fmt(g, 0)} 🌀</div><p class="sectorline">Next: <b>Sector ${G.sector() + 1} · ${SECTORS[Math.min(G.sector(), SECTORS.length - 1)]}</b></p><button class="btn gold big" id="go" ${g < 1 ? 'disabled' : ''}>${g < 1 ? 'Next at $' + fmt(G.dmNext()) + ' all-time' : 'ENGAGE WARP'}</button></div>` + perks() + stats();
-  $('#go')?.addEventListener('click', () => { if (G.dmGain() < 1) return; confirmModal('🌀', 'Engage warp?', `Reset this sector for +${fmt(G.dmGain(), 0)} Dark Matter and jump to Sector ${G.sector() + 1}.`, 'WARP', () => { G.doWarp(); G.save(); sfx.warp(); buzz([50, 50, 100, 50, 200]); flash(); for (let k = 0; k < 5; k++) setTimeout(() => burst(Math.random() * innerWidth, Math.random() * innerHeight * .6, 40), k * 120); setTab('mine'); }); });
+  main.innerHTML = `<div class="nova card"><div class="sun art-hero">${art('hole')}</div><h2 class="h">Warp to a new sector</h2><p>Resets mines, factory, fleet and planets. Keeps <b style="color:var(--violet)">Dark Matter</b> and trophies.</p><div class="h gain">+${fmt(g, 0)} ${I.warp}</div><p class="sectorline">Next: <b>Sector ${G.sector() + 1} · ${SECTORS[Math.min(G.sector(), SECTORS.length - 1)]}</b></p><button class="btn gold big" id="go" ${g < 1 ? 'disabled' : ''}>${g < 1 ? 'Next at $' + fmt(G.dmNext()) + ' all-time' : 'ENGAGE WARP'}</button></div>` + perks() + stats();
+  $('#go')?.addEventListener('click', () => { if (G.dmGain() < 1) return; confirmModal(art('hole'), 'Engage warp?', `Reset this sector for +${fmt(G.dmGain(), 0)} Dark Matter and jump to Sector ${G.sector() + 1}.`, 'WARP', () => { G.doWarp(); G.save(); sfx.warp(); buzz([50, 50, 100, 50, 200]); flash(); for (let k = 0; k < 5; k++) setTimeout(() => burst(Math.random() * innerWidth, Math.random() * innerHeight * .6, 40), k * 120); setTab('mine'); }); });
 }
 function perks() { const s = st(); return `<div class="sec">Warp perks</div>${PERKS.map(p => `<div class="row perk ${s.warps >= p.warps ? 'got' : 'dim'}"><div class="ico sm">${art(p.art)}</div><div class="mid"><div class="name">${p.name} <small>${s.warps >= p.warps ? '✓ active' : `after warp ${p.warps}`}</small></div><p>${p.desc}</p></div></div>`).join('')}`; }
 function stats() { const s = st(); return `<div class="sec">Stats</div><div class="card stats">${[['Dark Matter', `${fmt(s.dm, 0)} (profit ×${fmt(G.dmMul())})`], ['Trophy bonus', `+${Math.round((G.achMul() - 1) * 100)}%`], ['Planet bonus', '×' + fmt(G.planetMul())], ['Earned this sector', '$' + fmt(s.life)], ['All-time', '$' + fmt(G.allTime())], ['Missions won / ships lost', `${s.wins} / ${s.lost}`], ['Play time', fmtT(s.played)], ['Taps', s.taps]].map(([a, b]) => `<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('')}</div><div class="sec">Settings</div><button class="btn big ghost" id="reset">Reset save</button>`; }
-document.addEventListener('click', e => { if ((e.target as HTMLElement).id === 'reset') confirmModal('🗑️', 'Reset everything?', 'Wipes all progress including Dark Matter and trophies.', 'Reset', () => { localStorage.removeItem(G.KEY); G.setS(G.fresh()); setTab('mine'); renderGoal(); }); });
+document.addEventListener('click', e => { if ((e.target as HTMLElement).id === 'reset') confirmModal(I.trash, 'Reset everything?', 'Wipes all progress including Dark Matter and trophies.', 'Reset', () => { localStorage.removeItem(G.KEY); G.setS(G.fresh()); setTab('mine'); renderGoal(); }); });
 
 // ---------- modals ----------
-function modal(html: string) { const m = document.createElement('div'); m.className = 'modal'; m.innerHTML = `<div class="sheet">${html}</div>`; document.body.appendChild(m); m.addEventListener('click', e => { if (e.target === m) m.remove(); }); return m; }
+function modal(html: string) { closeSheet(); const m = document.createElement('div'); m.className = 'modal'; m.innerHTML = `<div class="sheet">${html}</div>`; document.body.appendChild(m); m.addEventListener('click', e => { if (e.target === m) m.remove(); }); return m; }
 function confirmModal(icon: string, title: string, txt: string, ok: string, fn: () => void) {
   const m = modal(`<div class="hero">${icon}</div><h2 class="h">${title}</h2><p>${txt}</p><div class="two"><button class="btn big ghost" data-x>Cancel</button><button class="btn gold big" data-ok>${ok}</button></div>`);
   m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('[data-ok]')!.addEventListener('click', () => { m.remove(); fn(); });
 }
 $('#trophy').addEventListener('click', () => { sfx.tap(); const s = st(); const m = modal(`<h2 class="h"><span class="hico">${$('#trophy svg')?.outerHTML || ''}</span> Trophies <small>${s.ach.length}/${ACHS.length}</small></h2><p>Each trophy: <b style="color:var(--mint)">+2% profit</b> forever</p><div class="achs">${ACHS.map(a => `<div class="ach ${s.ach.includes(a.id) ? 'got' : ''}"><i>${s.ach.includes(a.id) ? ($('#trophy svg')?.outerHTML || '') : `<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3" fill="#8b84b0" stroke="#24163a" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#24163a" stroke-width="2.5"/><circle cx="12" cy="15.5" r="1.8" fill="#24163a"/></svg>`}</i><b>${a.name}</b><small>${a.desc}</small></div>`).join('')}</div><button class="btn big" data-x>Close</button>`); m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('.sheet')!.classList.add('tall'); });
-function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); xp(XP.ach); if (s.goal < 9) continue; sfx.fanfare(); buzz([20, 40, 20, 40]); toast(`🏆 ${a.name} · +2% profit`); bump($('#trophy')); burst(...center($('#trophy')), 24); } }
+function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); xp(XP.ach); if (s.goal < 9) continue; sfx.fanfare(); buzz([20, 40, 20, 40]); toast(`${I.trophy} ${a.name} · +2% profit`); bump($('#trophy')); burst(...center($('#trophy')), 24); } }
 
 // ---------- tabs ----------
 const RENDER: Record<string, () => void> = { base: renderBase, mine: renderMine, fac: renderFac, crew: renderCrew, fleet: renderFleet, warp: renderWarp };
@@ -480,7 +483,7 @@ function frame(now: number) {
 // ---------- progressive disclosure + Commander ----------
 const seen = (id: string) => (st().seen ||= []).includes(id);
 const mark = (id: string) => { if (!seen(id)) st().seen.push(id); };
-function intro(id: string, beats: (string | { t: string; h?: string })[], focus?: string) { if (seen(id)) return; if (focus && bv && ((slotByKey(focus)?.rock || 0) !== bv.rock || bv.travelT >= 0)) return; mark(id); if (focus && bv && tab === 'base') bv.focus(focus); say(id, beats); }
+function intro(id: string, beats: (string | { t: string; h?: string })[], focus?: string) { if (seen(id) || document.querySelector('#sheet.open, .modal, .tree')) return; if (focus && bv && ((slotByKey(focus)?.rock || 0) !== bv.rock || bv.travelT >= 0)) return; mark(id); if (focus && bv && tab === 'base') bv.focus(focus); say(id, beats); }
 function disclose() {
   const s = st();
   app.classList.toggle('nonav', s.goal < 9 && !s.warps);
@@ -490,7 +493,7 @@ function disclose() {
 function explain() {
   const s = st(); if (talking()) return;
   if (s.goal >= 2 || s.warps) intro('factory', [{ h: 'REFINE', t: 'Raw ore is cheap. A <b>Smelter</b> turns it into <b>ingots</b> – worth far more. Conveyors carry the ore over by themselves.' }], 'f0');
-  if (s.mach[0] && G.powerDemand() >= G.powerSupply() * .75) intro('power', [{ h: 'POWER', t: 'Every factory draws power. When buildings flash <b>⚡</b>, upgrade the <b>Fusion Generator</b>.' }], 'gen');
+  if (s.mach[0] && G.powerDemand() >= G.powerSupply() * .75) intro('power', [{ h: 'POWER', t: 'Every factory draws power. When buildings flash <b>' + I.bolt + '</b>, upgrade the <b>Fusion Generator</b>.' }], 'gen');
   if (s.goal >= 4 || s.tech.length) intro('lab', [{ h: 'RESEARCH', t: 'The <b>Lab</b> trades cash and goods for permanent profit boosts. Spend ingots here!' }], 'lab');
   if (s.goal >= 7) intro('export', [{ h: 'EXPORT', t: 'Got spare goods? Export them at <b>HQ</b>. I never sell what your factory still needs.' }], 'hq');
   if (s.goal >= 8) intro('foreman', [{ h: 'AUTOMATE', t: 'Tired of tapping? Hire a <b>foreman</b> on any mine and it runs forever – even while you are away.' }], 'm0');
@@ -544,7 +547,7 @@ function cmdHud() {
   $('#cmdbadge').style.visibility = st().goal >= 2 || st().xp > 0 || st().warps ? '' : 'hidden';
 }
 let treeSel: string | null = null;
-function openTree() {
+function openTree() { closeSheet();
   sfx.select(); const m = document.createElement('div'); m.className = 'tree'; document.body.appendChild(m);
   const draw = () => {
     const s = st(), L = G.cmdLevel(), pts = G.skillPoints();
@@ -571,7 +574,16 @@ setInterval(() => { rockHud(); cmdHud(); if (bv) { rockBtn.classList.remove('pul
 
 // subtle day/night dial: sun ↔ moon on a little arc, shows the Night Shift bonus when it applies
 const dnEl = $('#dn'); let dnLast = '';
-setInterval(() => { const n = G.nightness(), ph = (st().played / 360 + .8) % 1, k = n > .5 ? 'moon' : 'sun', bonus = n > .3 && G.sk('iNight'); const key = k + bonus + Math.round(ph * 40);
+setInterval(() => { const n = G.nightness(), ph = G.nightPhase(), k = n > .5 ? 'moon' : 'sun', bonus = n > .3 && G.sk('iNight'); const key = k + bonus + Math.round(ph * 40);
   if (key === dnLast) return; dnLast = key; const a = ph * Math.PI * 2, x = 14 + Math.sin(a) * 8, y = 15 - Math.cos(a) * 5;
   dnEl.innerHTML = `<svg viewBox="0 0 28 22"><path d="M3 18a11 9 0 0 1 22 0" fill="none" stroke="#ffffff22" stroke-width="2" stroke-dasharray="2 3"/>${k === 'sun' ? `<circle cx="${x}" cy="${y}" r="4.5" fill="#ffd23f" stroke="#24163a" stroke-width="1.5"/>` : `<path d="M${x + 1} ${y - 5}a5 5 0 1 0 4 7a4 4 0 0 1-4-7z" fill="#cfe6ff" stroke="#24163a" stroke-width="1.5"/>`}</svg>${bonus ? '<b>×2</b>' : ''}`;
   dnEl.title = n > .5 ? 'Night' : 'Day'; dnEl.classList.toggle('night', n > .5); }, 500);
+
+(window as unknown as { __renderSfx: unknown }).__renderSfx = async (n: string) => Array.from(await renderSfx(n as never));
+
+// ---------- overlay manager: ONE foreground thing at a time ----------
+// priority: modal / skill tree  >  Vex  >  building panel  >  toasts. HUD auto-hides what isn't needed right now.
+const fgModal = () => !!document.querySelector('.modal, .tree');
+setGate(fgModal);
+setToastGate(() => fgModal() || talking() || !!document.querySelector('#sheet.open'));
+setInterval(() => { const b = document.body, sheet = !!document.querySelector('#sheet.open'); b.classList.toggle('fg-sheet', sheet); b.classList.toggle('fg-modal', fgModal()); }, 120);

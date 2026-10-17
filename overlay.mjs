@@ -1,0 +1,25 @@
+import { chromium } from 'playwright';
+const b=await chromium.launch({args:['--use-gl=swiftshader','--enable-unsafe-swiftshader']}); const errs=[]; const report=[];
+const z={ore:0,quartz:0,ingot:0,glass:0,part:0,alloy:0,chip:0,hull:0,exotic:0};
+const M=a=>a.map(([n,m])=>({n,p:0,m:!!m,run:!!m}));
+const base={v:2,cash:400,life:900,total:0,dm:0,warps:0,mines:M([[18,0],[3,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]]),tech:[],res:{...z},made:{...z},mach:[0,0,0,0,0,0,0],on:Array(7).fill(true),gen:1,ships:{},conquered:[],missions:[],fupg:{},uid:1,ach:[],goal:0,sold:0,lost:0,wins:0,w:Array(7).fill(50),auto:false,mute:true,last:Date.now(),mult:0,taps:0,played:30};
+const count=()=>{const vis=s=>[...document.querySelectorAll(s)].filter(e=>{const c=getComputedStyle(e);return c.opacity>0.05&&c.display!=='none'&&c.visibility!=='hidden'}).length; return {vex:vis('.cmdr.open:not(.held)'),sheet:vis('#sheet.open'),modal:vis('.modal,.tree'),toast:vis('.toast')}};
+async function scen(name,seed,act){ const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+  if(seed) await ctx.addInitScript(s=>{if(!sessionStorage.seed){sessionStorage.seed=1;localStorage.setItem('starforge.v2',s)}},JSON.stringify(seed));
+  const p=await ctx.newPage(); p.on('pageerror',e=>errs.push(e.message)); p.on('console',m=>m.type()==='error'&&errs.push(m.text())); await p.goto('http://localhost:4173/'); await p.waitForTimeout(800);
+  let worst=0, worstAt=null, shot=0;
+  const sample=async(tag)=>{ const c=await p.evaluate(count); const n=c.vex+c.sheet+c.modal+c.toast; if(n>worst){worst=n;worstAt=JSON.stringify(c)+' '+tag;} };
+  const t0=Date.now(); const timer=setInterval(()=>sample('t'+(Date.now()-t0)).catch(()=>{}),250);
+  await act(p, async n=>{ await p.screenshot({path:`shots/o-${name}-${++shot}${n?'-'+n:''}.png`}); });
+  clearInterval(timer); await sample('end'); report.push(`${name}: max simultaneous popups ${worst} ${worst>1?'❌ '+worstAt:'✅'}`); await ctx.close(); }
+const tapSlot=async(p,k)=>{ const [x,y]=await p.evaluate(k=>window.bv.slotScreen(k),k); await p.touchscreen.tap(x,y+25); };
+const vexNext=p=>p.evaluate(()=>document.querySelector('.cmdr.open:not(.held) .cbub')?.click());
+// 1) first minutes: intro + drill taps + building
+await scen('first', null, async (p,shot)=>{ await p.waitForTimeout(1500); await shot('intro'); for(let k=0;k<14;k++){ await vexNext(p); await p.waitForTimeout(500); await tapSlot(p,'m0'); await p.waitForTimeout(400);} await shot('play'); await p.evaluate(()=>{const s=JSON.parse(localStorage.getItem('starforge.v2')||'{}');}); await tapSlot(p,'hq'); await p.waitForTimeout(600); await shot('hq'); });
+// 2) busy mid moment: goal ready + several trophies unlock + sheet open
+await scen('busy', {...base,cash:5e6,life:5e6,taps:2000,mines:M([[120,1],[60,1],[30,1],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]]),mach:[12,6,0,0,0,0,0],gen:4,res:{...z,ore:1e4,ingot:2e3},made:{...z,ingot:5e3,glass:100},goal:9,seen:['intro','factory','power','lab']}, async (p,shot)=>{ await p.waitForTimeout(1200); await shot('load'); await tapSlot(p,'f0'); await p.waitForTimeout(700); await shot('sheet'); await p.waitForTimeout(2500); await shot('sheet2'); await p.evaluate(()=>document.querySelector('#sheet [data-act=close]')?.click()); await p.waitForTimeout(1500); await shot('closed'); for(let k=0;k<6;k++){await vexNext(p); await p.waitForTimeout(600);} await shot('after'); });
+// 3) fleet unlock
+await scen('fleet', {...base,cash:4e9,life:6e9,mines:M([[200,1],[120,1],[90,1],[60,1],[20,1],[0,0],[0,0],[0,0],[0,0]]),mach:[30,25,12,6,1,0,0],gen:12,res:{...z,part:500,alloy:200,chip:5},made:{...z,ingot:1e5,part:1e3,alloy:400,chip:5},goal:24,seen:['intro','factory','power','lab','export','foreman','tiers','skills']}, async (p,shot)=>{ await p.waitForTimeout(1500); await shot('unlock'); for(let k=0;k<4;k++){await vexNext(p); await p.waitForTimeout(700);} await p.click('#rockbtn',{force:true}).catch(()=>{}); await p.waitForTimeout(2600); await shot('rock'); for(let k=0;k<4;k++){await vexNext(p); await p.waitForTimeout(700);} await shot('rock2'); });
+// 4) after warp
+await scen('warp', {...base,cash:4e13,life:2e14,total:0,dm:0,mines:M([[400,1],[300,1],[260,1],[220,1],[180,1],[150,1],[120,1],[80,1],[0,0]]),mach:[100,90,80,60,40,20,0],gen:40,goal:40,seen:['intro','factory','power','lab','export','foreman','tiers','skills','fleet','rock2']}, async (p,shot)=>{ await p.waitForTimeout(1200); await p.evaluate(()=>window.bv.focus('gate')); await p.waitForTimeout(900); await tapSlot(p,'gate'); await p.waitForTimeout(600); await p.evaluate(()=>document.querySelector('#sheet [data-act=dowarp]')?.click()); await p.waitForTimeout(400); await shot('confirm'); await p.evaluate(()=>document.querySelector('.modal [data-ok]')?.click()); await p.waitForTimeout(4500); await shot('after'); await p.waitForTimeout(3000); await shot('after2'); });
+console.log(report.join('\n')); console.log('errors',JSON.stringify(errs)); await b.close();

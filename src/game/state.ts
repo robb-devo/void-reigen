@@ -8,7 +8,8 @@ export const canLearn = (id: string) => { const d = SKILLS.find(x => x.id === id
 export function learn(id: string) { if (!canLearn(id)) return false; S.skills.push(id); return true; }
 export function gainXp(n: number) { const a = cmdLevel().lv; S.xp += n; return cmdLevel().lv - a; }
 /** 0 = day … 1 = deep night. 6-minute cycle driven by play time, so the first minutes are always daylight. */
-export const nightness = () => { const ph = (S.played / 360 + .8) % 1; return Math.max(0, Math.min(1, (Math.cos(ph * Math.PI * 2) * -1 - .1) * 1.6)); };
+export const nightPhase = () => { const o = (globalThis as { __night?: number }).__night; return o !== undefined ? .5 * o : (S.played / 360 + .8) % 1; };
+export const nightness = () => { const o = (globalThis as { __night?: number }).__night; if (o !== undefined) return o; const ph = (S.played / 360 + .8) % 1; return Math.max(0, Math.min(1, (Math.cos(ph * Math.PI * 2) * -1 - .1) * 1.6)); };
 export const avail = (d: { sector?: number }) => (d.sector || 1) <= sector();
 export const techAvail = (t: { tgt: number; res: Res }) => (t.tgt < 0 || avail(MINES[t.tgt])) && (t.res !== 'exotic' || sector() >= 2);
 export type Mine = { n: number; p: number; m: boolean; run: boolean };

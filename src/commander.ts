@@ -7,7 +7,11 @@ const PORTRAIT = `<svg viewBox="0 0 64 64"><defs><linearGradient id="cv1" x1="0"
 <rect x="29" y="4" width="6" height="8" rx="2" fill="#ff5b5b" stroke="#24163a" stroke-width="2.5"/></svg>`;
 type Beat = { t: string; h?: string };
 let el: HTMLElement | null = null, queue: { id: string; beats: Beat[]; skip?: boolean; done?: () => void }[] = [], cur: typeof queue[0] | null = null, bi = 0, typer = 0;
-export const talking = () => !!cur;
+export let lastTalk = 0;
+export const talking = () => !!cur || performance.now() - lastTalk < 600;
+/** Overlay manager hook: while gate() is true (a modal / skill tree is up) Vex is held off-screen and resumes after. */
+let gate = () => false; export const setGate = (f: () => boolean) => { gate = f; };
+setInterval(() => { if (!el) return; const held = !!cur && gate(); el.classList.toggle('held', held); document.body.classList.toggle('vex', !!cur && !held); }, 120);
 export function say(id: string, beats: (string | Beat)[], o: { skip?: boolean; done?: () => void } = {}) {
   if (queue.some(q => q.id === id) || cur?.id === id) return;
   queue.push({ id, beats: beats.map(b => typeof b === 'string' ? { t: b } : b), ...o }); if (!cur) next();
@@ -20,7 +24,7 @@ function next() {
 function show() {
   const b = cur!.beats[bi]; const last = bi === cur!.beats.length - 1;
   el!.innerHTML = `<div class="cport">${PORTRAIT}</div><div class="cbub"><div class="cname">CMDR. VEX</div>${b.h ? `<div class="chead">${b.h}</div>` : ''}<p></p><div class="cfoot">${cur!.skip && !last ? '<button data-skip>Skip intro</button>' : '<span></span>'}<b>${last ? 'Got it' : 'Next'} ›</b></div><div class="cdots">${cur!.beats.length > 1 ? cur!.beats.map((_, k) => `<i class="${k === bi ? 'on' : ''}"></i>`).join('') : ''}</div></div>`;
-  el!.classList.add('open'); el!.classList.remove('bump'); void el!.offsetWidth; el!.classList.add('bump');
+  el!.classList.add('open'); document.body.classList.toggle('vex', !gate()); el!.classList.remove('bump'); void el!.offsetWidth; el!.classList.add('bump');
   const p = el!.querySelector('p')!; let n = 0; clearInterval(typer); sfx.select();
   typer = window.setInterval(() => { n += 2; p.innerHTML = b.t.slice(0, n); if (n % 8 === 0) sfx.blip(); if (n >= b.t.length) { clearInterval(typer); p.innerHTML = b.t; } }, 16);
 }
@@ -29,4 +33,4 @@ function advance() {
   if (p.innerHTML.length < b.t.length) { clearInterval(typer); p.innerHTML = b.t; return; }
   if (bi < cur!.beats.length - 1) { bi++; show(); } else finish();
 }
-function finish() { clearInterval(typer); const d = cur?.done; el!.classList.remove('open'); cur = null; d?.(); setTimeout(next, 350); }
+function finish() { clearInterval(typer); lastTalk = performance.now(); document.body.classList.remove('vex'); const d = cur?.done; el!.classList.remove('open'); cur = null; d?.(); setTimeout(next, 350); }

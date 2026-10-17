@@ -22,29 +22,32 @@ function v(o: V) {
   if (S.mute) return; const c = ac(); if (c.state === 'suspended') c.resume();
   const t = c.currentTime + (o.at || 0), d = o.d ?? .08, os = c.createOscillator(), g = c.createGain();
   os.type = o.type || 'sine'; os.frequency.setValueAtTime(o.f, t); if (o.to) os.frequency.exponentialRampToValueAtTime(Math.max(20, o.to), t + d * .9);
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(o.vol ?? .2, t + (o.att ?? .004)); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime((o.vol ?? .2) * trim, t + (o.att ?? .004)); g.gain.exponentialRampToValueAtTime(.0001, t + d);
   os.connect(g); g.connect(bus(o.bus || 'ui')); if (o.wet && send) g.connect(send); os.start(t); os.stop(t + d + .03);
 }
 function noise(d = 0.3, vol = 0.08, freq = 800, at = 0, b: Bus = 'world', q = 1) {
   if (S.mute) return; const c = ac(); const t = c.currentTime + at; const buf = c.createBuffer(1, Math.ceil(c.sampleRate * d), c.sampleRate), a = buf.getChannelData(0); for (let k = 0; k < a.length; k++) a[k] = Math.random() * 2 - 1;
-  const src = c.createBufferSource(); src.buffer = buf; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  const src = c.createBufferSource(); src.buffer = buf; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(vol * trim, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
   src.connect(f).connect(g).connect(bus(b)); src.start(t); src.stop(t + d + .02);
 }
 // building blocks
-const pop = (f = 520, at = 0, vol = .32, b: Bus = 'ui') => { v({ f: f * 1.9, to: f * .7, d: .09, type: 'sine', vol, at, bus: b }); v({ f: f * 4, to: f * 2, d: .025, type: 'triangle', vol: vol * .25, at, bus: b }); };
-const click = (at = 0, vol = .12) => noise(.018, vol, 3800, at, 'ui', 2.5);
-const chime = (f: number, at = 0, vol = .14) => { v({ f, d: .32, type: 'sine', vol, at, bus: 'reward', wet: true }); v({ f: f * 2.76, d: .12, type: 'sine', vol: vol * .35, at, bus: 'reward', wet: true }); v({ f: f * 5.4, d: .05, type: 'sine', vol: vol * .15, at, bus: 'reward' }); };
+const pop = (f = 520, at = 0, vol = .32, b: Bus = 'ui') => { v({ f: f * 1.9, to: f * .7, d: .09, type: 'sine', vol, at, bus: b }); v({ f: f * 4, to: f * 2, d: .03, type: 'triangle', vol: vol * .45, at, bus: b }); };
+const click = (at = 0, vol = .12) => { noise(.016, vol * 6, 6500, at, 'ui', .9); v({ f: 3200, to: 2200, d: .012, type: 'triangle', vol: vol * .9, at, att: .001 }); };
+const chime = (f: number, at = 0, vol = .14) => { noise(.02, vol * .5, 9000, at, 'reward', 2); v({ f, d: .32, type: 'sine', vol, at, bus: 'reward', wet: true }); v({ f: f * 2.76, d: .12, type: 'sine', vol: vol * .35, at, bus: 'reward', wet: true }); v({ f: f * 5.4, d: .05, type: 'sine', vol: vol * .15, at, bus: 'reward' }); };
 const kick = (at = 0, vol = .5) => v({ f: 160, to: 45, d: .16, type: 'sine', vol, at, bus: 'world', att: .002 });
 const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
 const st2 = (base: number, k: number) => base * Math.pow(2, PENTA[Math.min(PENTA.length - 1, k)] / 12);
+let trim = 1;
+// loudness trims from the offline analysis (audio_an.py): keeps every SFX in its category's LU window
+export const TRIM: Record<string, number> = {blip: 16, build: 1.549, buy: 2.917, claim: 1.641, clank: 3.83, coin: 3.548, drill: 6.457, fanfare: 2.318, land: 1.273, launch: 5.433, lode: 1.659, no: 7.079, rank: 1.84, select: 2.917, tap: 5.433, warp: 1.758};
 let lastCoin = 0, combo = 0, comboT = 0, lastFan = 0, lastBlip = 0;
-export const sfx = {
+const raw = {
   tap: () => { click(0, .1); pop(620, 0, .16); },
   select: () => { click(0, .1); pop(440, 0, .24); pop(880, .045, .12); },
   drill: () => { pop(300, 0, .28, 'world'); noise(.07, .07, 1800, 0, 'world', 1.2); v({ f: 90, to: 60, d: .12, type: 'square', vol: .03, bus: 'world' }); },
   coin: () => { const n = performance.now(); if (n - lastCoin < 70) return; combo = n - comboT < 700 ? Math.min(combo + 1, 10) : 0; comboT = n; lastCoin = n; chime(st2(1046, combo), 0, .1); },
   buy: () => { pop(500, 0, .3); chime(1318, .04, .08); },
-  no: () => { v({ f: 220, to: 150, d: .12, type: 'square', vol: .05 }); v({ f: 180, to: 120, d: .14, type: 'square', vol: .05, at: .09 }); },
+  no: () => { v({ f: 330, to: 220, d: .12, type: 'square', vol: .05 }); v({ f: 280, to: 190, d: .14, type: 'square', vol: .05, at: .09 }); },
   fanfare: () => { const n = performance.now(); if (n - lastFan < 350) return; lastFan = n; kick(0, .35); [523, 659, 784, 1047].forEach((f, k) => { v({ f, d: .28, type: 'triangle', vol: .12, at: k * .075, bus: 'reward', wet: true }); }); chime(2093, .32, .1); },
   claim: () => { kick(0, .4); for (let k = 0; k < 6; k++) chime(st2(784, k + 2), k * .045, .08); pop(392, .3, .25, 'reward'); chime(1568, .34, .14); },
   launch: () => { noise(.9, .12, 500, 0, 'world', .7); v({ f: 70, to: 260, d: .8, type: 'sawtooth', vol: .04, bus: 'world' }); kick(0, .4); },
@@ -52,10 +55,12 @@ export const sfx = {
   clank: () => { click(0, .14); v({ f: 900, to: 600, d: .03, type: 'square', vol: .03 }); },
   blip: () => { const n = performance.now(); if (n - lastBlip < 45) return; lastBlip = n; v({ f: 700 + Math.random() * 300, d: .03, type: 'triangle', vol: .05 }); },
   build: () => { for (let k = 0; k < 3; k++) { click(k * .2, .16); v({ f: 240 - k * 20, to: 140, d: .06, type: 'square', vol: .04, at: k * .2, bus: 'world' }); } kick(.85, .5); [784, 988, 1319, 1568].forEach((f, k) => chime(f, .88 + k * .055, .1)); },
-  land: () => { noise(.6, .07, 400, 0, 'world', .8); v({ f: 420, to: 140, d: .8, type: 'sine', vol: .05, bus: 'world' }); kick(1.4, .45); pop(260, 1.42, .2, 'world'); },
+  land: () => { noise(.6, .07, 400, 0, 'world', .8); v({ f: 420, to: 140, d: .8, type: 'sine', vol: .05, bus: 'world' }); kick(1.4, .3); pop(380, 1.42, .3, 'world'); click(1.42, .2); },
   lode: () => { kick(0, .5); for (let k = 0; k < 8; k++) chime(st2(1046, k + 1), k * .035, .09); },
   rank: () => { kick(0, .5); [392, 523, 659, 784, 1047].forEach((f, k) => v({ f, d: .35, type: 'triangle', vol: .12, at: k * .07, bus: 'reward', wet: true })); chime(2093, .4, .14); chime(2637, .48, .1); },
 };
+export const sfx = Object.fromEntries(Object.entries(raw).map(([k, fn]) => [k, () => { trim = TRIM[k] ?? 1; try { fn(); } finally { trim = 1; } }])) as typeof raw;
+
 export const buzz = (p: number | number[]) => { try { if ((navigator as any).userActivation?.hasBeenActive === false) return; navigator.vibrate?.(p); } catch {} };
 
 // ---------- canvas particles ----------
@@ -89,8 +94,16 @@ export function stepFx(dt: number, t: number) {
 let popN = 0;
 export function popup(x: number, y: number, txt: string, color?: string) { if (popN > 14) return; popN++; setTimeout(() => popN--, 900); const d = document.createElement('div'); d.className = 'pop'; d.textContent = txt; d.style.left = x + 'px'; d.style.top = y + 'px'; if (color) d.style.color = color; document.body.appendChild(d); setTimeout(() => d.remove(), 900); }
 const tq: string[] = []; let tbusy = false;
-function nextToast() { const t = tq.shift(); if (!t) { tbusy = false; return; } tbusy = true; document.querySelectorAll('.toast').forEach(e => e.remove()); const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2400); setTimeout(nextToast, tq.length ? 1100 : 2000); }
+let toastGate = () => false; export const setToastGate = (f: () => boolean) => { toastGate = f; };
+function nextToast() { if (tq.length && toastGate()) { tbusy = true; setTimeout(nextToast, 400); return; } const t = tq.shift(); if (!t) { tbusy = false; return; } tbusy = true; document.querySelectorAll('.toast').forEach(e => e.remove()); const d = document.createElement('div'); d.className = 'toast'; d.innerHTML = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2400); setTimeout(nextToast, tq.length ? 1100 : 2000); }
 export function toast(t: string) { if (tq.includes(t)) return; if (tq.length > 3) tq.shift(); tq.push(t); if (!tbusy) nextToast(); }
 let lastRocket = 0;
-export function rocket(x: number, y: number, force = false) { const n = performance.now(); if (!force && n - lastRocket < 700) return; lastRocket = n; const d = document.createElement('div'); d.className = 'rocket'; d.textContent = '🚀'; d.style.left = x + 'px'; d.style.top = y + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1400); for (let k = 0; k < 8; k++) setTimeout(() => burst(x, y + 10 - k * 18, 3, 0, k % 2 ? '#ff9f43' : '#ffd84a'), k * 40); }
+export function rocket(x: number, y: number, force = false) { const n = performance.now(); if (!force && n - lastRocket < 700) return; lastRocket = n; const d = document.createElement('div'); d.className = 'rocket'; d.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 2c4 3 5 8 3 13H9C7 10 8 5 12 2z" fill="#eef2ff" stroke="#24163a" stroke-width="2"/><circle cx="12" cy="9" r="2" fill="#5cf2ff" stroke="#24163a" stroke-width="1.5"/><path d="M9 13l-3 4h3M15 13l3 4h-3" fill="#ff5b5b" stroke="#24163a" stroke-width="1.5"/><path d="M10 16l2 5 2-5" fill="#ffb23f"/></svg>'; d.style.left = x + 'px'; d.style.top = y + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1400); for (let k = 0; k < 8; k++) setTimeout(() => burst(x, y + 10 - k * 18, 3, 0, k % 2 ? '#ff9f43' : '#ffd84a'), k * 40); }
 export function flash() { const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:70;background:radial-gradient(circle,#fff,#7ee8ff 40%,#4a2f9a);pointer-events:none;transition:opacity 1.2s'; document.body.appendChild(d); requestAnimationFrame(() => requestAnimationFrame(() => d.style.opacity = '0')); setTimeout(() => d.remove(), 1300); }
+/** Dev/QA: render one SFX offline (for loudness/spectrum analysis). */
+export async function renderSfx(name: keyof typeof sfx, secs = 2, rate = 44100) {
+  const keepAC = AC, keepB = buses, keepS = send, keepM = S.mute;
+  AC = new OfflineAudioContext(1, Math.ceil(secs * rate), rate) as unknown as AudioContext; buses = null; send = null; S.mute = false;
+  try { (sfx[name] as () => void)(); return (await (AC as unknown as OfflineAudioContext).startRendering()).getChannelData(0); }
+  finally { AC = keepAC; buses = keepB; send = keepS; S.mute = keepM; }
+}
