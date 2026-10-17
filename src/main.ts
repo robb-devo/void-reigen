@@ -146,7 +146,7 @@ function updateMine() {
 let ySeg = 0;
 let bv: BaseView | null = null; let bwrap: HTMLElement | null = null; let sheetKey: string | null = null; let lastDrone = 0;
 function renderBase() {
-  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); bv.z = Math.max(.62, Math.min(.95, 1 - SLOTS.filter(x => visible(x) === 'built').length * .03)); bv.onTap = baseTap; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`);
+  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); bv.z = Math.max(.62, Math.min(.95, 1 - SLOTS.filter(x => visible(x) === 'built').length * .03)); bv.onTap = baseTap; bv.onProp = (k, r) => { (r ? [sfx.pMetal, sfx.pBarrel, sfx.pRadar, sfx.pMetal] : [sfx.pLamp, sfx.pCrystal, sfx.pFlag, sfx.pBarrel])[k](); buzz(8); }; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`);
     bv.onConstruct = () => sfx.build();
     bv.onTravel = () => { sfx.land(); };
     const sh = $('#sheet'); let y0 = -1; sh.addEventListener('pointerdown', e => { y0 = e.clientY; }); sh.addEventListener('pointerup', e => { if (y0 < 0) return; const dy = e.clientY - y0; y0 = -1; if (dy < -30) { sh.classList.remove('compact'); sfx.select(); } else if (dy > 40) { if (sh.classList.contains('compact')) closeSheet(); else sh.classList.add('compact'); sfx.select(); } }); }
