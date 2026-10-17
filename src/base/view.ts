@@ -139,7 +139,7 @@ export class BaseView {
   }
   // ---- visiting trader (mining rock): lands, opens its ramp, waits, lifts off ----
   trader: { gx: number; gy: number; t: number; st: 0 | 1 | 2; lt: number; left: number } | null = null; onTrader: () => void = () => {}; onTraderLand: () => void = () => {};
-  traderCome() { if (this.trader || this.rock) return false; const p = this.freeSpot(.7, 1.5, 7.5); if (!p) return false; { const [x, y] = iso(p[0], p[1]); this.cam = { x: this.w / 2 - x * this.z, y: this.h * .6 - y * this.z, z: this.z }; } this.trader = { gx: p[0], gy: p[1], t: this.t, st: 0, lt: 0, left: 1 }; return true; }
+  traderCome(pan = true) { if (this.trader || this.rock) return false; const p = this.freeSpot(.7, 1.5, 7.5); if (!p) return false; if (pan) { const [x, y] = iso(p[0], p[1]); this.cam = { x: this.w / 2 - x * this.z, y: this.h * .6 - y * this.z, z: this.z }; } this.trader = { gx: p[0], gy: p[1], t: this.t, st: 0, lt: 0, left: 1 }; return true; }
   traderGo() { if (this.trader && this.trader.st !== 2) { this.trader.st = 2; this.trader.lt = this.t; } }
   private traderPose() { const tr = this.trader!, [x, y] = iso(tr.gx, tr.gy), t = this.t;
     if (tr.st === 0) { const f = Math.min(1, (t - tr.t) / 2.4), e = 1 - Math.pow(1 - f, 3); return { x: x + 170 * (1 - e), y, alt: 540 * (1 - e), flame: 1, legs: Math.max(0, (f - .55) / .45), ramp: 0, f }; }

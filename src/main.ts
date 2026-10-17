@@ -654,7 +654,7 @@ setInterval(() => {
 // A cargo hauler lands for 2 minutes with three one-off deals: a swap aimed at what you're short of, a ×2 income
 // boost paid in goods, and a rotating third slot (ore surge or rare cargo for cash). Taking all three sends it off early.
 const TRADER_STAY = 120; let offers: EV.Offer[] = [], traderEnd = 0, traderMod: HTMLElement | null = null;
-function traderArrive() { if (!bv || !bv.traderCome()) return false; lastEv = 'trader'; offers = EV.traderOffers(); traderEnd = 0; sfx.launch(); buzz(10);
+function traderArrive() { if (!bv || !bv.traderCome(!document.querySelector('#sheet.open'))) return false; lastEv = 'trader'; offers = EV.traderOffers(); traderEnd = 0; sfx.launch(); buzz(10);
   if (seen('trader')) toast(`${I.coin} A trader is landing – tap the ship to deal`); return true; }
 function traderLanded() { sfx.land2(); sfx.clank(); buzz([20, 30]); traderEnd = performance.now() + TRADER_STAY * 1e3;
   if (!seen('trader')) intro('trader', [{ h: 'VOID TRADER', t: 'A trader just docked! Tap the ship for <b>one-time deals</b> – goods you\'re short of and <b>income boosts</b>. It leaves in 2 minutes.' }]);
