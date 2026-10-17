@@ -62,7 +62,14 @@ const activeOf = (sl: Slot) => sl.kind === 'mine' ? (G.S.mines[sl.idx].m || G.S.
 type Drone = { a: [number, number]; b: [number, number]; t: number; col: string; done?: () => void };
 type Puff = { x: number; y: number; t: number; c: string };
 type Ship = { x: number; y: number; vy: number; t: number; dir: 1 | -1; sc: number };
-type Sprite = { cv: HTMLCanvasElement; k: number };
+type Sprite = { cv: HTMLCanvasElement; k: number; bx: number; by: number };
+/** Crop a baked sprite to its opaque bounds: most of the 240×300 bake box is empty, and blitting empty pixels isn't free. */
+function trim(cv: HTMLCanvasElement): [HTMLCanvasElement, number, number] {
+  const g = cv.getContext('2d')!, { width: W, height: H } = cv, d = g.getImageData(0, 0, W, H).data; let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 2) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return [cv, 0, 0]; x0 = Math.max(0, x0 - 1); y0 = Math.max(0, y0 - 1); const w = Math.min(W, x1 + 2) - x0, h = Math.min(H, y1 + 2) - y0;
+  const o = document.createElement('canvas'); o.width = w; o.height = h; o.getContext('2d')!.drawImage(cv, x0, y0, w, h, 0, 0, w, h); return [o, x0, y0];
+}
 export class BaseView {
   cv: HTMLCanvasElement; c: CanvasRenderingContext2D; z = 0.66; ox = 0; oy = 0; dpr = Math.min(1.5, devicePixelRatio || 1);
   w = 0; h = 0; sel: string | null = null; guide: string | null = null; drones: Drone[] = []; puffs: Puff[] = []; t = 0;
@@ -361,8 +368,8 @@ export class BaseView {
   private building(sl: Slot, x: number, y: number) {
     const c = this.c, tr = tier(sl), act = !!activeOf(sl), id = idOf(sl), k = Math.max(.5, Math.round(this.z * this.dpr * 4) / 4);
     const key = `${id}|${tr}|${k}`; let sp = this.sprites.get(key);
-    if (!sp) { const W = 240, H = 300, cv = document.createElement('canvas'); cv.width = Math.ceil(W * k); cv.height = Math.ceil(H * k); const g = cv.getContext('2d')!; g.setTransform(k, 0, 0, k, W / 2 * k, 240 * k); bakeShadow(g, sl.s); drawBuilding(g, 0, sl.kind, id, hueOf(sl), tr, 0, 0, sl.s, 0, act, accentOf(sl)); sp = { cv, k }; if (this.sprites.size > 120) this.sprites.clear(); this.sprites.set(key, sp); }
-    c.drawImage(sp.cv, x - 120, y - 240, 240, 300);
+    if (!sp) { const W = 240, H = 300, cv = document.createElement('canvas'); cv.width = Math.ceil(W * k); cv.height = Math.ceil(H * k); const g = cv.getContext('2d')!; g.setTransform(k, 0, 0, k, W / 2 * k, 240 * k); bakeShadow(g, sl.s); drawBuilding(g, 0, sl.kind, id, hueOf(sl), tr, 0, 0, sl.s, 0, act, accentOf(sl)); const [tc, bx, by] = trim(cv); sp = { cv: tc, k, bx, by }; if (this.sprites.size > 120) this.sprites.clear(); this.sprites.set(key, sp); }
+    c.drawImage(sp.cv, x - 120 + sp.bx / sp.k, y - 240 + sp.by / sp.k, sp.cv.width / sp.k, sp.cv.height / sp.k);
     drawBuilding(c, 1, sl.kind, id, hueOf(sl), tr, x, y, sl.s, this.t + sl.gx * .37, act, accentOf(sl));
   }
   private decorKey = ''; private decorList: [number, number, number][] = [];
