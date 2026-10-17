@@ -1,3 +1,4 @@
+import { vibrate } from '../native';
 import { S } from './state';
 // ---------- Sound: one consistent, poppy synth kit ----------
 // Mix buses: ui (taps/selects), reward (coins/claims), world (machines, ships), each into a soft
@@ -73,7 +74,7 @@ const raw = {
 };
 export const sfx = Object.fromEntries(Object.entries(raw).map(([k, fn]) => [k, () => { trim = TRIM[k] ?? 1; try { fn(); } finally { trim = 1; } }])) as typeof raw;
 
-export const buzz = (p: number | number[]) => { try { if ((navigator as any).userActivation?.hasBeenActive === false) return; navigator.vibrate?.(p); } catch {} };
+export const buzz = (p: number | number[]) => { try { if ((navigator as any).userActivation?.hasBeenActive === false) return; vibrate(p); } catch {} }; // native haptics in the app, navigator.vibrate on the web
 
 // ---------- canvas particles ----------
 type P = { x: number; y: number; vx: number; vy: number; l: number; ml: number; k: number; c: string; s: number; tx?: number; ty?: number; done?: () => void };

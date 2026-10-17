@@ -14,6 +14,7 @@ import { renderSfx, setToastGate, setTapStep } from './game/fx';
 import { SKILLS, BRANCHES, LEVEL_GATE, XP } from './game/skills';
 import { TIER_NAMES } from './base/render';
 import { say, talking, setGate } from './commander';
+import { isNative, mirrorNow } from './native';
 import { sfx, buzz, initFx, stepFx, burst, fly, popup, toast, rocket, flash } from './game/fx';
 
 const rawSave = localStorage.getItem(G.KEY); G.load(); G.migrateSeen(rawSave);
@@ -548,9 +549,9 @@ $('#back').addEventListener('click', () => { sfx.tap(); setTab('base'); });
 setTab('base'); disclose(); offline(); setTimeout(storyIntro, 600); requestAnimationFrame(frame);
 // never autosave while hidden: it would stamp `last` = now and the time spent in the background would be lost on return
 setInterval(() => { if (!document.hidden) G.save(); }, 5000);
-addEventListener('visibilitychange', () => { if (document.hidden) G.save(); else { prev = performance.now(); offline(); } });
+addEventListener('visibilitychange', () => { if (document.hidden) { G.save(); mirrorNow(G.KEY); } else { prev = performance.now(); offline(); } });
 addEventListener('pagehide', G.save);
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('./sw.js').catch(() => {});
+if (!isNative && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('./sw.js').catch(() => {});
 void MILESTONES;
 
 // ---------- Commander rank + skill tree ----------

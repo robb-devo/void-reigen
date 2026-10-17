@@ -1,3 +1,4 @@
+import { mirrorSave } from '../native';
 import { MINES, MILESTONES, MACHINES, TECH, SHIPS, PLANETS, RUNS, RES, RES_ORDER, GEN, FLEET_UPG, GATES, Res } from './data';
 import { SKILLS, levelOf, LEVEL_GATE } from './skills';
 export const sector = () => S.warps + 1;
@@ -36,7 +37,7 @@ export let clock = () => Date.now();
 export function setClock(f: () => number) { clock = f; }
 export function load() { try { const r = localStorage.getItem(KEY); if (r) { const o = JSON.parse(r); const f = fresh(); S = { ...f, ...o, res: { ...f.res, ...o.res }, made: { ...f.made, ...o.made }, fstock: { ...f.fstock, ...(o.fstock || {}) } }; if ((o.gv ?? 1) < 3) { const g = o.goal | 0; S.goal = g <= 13 ? g : g <= 16 ? g + 1 : g === 17 ? 20 : g <= 19 ? 21 : g === 20 ? 22 : g + 6; S.gv = 3; } if (!o.fstock && o.ships && Object.keys(o.ships).length) for (const r of FLEET_RES) { S.fstock[r] = S.res[r] * .5; S.res[r] *= .5; } if (!Array.isArray(S.skills)) S.skills = []; if (typeof S.xp !== 'number') S.xp = 0; while (S.mach.length < MACHINES.length) { S.mach.push(0); S.on.push(true); } while (S.w.length < MACHINES.length) S.w.push(50); while (S.mines.length < MINES.length) S.mines.push({ n: 0, p: 0, m: false, run: false }); clockGuard(); } } catch { S = fresh(); } }
 export function migrateSeen(raw: string | null) { if (!raw) return; try { const o = JSON.parse(raw); if (!o.seen && (o.life > 0 || o.warps)) { S.seen = ['intro', 'factory', 'power', 'lab', 'export', 'foreman', 'tiers']; if (fleetOpen()) S.seen.push('fleet'); if (warpOpen() || o.warps) S.seen.push('warp'); } } catch {} }
-export function save() { S.last = clock(); S.hw = Math.max(S.hw || 0, Date.now()); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
+export function save() { S.last = clock(); S.hw = Math.max(S.hw || 0, Date.now()); try { const j = JSON.stringify(S); localStorage.setItem(KEY, j); mirrorSave(KEY, j); } catch {} }
 export function setS(n: State) { S = n; }
 
 // ---------- mines ----------
