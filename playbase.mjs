@@ -9,6 +9,14 @@ let step='', stepT=Date.now(); const S_=n=>{step=n;stepT=Date.now()}; setInterva
 while(Date.now()-t0<T*1000){ S_('top');
   const cm=await p.$('.cmdr.open .cbub'); if(cm){ if(HUMAN) await p.waitForTimeout(2600); await cm.evaluate(e=>e.click()).catch(()=>{}); await p.waitForTimeout(250); if(mi<marks.length && Date.now()-t0>marks[mi]*1000){ await p.screenshot({path:`shots/pb-${String(marks[mi]).padStart(3,'0')}s.png`}); mi++; } continue; }
   const dc=await p.$('#dopen:not([disabled])'); if(dc){ log&&typeof log.push==='function'&&log.push(`${Math.round((Date.now()-t0)/1000)}s [daily crate]`); await dc.evaluate(e=>e.click()); await p.waitForTimeout(900); const d2=await p.$('#dopen:not([disabled])'); if(d2) await d2.evaluate(e=>e.click()); await p.waitForTimeout(300); continue; }
+  { const ev=await p.evaluate(()=>{const v=window.bv; if(!v) return null; const r=v.cv.getBoundingClientRect(), P=(gx,gy,dy)=>[r.left+v.ox+v.z*(gx-gy)*36, r.top+v.oy+v.z*((gx+gy)*18+dy)];
+      const t=v.trader&&v.trader.st===1&&!window.__pbTraded? P(v.trader.gx,v.trader.gy,-40):null, m=v.meteors.find(m=>m.st===1&&m.rock===v.rock), w=v.wreckE&&v.wreckE.st===1&&v.rock===1? P(v.wreckE.gx,v.wreckE.gy,-20):null;
+      return {t, m:m?P(m.gx,m.gy,-8):null, w};});
+    if(ev&&(ev.t||ev.m||ev.w)&&!await p.$('.modal')){ const at=Math.round((Date.now()-t0)/1000)+'s';
+      if(ev.t){ log.push(at+' [trader]'); await p.touchscreen.tap(...ev.t); await p.waitForTimeout(HUMAN?1500:400); for(const b2 of await p.$$('.trade [data-take]:not([disabled])')){ await b2.click({force:true}).catch(()=>{}); await p.waitForTimeout(HUMAN?700:200);} const x=await p.$('.trade [data-x]'); if(x) await x.click({force:true}).catch(()=>{}); await p.evaluate(()=>{window.__pbTraded=1}); log.push(at+' [trades '+await p.evaluate(()=>window.G.S.trades)+']'); }
+      else if(ev.m){ log.push(at+' [meteor]'); await p.touchscreen.tap(...ev.m); await p.waitForTimeout(HUMAN?300:100); }
+      else if(ev.w){ await p.touchscreen.tap(...ev.w); await p.waitForTimeout(HUMAN?250:80); }
+      continue; } }
   const c=await p.$('#claim'); if(c){ log.push(`${Math.round((Date.now()-t0)/1000)}s ${await p.$eval('.gm b',e=>e.textContent)}`); if(HUMAN) await p.waitForTimeout(900); await c.click({force:true}).catch(()=>{}); await p.waitForTimeout(200); continue; }
   S_('go'); const go=await p.$('[data-go]'); if(go && Date.now()>skip && await go.getAttribute('data-go').catch(()=>'base')!=='base'){ await go.click({force:true}).catch(()=>{}); await p.waitForTimeout(300); const bs=await p.$$('.coach:not([disabled])'); if(bs.length) await bs[0].click({force:true}).catch(()=>{}); else skip=Date.now()+8000; await p.tap('nav button[data-t=base]',{force:true}); continue; }
   S_('nav'); if(await p.$eval('nav button.on',e=>e.dataset.t)!=='base') await p.tap('nav button[data-t=base]',{force:true});

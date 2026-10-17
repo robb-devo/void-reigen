@@ -657,7 +657,8 @@ const TRADER_STAY = 120; let offers: EV.Offer[] = [], traderEnd = 0, traderMod: 
 function traderArrive() { if (!bv || !bv.traderCome()) return false; lastEv = 'trader'; offers = EV.traderOffers(); traderEnd = 0; sfx.launch(); buzz(10);
   if (seen('trader')) toast(`${I.coin} A trader is landing – tap the ship to deal`); return true; }
 function traderLanded() { sfx.land2(); sfx.clank(); buzz([20, 30]); traderEnd = performance.now() + TRADER_STAY * 1e3;
-  if (!seen('trader')) intro('trader', [{ h: 'VOID TRADER', t: 'A trader just docked! Tap the ship for <b>one-time deals</b> – goods you\'re short of and <b>income boosts</b>. It leaves in 2 minutes.' }]); }
+  if (!seen('trader')) intro('trader', [{ h: 'VOID TRADER', t: 'A trader just docked! Tap the ship for <b>one-time deals</b> – goods you\'re short of and <b>income boosts</b>. It leaves in 2 minutes.' }]);
+  if (!seen('trader')) toast(`${I.coin} A trader docked – tap the ship to deal`); } // intro was blocked by an open panel
 function traderLeave() { if (!bv?.trader) return; traderMod?.remove(); traderMod = null; bv.traderGo(); setTimeout(() => { sfx.launch(); if (bv) bv.shake = Math.max(bv.shake, .1); }, 350); }
 const goodHTML = (r: Res, n: number) => `<span class="tg" style="--c:${RES[r].color}">${ri(r)}<b>${fmt(n)}</b><small>${RES[r].name}</small></span>`;
 const offerSide = (o: EV.Offer, give: boolean) => { if (give) return o.give.r ? goodHTML(o.give.r, o.give.n) : `<span class="tg" style="--c:#ffd23f">${I.coin}<b>$${fmt(o.give.cash!)}</b><small>Cash</small></span>`;
@@ -702,7 +703,7 @@ setInterval(() => { if (!bv) return; const now = performance.now();
   if (document.hidden || tab !== 'base' || !G.fleetOpen() || !seen('rock2') || bv.travelT !== -1) { nextWreck = Math.max(nextWreck, now + 15e3); return; }
   if (now < nextWreck || bv.wreckE) return; if (talking() || document.querySelector('.modal, .tree')) { nextWreck = now + 8e3; return; }
   nextWreck = now + (5 + Math.random() * 3) * 60e3; wreckBorn = now; const here = bv.rock === 1; bv.wreckCome(!here);
-  if (here) { if (!seen('wreck')) intro('wreck', [{ h: 'DERELICT', t: 'A derelict just crashed into the ice! <b>Tap it 5 times</b> to strip it for cash and fleet goods.' }]); else toast(`${I.boom} A derelict crashed – tap it to salvage!`); }
+  if (here) { const was = seen('wreck'); if (!was) intro('wreck', [{ h: 'DERELICT', t: 'A derelict just crashed into the ice! <b>Tap it 5 times</b> to strip it for cash and fleet goods.' }]); if (was || !seen('wreck')) toast(`${I.boom} A derelict crashed – tap it to salvage!`); }
   else toast(`${I.boom} Derelict spotted on the Fleet Rock!`);
 }, 1000);
 (window as any).__wreck = () => { if (bv) { bv.wreckE = null; wreckBorn = performance.now(); bv.wreckCome(bv.rock !== 1); } };
