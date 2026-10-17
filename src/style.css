@@ -467,3 +467,16 @@ body.placing .toast{bottom:calc(var(--sb) + 104px)}
 @keyframes lvban{0%{transform:scale(.3);opacity:0}12%{transform:scale(1.08);opacity:1}20%{transform:scale(1)}85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translateY(-24px) scale(.95)}}
 .lvban .ribbon.gold{background:linear-gradient(105deg,#fff0a0 0%,#ffc93d 40%,#fff6c8 50%,#ffc93d 60%,#f29a17 100%);background-size:300% 100%;animation:shine 1.6s .3s ease-in-out both}
 @keyframes shine{from{background-position:100% 0}to{background-position:0 0}}
+/* screen transition: chevron wipe that reveals the new screen */
+.wipe{position:fixed;inset:-4px -40px;z-index:58;pointer-events:none;animation:wipe .5s cubic-bezier(.55,0,.25,1) forwards}
+.wipe::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(115deg,#ffffff07 0 14px,transparent 14px 34px),linear-gradient(160deg,#3b2b68,#160d2c);clip-path:polygon(0 0,100% 0,100% 100%,0 100%,12% 50%)}
+.wipe i{position:absolute;top:0;bottom:0;left:0;width:16%;background:linear-gradient(90deg,#fff3b0,#ffd23f 60%,#f29a17);clip-path:polygon(0 0,9% 0,84% 50%,9% 100%,0 100%,75% 50%)}
+.wipe.rev{transform:scaleX(-1);animation-name:wiperev}
+@keyframes wipe{0%{transform:translateX(0)}100%{transform:translateX(118%)}}
+@keyframes wiperev{0%{transform:scaleX(-1) translateX(0)}100%{transform:scaleX(-1) translateX(118%)}}
+main.enter>*:nth-child(2){animation-delay:.04s}main.enter>*:nth-child(3){animation-delay:.08s}main.enter>*:nth-child(4){animation-delay:.12s}main.enter>*:nth-child(5){animation-delay:.16s}main.enter>*:nth-child(n+6){animation-delay:.2s}
+/* HUD clarity: soft plate behind the money, pill for the rate */
+header::before{content:'';position:absolute;left:50%;top:calc(var(--st,0px) + 18px);width:260px;height:96px;transform:translateX(-50%);background:radial-gradient(closest-side,#0b0620d0,#0b062000);pointer-events:none;z-index:-1}
+#rate:not(:empty){display:inline-block;padding:1px 10px;border-radius:10px;background:#0a2a2a99;border:1.5px solid #7affd133;line-height:1.35;min-height:0}
+#res .rc{box-shadow:0 2px 0 #0008,inset 0 1px 0 #ffffff1c}
+.buy:disabled{filter:none!important;background:linear-gradient(#5d5184,#43386a)!important;color:#c9c0ee!important;box-shadow:0 4px 0 #1a1030,inset 0 2px 0 #ffffff1c!important}

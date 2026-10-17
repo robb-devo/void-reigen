@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const OUT='shots/r12'; const b = await chromium.launch(); const errs=[];
+const z={ore:0,quartz:0,ingot:0,glass:0,part:0,alloy:0,chip:0,hull:0,exotic:0};
+const mid={v:2,cash:3.2e7,life:9e7,total:0,dm:0,warps:0,mines:[[160,1],[90,1],[64,1],[40,1],[0,0],[0,0],[0,0],[0,0],[0,0]].map(([n,m])=>({n,p:0,m:!!m,run:false})),tech:[],res:{...z,ore:52000,quartz:3000,ingot:900},made:{...z},mach:[38,30,14,6,0,0,0],on:Array(7).fill(true),gen:22,ships:{},conquered:[],missions:[],fupg:{},uid:2,ach:['tap100'],goal:20,taps:640,played:3000,xp:400,seen:['intro','factory','power','lab','export','foreman','tiers','skills','place'],daily:{day:30000101,streak:1,at:Date.now()},last:Date.now()};
+const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+await ctx.addInitScript(s=>{if(!sessionStorage.seed){sessionStorage.seed=1;localStorage.setItem('starforge.v2',s)}},JSON.stringify(mid));
+const p=await ctx.newPage(); p.on('pageerror',e=>errs.push(e.message)); p.on('console',m=>m.type()==='error'&&errs.push(m.text())); await p.goto('http://localhost:4190/'); await p.waitForTimeout(1800);
+await p.screenshot({path:`${OUT}/hud.png`});
+let [x,y]=await p.evaluate(()=>window.bv.slotScreen('m0')); await p.mouse.click(x,y+30); await p.waitForTimeout(500);
+await p.evaluate(()=>document.querySelector('#sheet [data-act=list]').click()); console.log('wipe', await p.evaluate(()=>{const w=document.querySelector('.wipe'); return w? getComputedStyle(w).transform+' '+getComputedStyle(w,'::before').clipPath : 'none'})); await p.waitForTimeout(150); await p.evaluate(()=>{const w=document.querySelector('.wipe'); if(w) w.style.animationPlayState='paused'}); await p.screenshot({path:`${OUT}/trans-1.png`}); await p.waitForTimeout(800);
+await p.evaluate(()=>document.querySelector('#back').click()); await p.waitForTimeout(170); await p.screenshot({path:`${OUT}/trans-2.png`}); await p.waitForTimeout(800);
+console.log('errs',errs); await b.close();
