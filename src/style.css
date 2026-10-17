@@ -480,3 +480,7 @@ header::before{content:'';position:absolute;left:50%;top:calc(var(--st,0px) + 18
 #rate:not(:empty){display:inline-block;padding:1px 10px;border-radius:10px;background:#0a2a2a99;border:1.5px solid #7affd133;line-height:1.35;min-height:0}
 #res .rc{box-shadow:0 2px 0 #0008,inset 0 1px 0 #ffffff1c}
 .buy:disabled{filter:none!important;background:linear-gradient(#5d5184,#43386a)!important;color:#c9c0ee!important;box-shadow:0 4px 0 #1a1030,inset 0 2px 0 #ffffff1c!important}
+.scard .sart2 img{width:70px;height:64px;object-fit:contain;filter:drop-shadow(0 3px 0 #0005)}
+.scard .sart2{background:radial-gradient(circle at 50% 55%,#ffffff2a,#0000 66%),radial-gradient(ellipse 60% 22% at 50% 88%,#0006,#0000)}
+.newrib{position:absolute;top:6px;right:6px;background:linear-gradient(#ff8cc3,#e04694);color:#fff;font:700 10.5px/1 Fredoka;font-style:normal;letter-spacing:.06em;padding:4px 8px 4px 10px;border:2px solid #120a24;border-radius:8px 8px 8px 2px;text-shadow:0 1px 0 #120a24;box-shadow:0 2px 0 #120a24;animation:newbob 1.6s ease-in-out infinite}
+@keyframes newbob{50%{transform:translateY(-2px) rotate(-4deg)}}
