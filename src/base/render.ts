@@ -28,6 +28,15 @@ export function box(c: C, x: number, y: number, hw: number, hh: number, h: numbe
   }
   if (o.panels) { c.strokeStyle = 'rgba(0,0,0,.18)'; c.lineWidth = 1.5; for (let k = 1; k <= o.panels; k++) { const f = k / (o.panels + 1); c.beginPath(); c.moveTo(x - hw + hw * f, y + hh * f); c.lineTo(x - hw + hw * f, y + hh * f - h); c.moveTo(x + hw * f, y + hh - hh * f); c.lineTo(x + hw * f, y + hh - hh * f - h); c.stroke(); } }
   if (o.rivets) { c.fillStyle = 'rgba(255,255,255,.55)'; for (let k = 1; k < 6; k++) { const f = k / 6; c.beginPath(); c.arc(x - hw + hw * f, y + hh * f - h + 4, 1.3, 0, 7); c.fill(); } }
+  if (h > 9) { // material pass: warm key light sheen on the lit wall, cool space-bounce rim on the shadow wall, AO at the foot
+    c.save(); c.beginPath(); c.moveTo(x - hw, y); c.lineTo(x, y + hh); c.lineTo(x, y + hh - h); c.lineTo(x - hw, y - h); c.closePath(); c.clip();
+    const sh = c.createLinearGradient(x - hw, 0, x, 0); sh.addColorStop(0, 'rgba(255,255,255,0)'); sh.addColorStop(.18, 'rgba(255,240,220,.16)'); sh.addColorStop(.3, 'rgba(255,255,255,0)'); c.fillStyle = sh; c.fillRect(x - hw, y - h - hh, hw, h + hh * 2);
+    const ao = c.createLinearGradient(0, y + hh, 0, y + hh - Math.min(h, 22)); ao.addColorStop(0, 'rgba(12,4,30,.35)'); ao.addColorStop(1, 'rgba(12,4,30,0)'); c.fillStyle = ao; c.fillRect(x - hw, y - h - hh, hw * 2, h + hh * 2); c.restore();
+    c.save(); c.beginPath(); c.moveTo(x + hw, y); c.lineTo(x, y + hh); c.lineTo(x, y + hh - h); c.lineTo(x + hw, y - h); c.closePath(); c.clip();
+    const rim = c.createLinearGradient(x + hw, 0, x + hw * .6, 0); rim.addColorStop(0, 'rgba(120,200,255,.42)'); rim.addColorStop(1, 'rgba(120,200,255,0)'); c.fillStyle = rim; c.fillRect(x, y - h - hh, hw, h + hh * 2);
+    c.fillStyle = ao; c.fillRect(x, y - h - hh, hw, h + hh * 2); c.restore();
+    c.beginPath(); c.moveTo(x, y + hh - 2); c.lineTo(x, y + hh - h + 2); c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 1.5; c.stroke();
+  }
   c.lineCap = 'round'; c.beginPath(); c.moveTo(x - hw + 3, y - h); c.lineTo(x, y - hh - h + 2); c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 2; c.stroke();
   c.beginPath(); c.moveTo(x + 2, y - hh - h + 2); c.lineTo(x + hw - 3, y - h); c.strokeStyle = 'rgba(255,230,190,.35)'; c.stroke();
   return y - h;
@@ -36,9 +45,16 @@ export function cyl(c: C, x: number, y: number, r: number, h: number, hue: numbe
   const ry = r / 2;
   c.beginPath(); c.moveTo(x - r, y - h); c.lineTo(x - r, y); c.ellipse(x, y, r, ry, 0, Math.PI, 0, true); c.lineTo(x + r, y - h); c.closePath();
   const g = c.createLinearGradient(x - r, 0, x + r, 0); g.addColorStop(0, hsl(hue, sat, lit - 8)); g.addColorStop(.3, hsl(hue, sat, lit + 10)); g.addColorStop(.55, hsl(hue, sat, lit)); g.addColorStop(1, hsl(hue, sat, lit - 30));
-  c.fillStyle = g; c.fill(); c.lineWidth = 2.5; c.strokeStyle = INK; c.stroke();
+  c.fillStyle = g; c.fill();
+  if (h > 8) { c.save(); c.clip(); // specular streak, cool rim, foot AO
+    c.fillStyle = 'rgba(255,255,255,.32)'; c.fillRect(x - r * .5, y - h - ry, r * .12, h + ry * 2); c.fillStyle = 'rgba(255,255,255,.14)'; c.fillRect(x - r * .33, y - h - ry, r * .06, h + ry * 2);
+    const rim = c.createLinearGradient(x + r, 0, x + r * .55, 0); rim.addColorStop(0, 'rgba(120,200,255,.45)'); rim.addColorStop(1, 'rgba(120,200,255,0)'); c.fillStyle = rim; c.fillRect(x, y - h - ry, r, h + ry * 2);
+    const ao = c.createLinearGradient(0, y + ry, 0, y + ry - Math.min(h, 18)); ao.addColorStop(0, 'rgba(12,4,30,.4)'); ao.addColorStop(1, 'rgba(12,4,30,0)'); c.fillStyle = ao; c.fillRect(x - r, y - h - ry, r * 2, h + ry * 2); c.restore();
+    c.beginPath(); c.moveTo(x - r, y - h); c.lineTo(x - r, y); c.ellipse(x, y, r, ry, 0, Math.PI, 0, true); c.lineTo(x + r, y - h); c.closePath(); }
+  c.lineWidth = 2.5; c.strokeStyle = INK; c.stroke();
   for (let k = 1; k <= bands; k++) { const by = y - h * k / (bands + 1); c.beginPath(); c.ellipse(x, by, r, ry, 0, 0, Math.PI); c.strokeStyle = 'rgba(0,0,0,.3)'; c.lineWidth = 2; c.stroke(); }
   c.beginPath(); c.ellipse(x, y - h, r, ry, 0, 0, Math.PI * 2); c.fillStyle = top || hsl(hue, sat, lit + 14); c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke();
+  if (r > 6 && !top) { c.beginPath(); c.ellipse(x, y - h, r * .72, ry * .72, 0, 0, Math.PI * 2); c.strokeStyle = 'rgba(0,0,0,.16)'; c.lineWidth = 2; c.stroke(); c.beginPath(); c.ellipse(x, y - h, r * .86, ry * .86, 0, Math.PI * 1.1, Math.PI * 1.7); c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1.5; c.stroke(); }
 }
 function cone(c: C, x: number, y: number, r: number, h: number, col: string) {
   c.beginPath(); c.moveTo(x - r, y); c.ellipse(x, y, r, r / 2, 0, Math.PI, 0, true); c.lineTo(x, y - h); c.closePath();
@@ -48,6 +64,7 @@ function dome(c: C, x: number, y: number, r: number, col: string) {
   c.beginPath(); c.ellipse(x, y, r, r / 2, 0, 0, Math.PI); c.arc(x, y, r, 0, Math.PI, true); c.closePath();
   const g = c.createRadialGradient(x - r * .4, y - r * .6, 1, x, y - r * .3, r * 1.2); g.addColorStop(0, '#fff'); g.addColorStop(.25, col); g.addColorStop(1, 'rgba(20,10,50,.8)');
   c.fillStyle = g; c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke();
+  if (r > 5) { c.beginPath(); c.arc(x, y, r * .78, Math.PI * 1.15, Math.PI * 1.45); c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = Math.max(1.5, r * .09); c.lineCap = 'round'; c.stroke(); c.beginPath(); c.arc(x, y, r * .82, Math.PI * 1.7, Math.PI * 1.85); c.strokeStyle = 'rgba(160,220,255,.5)'; c.stroke(); }
 }
 // Glows are the most frequent fill on screen (dozens per frame at night). A radial-gradient fill per call is costly to
 // rasterise without a GPU, so each colour is pre-rendered once into a small sprite and stretched with drawImage.
@@ -79,6 +96,10 @@ export function steam(c: C, x: number, y: number, t: number, col: string, n = 4,
 function pad(c: C, x: number, y: number, hw: number, hh: number, hue: number, tier: number) {
   c.beginPath(); c.ellipse(x + 6, y + 6, hw * 1.08, hh * 1.08, 0, 0, 7); c.fillStyle = 'rgba(20,8,40,.38)'; c.fill();
   box(c, x, y, hw, hh, 7, 235, 18, 46 + tier * 3, { top: tier >= 3 ? lg(c, x - hw, y, x + hw, y, hsl(hue, 35, 66), hsl(hue, 25, 52)) : undefined });
+  c.save(); c.beginPath(); c.moveTo(x - hw, y - 7); c.lineTo(x, y + hh - 7); c.lineTo(x + hw, y - 7); c.lineTo(x, y - hh - 7); c.closePath(); c.clip();
+  c.strokeStyle = 'rgba(0,0,0,.12)'; c.lineWidth = 1; for (let k = -3; k <= 3; k++) { c.beginPath(); c.moveTo(x - hw + (k + 3) * hw / 3.5 - hw * .3, y - 7 - hh); c.lineTo(x - hw + (k + 3) * hw / 3.5 + hw * .7, y - 7 + hh); c.stroke(); }
+  c.restore();
+  c.beginPath(); c.moveTo(x - hw + 4, y - 7); c.lineTo(x, y - 7 - hh + 2); c.lineTo(x + hw - 4, y - 7); c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 1.5; c.stroke();
   if (tier >= 1) { c.fillStyle = 'rgba(255,255,255,.5)'; for (const [dx, dy] of [[-hw * .8, 0], [hw * .8, 0], [0, -hh * .8], [0, hh * .8]]) { c.beginPath(); c.arc(x + dx, y - 7 + dy, 2, 0, 7); c.fill(); } }
   if (tier >= 2) { c.setLineDash([6, 6]); c.beginPath(); c.moveTo(x - hw * .82, y - 7); c.lineTo(x, y - 7 + hh * .82); c.lineTo(x + hw * .82, y - 7); c.strokeStyle = 'rgba(255,210,63,.9)'; c.lineWidth = 2.5; c.stroke(); c.setLineDash([]); }
 }

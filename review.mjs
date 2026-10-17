@@ -1,0 +1,24 @@
+import { chromium } from 'playwright';
+const OUT=process.env.OUT||'shots/r12'; const b = await chromium.launch(); const errs=[];
+const z={ore:0,quartz:0,ingot:0,glass:0,part:0,alloy:0,chip:0,hull:0,exotic:0};
+const mid={v:2,cash:3.2e7,life:9e7,total:0,dm:0,warps:0,mines:[[160,1],[90,1],[64,1],[40,1],[0,0],[0,0],[0,0],[0,0],[0,0]].map(([n,m])=>({n,p:0,m:!!m,run:false})),tech:[],res:{...z,ore:52000,quartz:3000,ingot:900},made:{...z},mach:[38,30,14,6,0,0,0],on:Array(7).fill(true),gen:22,ships:{},conquered:[],missions:[],fupg:{},uid:2,ach:['tap100'],goal:20,taps:640,played:3000,xp:400,seen:['intro','factory','power','lab','export','foreman','tiers','skills','place'],daily:{day:30000101,streak:1,at:Date.now()}};
+async function page(seed){ const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+  await ctx.addInitScript(s=>{if(!sessionStorage.seed){sessionStorage.seed=1;localStorage.setItem('starforge.v2',s)}},JSON.stringify(seed));
+  const p=await ctx.newPage(); p.on('console',m=>m.type()==='error'&&errs.push(m.text())); p.on('pageerror',e=>errs.push(e.message)); await p.goto('http://localhost:4190/'); await p.waitForTimeout(1800); await p.evaluate(()=>{window.__night=0}); return p; }
+const F={force:true}; const shot=async(p,n)=>{ await p.waitForTimeout(500); await p.screenshot({path:`${OUT}/${n}.png`}); };
+let p=await page({...mid,last:Date.now()});
+await shot(p,'01-base');
+let [x,y]=await p.evaluate(()=>window.bv.slotScreen('m0')); await p.mouse.click(x,y+30); await shot(p,'02-sheet-mine');
+await p.evaluate(()=>{const sh=document.querySelector('#sheet'); sh.classList.remove('compact');}); await shot(p,'03-sheet-full');
+await p.evaluate(s=>document.querySelector(s)?.click(),'#sheet [data-act=list]'); await shot(p,'04-mines-list');
+await p.evaluate(s=>document.querySelector(s)?.click(),'#back'); await p.waitForTimeout(400);
+[x,y]=await p.evaluate(()=>window.bv.slotScreen('gen')); await p.mouse.click(x,y+30); await p.waitForTimeout(400); await p.evaluate(s=>document.querySelector(s)?.click(),'#sheet [data-act=fac]').catch(()=>{}); await shot(p,'05-factory');
+await p.evaluate(s=>document.querySelector(s)?.click(),'#back'); await p.waitForTimeout(400);
+await p.evaluate(s=>document.querySelector(s)?.click(),'#buildbtn'); await shot(p,'06-shop'); await p.evaluate(s=>document.querySelector(s)?.click(),'.modal [data-x]');
+await p.evaluate(s=>document.querySelector(s)?.click(),'#mute'); await shot(p,'07-settings'); await p.evaluate(s=>document.querySelector(s)?.click(),'.modal [data-x]');
+await p.evaluate(s=>document.querySelector(s)?.click(),'#cmdbadge'); await shot(p,'08-skills'); await p.keyboard.press('Escape'); await p.evaluate(()=>document.querySelectorAll('.tree,.modal').forEach(e=>e.remove()));
+await p.evaluate(()=>{document.querySelector('#trophy').style.visibility='visible'}); await p.evaluate(s=>document.querySelector(s)?.click(),'#trophy'); await shot(p,'09-trophies'); await p.evaluate(()=>document.querySelectorAll('.modal').forEach(e=>e.remove()));
+[x,y]=await p.evaluate(()=>window.bv.slotScreen('hq')); await p.mouse.click(x,y+30); await shot(p,'10-sheet-hq');
+p=await page({...mid,last:Date.now()-3*3600e3}); await shot(p,'11-welcome-back');
+p=await page({...mid,last:Date.now(),daily:{day:0,streak:0}}); await shot(p,'12-daily');
+console.log('errs',JSON.stringify(errs)); await b.close();

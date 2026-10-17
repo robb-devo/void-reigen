@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-const URL='http://localhost:4173/'; const b = await chromium.launch(); const errs=[];
+const URL='http://localhost:4190/'; const b = await chromium.launch(); const errs=[];
 const OUT=process.env.OUT||'shots';
 async function page(seed){ const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
   if(seed) await ctx.addInitScript(s=>{if(!sessionStorage.seed){sessionStorage.seed=1;localStorage.setItem('starforge.v2',s)}},JSON.stringify(seed));
