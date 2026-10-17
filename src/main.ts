@@ -177,9 +177,9 @@ function tapRush(sl: Slot, x: number, y: number) {
   if (b.run || b.m) b.p = Math.min(.999, b.p + .06);
   const L = Math.min(5, Math.floor(rushN / 6)); bv?.punch(sl.key); setTapStep(Math.min(10, rushN >> 1)); burst(x, y, 3 + L * 2, 0, L ? '#ffd23f' : `hsl(${MINES[sl.idx].hue} 100% 70%)`); buzz(6 + L * 2);
   if (L > rushL) { rushL = L; G.setRush(1 + .05 * L); popup(x, y - 70, `RUSH ×${(1 + .05 * L).toFixed(2)}`, '#ffd23f'); sfx.rushUp(); if (L >= 3 && bv) bv.shake = .12; }
-  rushEl.innerHTML = rushL ? `${I.bolt}<b>RUSH ×${(1 + .05 * rushL).toFixed(2)}</b><i><u></u></i>` : ''; rushEl.classList.toggle('on', rushL > 0); rushEl.style.setProperty('--lv', String(rushL));
+  rushEl.innerHTML = rushL ? `${I.bolt}<b>RUSH ×${(1 + .05 * rushL).toFixed(2)}</b><i><u></u></i>` : ''; rushEl.classList.toggle('on', rushL > 0); document.body.classList.toggle('rushing', rushL > 0); rushEl.style.setProperty('--lv', String(rushL));
 }
-setInterval(() => { if (!rushN) return; const idle = performance.now() - rushT; const u = rushEl.querySelector('u') as HTMLElement | null; if (u) u.style.width = Math.max(0, 100 - idle / 12) + '%'; if (idle > 1200) { rushN = 0; rushL = 0; G.setRush(1); setTapStep(0); rushEl.classList.remove('on'); } }, 50);
+setInterval(() => { if (!rushN) return; const idle = performance.now() - rushT; const u = rushEl.querySelector('u') as HTMLElement | null; if (u) u.style.width = Math.max(0, 100 - idle / 12) + '%'; if (idle > 1200) { rushN = 0; rushL = 0; G.setRush(1); setTapStep(0); rushEl.classList.remove('on'); document.body.classList.remove('rushing'); } }, 50);
 const AUX: Record<string, number> = { hangar: 1, dock: 0, turret: 2, fuel: 2 };
 function closeSheet() { sheetKey = null; if (bv) bv.sel = null; $('#sheet')?.classList.remove('open'); }
 /** "Earn $X" goals point at the best-value mine upgrade (income gained per $), not at HQ. */
@@ -621,7 +621,7 @@ function dailyCheck() {
   btn.addEventListener('click', ev => {
     if (!opened) { opened = true; btn.disabled = true; const c = $('.crate', m); c.classList.add('shake'); sfx.clank(); buzz(15);
       setTimeout(() => { sfx.clank(); buzz(15); }, 260);
-      setTimeout(() => { c.classList.remove('shake'); c.classList.add('pop'); const r = G.claimDaily(); G.save(); sfx.claim(); buzz([30, 40, 80]); const [cx, cy] = center(c); burst(cx, cy, 40, 0, '#ffd23f'); burst(cx, cy, 20, 1);
+      setTimeout(() => { c.classList.remove('shake'); c.classList.add('opened'); const r = G.claimDaily(); G.save(); sfx.claim(); buzz([30, 40, 80]); const [cx, cy] = center(c); burst(cx, cy, 40, 0, '#ffd23f'); burst(cx, cy, 20, 1);
         ($('.amt', m) as HTMLElement).hidden = false; btn.textContent = 'Collect'; btn.disabled = false; xp(n.xp, cx, cy); void r; }, 620);
       return; }
     m.remove(); crateOpen = false; sfx.fanfare(); fly(ev.clientX, ev.clientY, ...center(cashEl), 20, 1, '#ffc94a', () => bump(cashEl));
