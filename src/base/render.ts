@@ -49,9 +49,13 @@ function dome(c: C, x: number, y: number, r: number, col: string) {
   const g = c.createRadialGradient(x - r * .4, y - r * .6, 1, x, y - r * .3, r * 1.2); g.addColorStop(0, '#fff'); g.addColorStop(.25, col); g.addColorStop(1, 'rgba(20,10,50,.8)');
   c.fillStyle = g; c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke();
 }
+// Glows are the most frequent fill on screen (dozens per frame at night). A radial-gradient fill per call is costly to
+// rasterise without a GPU, so each colour is pre-rendered once into a small sprite and stretched with drawImage.
+const GLOW = new Map<string, HTMLCanvasElement>(); const GS = 64;
+function glowSprite(col: string) { let s = GLOW.get(col); if (s) return s; if (GLOW.size > 256) GLOW.clear(); s = document.createElement('canvas'); s.width = s.height = GS; const g = s.getContext('2d')!, gr = g.createRadialGradient(GS / 2, GS / 2, 0, GS / 2, GS / 2, GS / 2); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, GS, GS); GLOW.set(col, s); return s; }
 export function glow(c: C, x: number, y: number, r: number, col: string, a = 1) {
-  const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
-  c.globalAlpha = Math.max(0, Math.min(1, a)); c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); c.globalAlpha = 1;
+  const al = Math.max(0, Math.min(1, a)); if (al < .004 || r <= 0) return;
+  c.globalAlpha = al; c.drawImage(glowSprite(col), x - r, y - r, r * 2, r * 2); c.globalAlpha = 1;
 }
 function lamp(c: C, x: number, y: number, col: string, t: number, ph = 0) {
   if (S()) { c.beginPath(); c.arc(x, y, 3.2, 0, 7); c.fillStyle = INK; c.fill(); return; }
