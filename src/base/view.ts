@@ -28,7 +28,8 @@ for (const s of ALL_SLOTS) { s.dx = s.gx; s.dy = s.gy; }
 export const MAIN_R = 10.2;
 const posOf = (k: string) => G.S.pos?.[k];
 /** apply saved positions (defaults = the old fixed layout) */
-export function syncPos() { for (const s of ALL_SLOTS) if (!s.rock) { const p = posOf(s.key); s.gx = p ? p[0] : s.dx!; s.gy = p ? p[1] : s.dy!; } }
+let placingKey: string | null = null;
+export function syncPos() { for (const s of ALL_SLOTS) if (!s.rock && s.key !== placingKey) { const p = posOf(s.key); s.gx = p ? p[0] : s.dx!; s.gy = p ? p[1] : s.dy!; } }
 /** built and standing on the map */
 export const onMap = (sl: Slot) => visible(sl) === 'built' && (!!sl.rock || !!posOf(sl.key));
 let moveKey: string | null = null;
@@ -115,12 +116,12 @@ export class BaseView {
   private drag: { dx: number; dy: number } | null = null;
   gridAt(cx: number, cy: number, raw = false): [number, number] { const r = this.cv.getBoundingClientRect(), lx = (cx - r.left - this.ox) / this.z, ly = (cy - r.top - this.oy) / this.z; const gx = (lx / (TW / 2) + ly / (TH / 2)) / 2, gy = (ly / (TH / 2) - lx / (TW / 2)) / 2; return raw ? [gx, gy] : [Math.round(gx), Math.round(gy)]; }
   startPlace(key: string, mode: 'new' | 'move', at: [number, number]) {
-    const sl = slotByKey(key)!; moveKey = mode === 'move' ? key : null; this.lsig = ''; this.sel = null;
+    const sl = slotByKey(key)!; moveKey = mode === 'move' ? key : null; placingKey = key; this.lsig = ''; this.sel = null;
     this.place = { key, gx: at[0], gy: at[1], mode, ok: false, from: mode === 'move' ? [sl.gx, sl.gy] : undefined, t: this.t };
     sl.gx = at[0]; sl.gy = at[1]; this.place.ok = canPlace(key, at[0], at[1]); this.focusAt(at[0], at[1]); this.onPlace(false);
   }
   placeAt(gx: number, gy: number) { const p = this.place; if (!p || (p.gx === gx && p.gy === gy)) return; const sl = slotByKey(p.key)!; p.gx = gx; p.gy = gy; sl.gx = gx; sl.gy = gy; p.ok = canPlace(p.key, gx, gy); p.t = this.t; this.onPlace(true); }
-  endPlace() { const p = this.place; this.place = null; moveKey = null; this.drag = null; this.lsig = ''; syncPos(); return p; }
+  endPlace() { const p = this.place; this.place = null; moveKey = null; placingKey = null; this.drag = null; this.lsig = ''; syncPos(); return p; }
   focusAt(gx: number, gy: number) { const [x, y] = iso(gx, gy), z = Math.max(this.z, .75), lx = 330 * z, ly = 200 * z; this.cam = { x: Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.w / 2 - x * z)), y: Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.h * .52 - y * z)), z }; }
   private onGhost(cx: number, cy: number) { const p = this.place; if (!p) return false; const [gx, gy] = this.gridAt(cx, cy, true); return Math.abs(gx - p.gx) + Math.abs(gy - p.gy) < 2.6 || (() => { const r = this.cv.getBoundingClientRect(), lx = (cx - r.left - this.ox) / this.z, ly = (cy - r.top - this.oy) / this.z, [x, y] = iso(p.gx, p.gy); return Math.abs(lx - x) < 50 && ly < y && ly > y - 110; })(); }
   private drawGhost() {

@@ -7,7 +7,7 @@ import * as G from './game/state';
 import { GOALS, goalReward, ACHS } from './game/progress';
 import * as EV from './game/events';
 import { art, ri } from './game/art';
-import { BaseView, SLOTS, Slot, level, tier, nextTierAt, visible, cost as slotCost, slotByKey } from './base/view';
+import { BaseView, SLOTS, ALL_SLOTS, Slot, level, tier, nextTierAt, visible, cost as slotCost, slotByKey, onMap, canPlace, findSpot, setPos } from './base/view';
 import { setBusy } from './base/render';
 import { I } from './design';
 import { renderSfx, setToastGate, setTapStep } from './game/fx';
@@ -77,11 +77,100 @@ function updateGoal() {
   if (g && g.prog && !done) { const pi = goalEl.querySelector<HTMLElement>('.gp i'); if (pi) pi.style.width = Math.min(100, g.prog()[0] / g.prog()[1] * 100) + '%'; }
   if (key !== goalKey || goalIdx !== st().goal) { const wasDone = goalKey.split('|')[1] === 'false' && g?.done(); goalKey = key; renderGoal(); spotlight(); if (wasDone) { sfx.fanfare(); buzz(30); bump(goalEl); } }
 }
+// ---------- BUILD MENU + PLACEMENT (free building) ----------
+const MOVE_IC = `<svg viewBox="0 0 24 24"><path d="M12 2l3.5 3.5h-2.3v5.3h5.3V8.5L22 12l-3.5 3.5v-2.3h-5.3v5.3h2.3L12 22l-3.5-3.5h2.3v-5.3H5.5v2.3L2 12l3.5-3.5v2.3h5.3V5.5H8.5z" fill="#5cf2ff" stroke="#24163a" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+const BUILD_IC = `<svg viewBox="0 0 48 48"><path d="M8 20h32l-3 20a3 3 0 0 1-3 2.6H14A3 3 0 0 1 11 40z" fill="#ff9f43" stroke="#24163a" stroke-width="3" stroke-linejoin="round"/><path d="M6 14h36v7H6z" fill="#ffd23f" stroke="#24163a" stroke-width="3" stroke-linejoin="round"/><path d="M6 14l5-8h26l5 8" fill="#ff5ea8" stroke="#24163a" stroke-width="3" stroke-linejoin="round"/><path d="M16 14l2-8M32 14l-2-8M24 14V6" stroke="#24163a" stroke-width="2.5"/><path d="M18 28h12M18 34h8" stroke="#fff8" stroke-width="3" stroke-linecap="round"/></svg>`;
+type ShopCat = 'mine' | 'mach' | 'sup';
+let shopCat: ShopCat = 'mine', shopCoach: string | null = null;
+const SHOP_CATS: [ShopCat, string][] = [['mine', 'Mines'], ['mach', 'Factories'], ['sup', 'Support']];
+const catOf = (sl: Slot): ShopCat => sl.kind === 'mine' ? 'mine' : sl.kind === 'mach' ? 'mach' : 'sup';
+const buyable = (sl: Slot) => sl.kind === 'mine' || sl.kind === 'mach';
+/** 'built' (on the map) | 'ready' (unlocked, can be bought & placed) | 'locked' | 'auto' (support building that unlocks by itself) */
+function shopState(sl: Slot): 'built' | 'ready' | 'locked' | 'auto' {
+  if (onMap(sl)) return 'built';
+  if (!buyable(sl)) return 'auto';
+  return visible(sl) === 'plot' ? 'ready' : 'locked';
+}
+const newCost = (sl: Slot) => sl.kind === 'mine' ? G.costN(sl.idx, 1) : G.machCostK(sl.idx, 1);
+function lockWhy(sl: Slot) {
+  const s = st();
+  if (sl.kind === 'mine') { const d = MINES[sl.idx]; if (!G.avail(d)) return `Reach Sector ${d.sector}`; return `Build the ${MINES[sl.idx - 1].name} first`; }
+  if (sl.kind === 'mach') { const d = MACHINES[sl.idx]; if (!G.avail(d)) return `Reach Sector ${d.sector}`; return `Earn $${fmt(d.unlock)} in total (${Math.floor(Math.min(1, G.allTime() / d.unlock) * 100)}%)`; }
+  if (sl.kind === 'gen') return 'Arrives with your first factory'; if (sl.kind === 'lab') return 'Arrives with your first factory';
+  if (sl.kind === 'lift') return 'Arrives with the Chip Fab'; if (sl.kind === 'gate') return s.life > 1e9 ? `Charges at $${fmt(G.warpNeed())} earned` : 'Appears late in the sector';
+  return '';
+}
+function shopDesc(sl: Slot) { if (sl.kind === 'mine') return `Mines ${ri(MINES[sl.idx].res)} ${RES[MINES[sl.idx].res].name}`; if (sl.kind === 'mach') { const d = MACHINES[sl.idx]; return `${(Object.keys(d.inp) as Res[]).map(r => ri(r)).join('+')} → ${ri(d.out)} ${RES[d.out].name}`; } return ({ hq: 'Your command centre', gen: 'Powers every factory', lab: 'Research boosts', lift: 'Ships goods to the fleet', gate: 'Warp to the next sector' } as Record<string, string>)[sl.kind] || ''; }
+const shopSlots = () => ALL_SLOTS.filter(sl => !sl.rock && (sl.kind !== 'mine' || G.avail(MINES[sl.idx]) || sl.idx < 8) && (sl.kind !== 'mach' || G.avail(MACHINES[sl.idx]) || sl.idx < 6));
+function readyCount() { return shopSlots().filter(sl => shopState(sl) === 'ready' && st().cash >= newCost(sl)).length; }
+function initBuild() {
+  if ($('#buildbtn')) return;
+  document.body.insertAdjacentHTML('beforeend', `<button class="buildbtn" id="buildbtn" aria-label="Build">${BUILD_IC}<b>BUILD</b><i class="bdg" hidden></i></button><div class="placebar" id="placebar"><button class="pb-x" data-pb="x" aria-label="Cancel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/></svg></button><div class="pb-mid"><b></b><small></small></div><button class="pb-ok" data-pb="ok" aria-label="Confirm"><svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5 10-11" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>`);
+  $('#buildbtn').addEventListener('click', () => openShop());
+  $('[data-pb="x"]').addEventListener('click', () => cancelPlace());
+  $('[data-pb="ok"]').addEventListener('click', ev => confirmPlace(ev as MouseEvent));
+  setInterval(() => { const b = $('#buildbtn'), n = readyCount(), bd = $('.bdg', b); bd.hidden = !n; bd.textContent = String(n); b.classList.toggle('show', tab === 'base' && !!bv && !bv.rock && bv.travelT < 0 && !bv.place && (st().goal >= 2 || st().warps > 0 || n > 0)); }, 250);
+  if (bv) bv.onPlace = moved => { updatePlacebar(); if (moved) { sfx.blip(); buzz(4); } };
+}
+function openShop(cat?: ShopCat) {
+  if (!bv) return; closeSheet(); sfx.select(); buzz(8);
+  if (cat) shopCat = cat; else if (shopCoach) shopCat = catOf(slotByKey(shopCoach)!); else { const r = shopSlots().find(sl => shopState(sl) === 'ready' && st().cash >= newCost(sl)); if (r) shopCat = catOf(r); }
+  document.querySelector('.modal.shop')?.remove();
+  const m = modal(`<div class="shophead"><span class="hico">${BUILD_IC}</span><h2 class="h">Build</h2><span class="shopcash">$${fmt(st().cash)}</span></div><div class="seg shopseg">${SHOP_CATS.map(([k, n]) => `<button data-cat="${k}" class="${k === shopCat ? 'on' : ''}">${n}<i class="cdot"></i></button>`).join('')}</div><div class="shopgrid"></div><button class="btn big" data-x>Close</button>`);
+  m.classList.add('shop'); const grid = $('.shopgrid', m);
+  const draw = () => {
+    const s = st(); m.querySelectorAll<HTMLElement>('[data-cat]').forEach(b => { b.classList.toggle('on', b.dataset.cat === shopCat); $('.cdot', b).classList.toggle('on', shopSlots().some(sl => catOf(sl) === b.dataset.cat && shopState(sl) === 'ready' && s.cash >= newCost(sl))); });
+    const list = shopSlots().filter(sl => catOf(sl) === shopCat).sort((a, b) => { const o = { ready: 0, built: 1, auto: 2, locked: 3 }; return o[shopState(a)] - o[shopState(b)] || a.idx - b.idx; });
+    grid.innerHTML = list.map(sl => { const stt = shopState(sl), c = buyable(sl) && stt === 'ready' ? newCost(sl) : 0, ok = s.cash >= c;
+      const foot = stt === 'built' ? `<span class="sc built">${MOVE_IC} Move</span>` : stt === 'ready' ? `<span class="sc price ${ok ? 'ok' : 'no'}">$${fmt(c)}</span>` : `<span class="sc lock"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3" fill="#8b84b0" stroke="#24163a" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#24163a" stroke-width="2.5"/></svg>${lockWhy(sl)}</span>`;
+      return `<button class="scard ${stt} ${stt === 'ready' && ok ? 'afford' : ''} ${sl.key === shopCoach ? 'coach' : ''}" data-k="${sl.key}"><span class="sart2">${slotArt(sl)}</span><b>${slotName(sl)}</b><small>${shopDesc(sl)}</small>${stt === 'built' && (sl.kind === 'mine' || sl.kind === 'mach') ? `<em class="lv">Lv ${level(sl)}</em>` : ''}${foot}</button>`; }).join('');
+    grid.querySelectorAll<HTMLElement>('.scard').forEach(b => b.addEventListener('click', () => { const sl = slotByKey(b.dataset.k!)!, stt = shopState(sl);
+      if (stt === 'built') { m.remove(); beginPlace(sl.key, 'move'); return; }
+      if (stt !== 'ready') { deny(b); toast(lockWhy(sl) || 'Not available yet'); return; }
+      if (st().cash < newCost(sl)) { deny(b); toast(`Need $${fmt(newCost(sl))}`); return; }
+      m.remove(); beginPlace(sl.key, 'new'); }));
+  };
+  m.querySelectorAll<HTMLElement>('[data-cat]').forEach(b => b.addEventListener('click', () => { shopCat = b.dataset.cat as ShopCat; sfx.tap(); buzz(5); draw(); grid.scrollTop = 0; }));
+  $('[data-x]', m).addEventListener('click', () => { sfx.tap(); m.remove(); });
+  draw();
+}
+function beginPlace(key: string, mode: 'new' | 'move') {
+  if (!bv) return; const sl = slotByKey(key)!;
+  const stale = st().pos?.[key];
+  const at = mode === 'move' ? [sl.gx, sl.gy] as [number, number] : (stale && canPlace(key, stale[0], stale[1]) ? stale : findSpot(key, [sl.dx!, sl.dy!]) || findSpot(key, [0, 0]));
+  if (!at) { toast('No room left – move a building to make space'); return deny(); }
+  document.body.classList.add('placing'); bv.startPlace(key, mode, at); sfx.select(); buzz(10);
+  if (!seen('place')) { mark('place'); toast('Drag the building · tap ✓ to place'); }
+}
+function updatePlacebar() {
+  const p = bv?.place, bar = $('#placebar'); if (!p) { bar.classList.remove('show'); return; }
+  const sl = slotByKey(p.key)!; bar.classList.add('show'); bar.classList.toggle('bad', !p.ok);
+  $('.pb-mid b', bar).textContent = (p.mode === 'move' ? 'Move ' : '') + slotName(sl);
+  $('.pb-mid small', bar).innerHTML = !p.ok ? 'Blocked: needs a free 3×3 spot' : p.mode === 'new' ? `Place for <span class="g">$${fmt(newCost(sl))}</span>` : 'Tap ✓ to drop it here';
+  $<HTMLButtonElement>('[data-pb="ok"]', bar).disabled = !p.ok;
+}
+function cancelPlace() { if (!bv?.place) return; bv.endPlace(); document.body.classList.remove('placing'); updatePlacebar(); sfx.tap(); buzz(6); }
+function confirmPlace(ev: MouseEvent) {
+  const p = bv?.place; if (!bv || !p) return; const sl = slotByKey(p.key)!, s = st();
+  if (!p.ok) return deny($('[data-pb="ok"]'));
+  if (p.mode === 'new') {
+    const c = newCost(sl); if (s.cash < c) { toast(`Need $${fmt(c)}`); return deny($('[data-pb="ok"]')); }
+    s.cash -= c; if (sl.kind === 'mine') s.mines[sl.idx].n = 1; else s.mach[sl.idx] = 1;
+  }
+  bv.endPlace(); setPos(sl.key, p.gx, p.gy); document.body.classList.remove('placing'); updatePlacebar();
+  const [x, y] = bv.slotScreen(sl.key);
+  if (p.mode === 'new') { bv.construct(sl.key); sfx.buy(); buzz([20, 20, 40]); burst(x, y + 30, 18); setTimeout(() => { celebrate(sl.kind === 'mach' && MACHINES[sl.idx].id === 'fab' ? 'Shipyard unlocked!' : `${slotName(sl)} built!`, x, y); spotlight(); }, 900); }
+  else { bv.puff(sl.key); sfx.clank(); buzz(14); burst(x, y + 30, 10, 0, '#5cf2ff'); }
+  void ev; G.save();
+}
+
 let guided = -1; let wantGuide: string | null = null;
 function spotlight() {
   document.querySelectorAll('.coach').forEach(e => e.classList.remove('coach'));
   const g = GOALS[st().goal]; if (bv) bv.guide = null; wantGuide = null;
   if (!g || g.done() || g.tab !== tab || !g.focus) return;
+  shopCoach = null;
+  if (g.focus.startsWith('@')) { const k0 = g.focus.slice(1), s0 = slotByKey(k0); if (s0 && !s0.rock && !onMap(s0) && shopState(s0) !== 'locked') { shopCoach = k0; $('#buildbtn')?.classList.add('coach'); return; } }
   if (g.focus.startsWith('@')) { if (bv) { const k = g.text.startsWith('Earn') ? bestUpgrade() : g.focus.slice(1); bv.guide = k; wantGuide = k; if (guided !== st().goal) { guided = st().goal; if (st().warps === 0 && st().goal < 14 && k !== 'm0') bv.focus(k, bv.z, undefined, 'm0'); else bv.focus(k); } } return; }
   if (st().goal > 12) return;
   document.querySelector(g.focus)?.classList.add('coach');
@@ -148,7 +237,7 @@ function updateMine() {
 let ySeg = 0;
 let bv: BaseView | null = null; let bwrap: HTMLElement | null = null; let sheetKey: string | null = null; let lastDrone = 0;
 function renderBase() {
-  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); { const nb = SLOTS.filter(x => visible(x) === 'built').length; bv.z = nb <= 4 ? 1.08 : nb <= 9 ? 1 : Math.max(.62, Math.min(.95, 1 - nb * .03)); } bv.onTap = baseTap; bv.onMeteor = meteorHit; bv.onTrader = openTrader; bv.onTraderLand = traderLanded; bv.wreckHits = EV.WRECK_HITS; bv.onWreck = wreckHit; bv.onImpact = () => { sfx.land2(); buzz(12); }; bv.onProp = (k, r) => { (r ? [sfx.pMetal, sfx.pBarrel, sfx.pRadar, sfx.pMetal] : [sfx.pLamp, sfx.pCrystal, sfx.pFlag, sfx.pBarrel])[k](); buzz(8); }; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`);
+  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); { const nb = SLOTS.filter(x => visible(x) === 'built').length; bv.z = nb <= 4 ? 1.08 : nb <= 9 ? 1 : Math.max(.62, Math.min(.95, 1 - nb * .03)); } bv.onTap = baseTap; bv.onMeteor = meteorHit; bv.onTrader = openTrader; bv.onTraderLand = traderLanded; bv.wreckHits = EV.WRECK_HITS; bv.onWreck = wreckHit; bv.onImpact = () => { sfx.land2(); buzz(12); }; bv.onProp = (k, r) => { (r ? [sfx.pMetal, sfx.pBarrel, sfx.pRadar, sfx.pMetal] : [sfx.pLamp, sfx.pCrystal, sfx.pFlag, sfx.pBarrel])[k](); buzz(8); }; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`); initBuild();
     bv.onConstruct = () => sfx.build();
     bv.onTravel = () => { sfx.land(); };
     const sh = $('#sheet'); let y0 = -1; sh.addEventListener('pointerdown', e => { y0 = e.clientY; }); sh.addEventListener('pointerup', e => { if (y0 < 0) return; const dy = e.clientY - y0; y0 = -1; if (dy < -30) { sh.classList.remove('compact'); sfx.select(); } else if (dy > 40) { if (sh.classList.contains('compact')) closeSheet(); else sh.classList.add('compact'); sfx.select(); } }); }
@@ -202,7 +291,7 @@ function openSheet(key: string): void {
   else if (sl.kind === 'lift') actions = `<div class="fstock" id="lstock"></div><button class="btn gold big" data-act="buy"></button><div class="row2"><button class="btn" data-act="fly">Fly to Fleet Rock ›</button><button class="btn ghost" data-act="ltog"></button></div>`;
   else actions = `<button class="btn gold big" data-act="buy"></button><div class="mkt" id="mkt"></div>${G.autoOK() ? `<button class="btn ghost" data-act="auto">Auto-export: ${s.auto ? 'ON' : 'OFF'}</button>` : ''}<div class="row2"><button class="btn ghost" data-act="list">All mines ›</button><button class="btn ghost" data-act="crew">Crew ›</button></div><div class="row2"><button class="btn ghost" data-act="trophy">Trophies ›</button><button class="btn ghost" data-act="warp">Stats &amp; settings ›</button></div>`;
   const compactable = sl.kind === 'mine' || sl.kind === 'mach' || sl.kind === 'gen';
-  sh.innerHTML = `<div class="grab" data-act="expand"></div><button class="x" data-act="close">✕</button><div class="shead"><div class="sart">${(bv?.portrait(k0.kind in AUX ? key : sheetKey!) && `<img src="${bv!.portrait(k0.kind in AUX ? key : sheetKey!)}" alt="">`) || slotArt(sl)}</div><div class="smid"><h3 class="h">${slotName(sl)}</h3><div class="slv"></div><div class="stier"></div></div></div><div class="sstats"></div><div class="sact">${actions}</div>`;
+  sh.innerHTML = `<div class="grab" data-act="expand"></div><button class="x" data-act="close">✕</button><div class="shead"><div class="sart">${(bv?.portrait(k0.kind in AUX ? key : sheetKey!) && `<img src="${bv!.portrait(k0.kind in AUX ? key : sheetKey!)}" alt="">`) || slotArt(sl)}</div><div class="smid"><h3 class="h">${slotName(sl)}</h3><div class="slv"></div><div class="stier"></div></div>${!sl.rock && onMap(sl) ? `<button class="mvbtn" data-act="move" aria-label="Move building">${MOVE_IC}<span>Move</span></button>` : ''}</div><div class="sstats"></div><div class="sact">${actions}</div>`;
   if (newKey) sh.classList.toggle('compact', compactable); else if (!compactable) sh.classList.remove('compact');
   sh.classList.add('open'); sh.classList.remove('spop'); void sh.offsetWidth; sh.classList.add('spop');
   sh.querySelectorAll<HTMLElement>('[data-act]').forEach(b => b.addEventListener('click', ev => sheetAct(b.dataset.act!, ev as MouseEvent, b)));
@@ -215,6 +304,7 @@ const sheetTxt = new Map<string, string>();
 function sheetAct(a: string, ev: MouseEvent, b: HTMLElement) {
   if (!sheetKey) return; const sl = slotOf(sheetKey), s = st(); if (!sl) return;
   if (a === 'close') { sfx.tap(); return closeSheet(); }
+  if (a === 'move') { const k = sheetKey!; closeSheet(); return beginPlace(k, 'move'); }
   if (a === 'list' || a === 'fac' || a === 'crew' || a === 'fleet' || a === 'warp') { sfx.tap(); return setTab(a === 'list' ? 'mine' : a); }
   if (a === 'trophy') return $('#trophy').click();
   if (a === 'hire') { const i = sl.idx; if (s.cash < MINES[i].mgr) return deny(b); s.cash -= MINES[i].mgr; s.mines[i].m = true; celebrate(`${MINES[i].mname} hired!`, ev.clientX, ev.clientY); return openSheet(sheetKey!); }
@@ -445,7 +535,7 @@ function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(
 
 // ---------- tabs ----------
 const RENDER: Record<string, () => void> = { base: renderBase, mine: renderMine, fac: renderFac, crew: renderCrew, fleet: renderFleet, warp: renderWarp };
-function setTab(t: string) { tab = t; app.classList.toggle('sub', t !== 'base'); main.classList.toggle('basemode', t === 'base'); app.classList.toggle('basemode', t === 'base'); if (t !== 'base') closeSheet(); document.querySelectorAll<HTMLElement>('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); main.scrollTop = 0; cards = []; facRows = []; techBtns = []; RENDER[t](); renderGoal(); spotlight(); main.classList.remove('enter'); void main.offsetWidth; main.classList.add('enter'); }
+function setTab(t: string) { if (t !== 'base' && bv?.place) cancelPlace(); tab = t; app.classList.toggle('sub', t !== 'base'); main.classList.toggle('basemode', t === 'base'); app.classList.toggle('basemode', t === 'base'); if (t !== 'base') closeSheet(); document.querySelectorAll<HTMLElement>('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); main.scrollTop = 0; cards = []; facRows = []; techBtns = []; RENDER[t](); renderGoal(); spotlight(); main.classList.remove('enter'); void main.offsetWidth; main.classList.add('enter'); }
 document.querySelectorAll<HTMLElement>('nav button').forEach(b => b.addEventListener('click', () => { if (tab !== b.dataset.t) { sfx.tap(); buzz(6); setTab(b.dataset.t!); } }));
 const muteBtn = $('#mute'); const GEAR = `<svg viewBox="0 0 24 24"><path d="M10.2 2.5h3.6l.5 2.6 1.9.8 2.2-1.5 2.5 2.5-1.5 2.2.8 1.9 2.6.5v3.6l-2.6.5-.8 1.9 1.5 2.2-2.5 2.5-2.2-1.5-1.9.8-.5 2.6h-3.6l-.5-2.6-1.9-.8-2.2 1.5-2.5-2.5 1.5-2.2-.8-1.9-2.6-.5v-3.6l2.6-.5.8-1.9-1.5-2.2 2.5-2.5 2.2 1.5 1.9-.8z" fill="#b9b2dd" stroke="#24163a" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.6" fill="#5cf2ff" stroke="#24163a" stroke-width="1.8"/></svg>`;
 const setMute = () => { muteBtn.innerHTML = GEAR + (st().mute ? '<i class="mutedot"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg></i>' : ''); muteBtn.setAttribute('aria-label', 'Settings'); }; setMute();
@@ -539,7 +629,7 @@ function disclose() {
 }
 function explain() {
   const s = st(); if (talking()) return;
-  if (s.goal >= 2 || s.warps) intro('factory', [{ h: 'REFINE', t: 'Raw ore is cheap. A <b>Smelter</b> turns it into <b>ingots</b> – worth far more. Conveyors carry the ore over by themselves.' }], 'f0');
+  if (s.goal >= 2 || s.warps) intro('factory', [{ h: 'REFINE', t: 'Raw ore is cheap. A <b>Smelter</b> turns it into <b>ingots</b> – worth far more.' }, { h: 'BUILD', t: 'Tap <b>BUILD</b> (bottom right), pick the <b>Smelter</b>, then <b>drag</b> it anywhere on the rock and tap <b>✓</b>. Conveyors find their own way.' }]);
   if (s.mach[0] && G.powerDemand() >= G.powerSupply() * .75) intro('power', [{ h: 'POWER', t: 'Every factory draws power. When buildings flash <b>' + I.bolt + '</b>, upgrade the <b>Fusion Generator</b>.' }], 'gen');
   if (s.goal >= 4 || s.tech.length) intro('lab', [{ h: 'RESEARCH', t: 'The <b>Lab</b> trades cash and goods for permanent profit boosts. Spend ingots here!' }], 'lab');
   if (s.goal >= 7) intro('export', [{ h: 'EXPORT', t: 'Got spare goods? Export them at <b>HQ</b>. I never sell what your factory still needs.' }], 'hq');
@@ -556,7 +646,7 @@ function storyIntro() {
   say('intro', [
     { t: 'Commander! Welcome to <b>Void Reigen</b>. This lonely rock is ours now – let’s turn it into an empire.' },
     { h: '① MINE', t: '<b>Tap</b> your drill to dig ore. Every load becomes cash.' },
-    { h: '② REFINE · ③ UPGRADE', t: 'Factories turn ore into pricier goods. Reinvest to <b>level up</b> buildings – they evolve as they grow.' },
+    { h: '② BUILD · ③ UPGRADE', t: 'Buy factories in the <b>Build</b> menu and place them wherever you like. Reinvest to <b>level up</b> buildings – they evolve as they grow.' },
     { h: '④ AUTOMATE', t: 'Hire foremen and your base runs itself. Then: ships, planets… the whole sector. Tap the drill to begin!' },
   ], { skip: true, done: () => bv?.focus('m0') });
 }
@@ -616,7 +706,7 @@ setBusy(() => st().missions.length);
 // rock switch (mining ⇄ fleet asteroid)
 const rockBtn = $('#rockbtn');
 function rockHud() { const show = !!bv && tab === 'base' && G.fleetOpen() && bv.travelT < 0; rockBtn.style.display = show ? '' : 'none'; if (!bv) return; rockBtn.innerHTML = bv.rock ? `${art('drill')}<span>Mining<br>Rock</span>` : `${art('cruiser')}<span>Fleet<br>Rock</span>`; }
-rockBtn.addEventListener('click', () => { if (!bv) return; closeSheet(); sfx.launch(); buzz([20, 30]); bv.travel(bv.rock ? 0 : 1); });
+rockBtn.addEventListener('click', () => { if (!bv) return; if (bv.place) cancelPlace(); closeSheet(); sfx.launch(); buzz([20, 30]); bv.travel(bv.rock ? 0 : 1); });
 setInterval(() => { if (bv && !bv.rock && tab === 'base' && G.fleetOpen() && st().liftOn && Math.random() < .25) { const j = MACHINES.findIndex((d, j) => st().mach[j] > 0 && G.FLEET_RES.includes(d.out) && G.liftRate(d.out) > 0 && Math.random() < .5); if (j >= 0) bv.drone('f' + j, 'lift', RES[MACHINES[j].out].color); } }, 300);
 setInterval(() => { rockHud(); cmdHud(); if (bv) { rockBtn.classList.remove('pulse'); const sl = wantGuide ? slotByKey(wantGuide) : null; if (!sl) bv.guide = null; else if ((sl.rock || 0) === bv.rock) bv.guide = wantGuide; else if (!bv.rock) bv.guide = 'lift'; else { bv.guide = null; rockBtn.classList.add('pulse'); } } if (bv?.wreckE && bv.rock === 0 && bv.travelT < 0) rockBtn.classList.add('pulse'); }, 300);
 
@@ -739,3 +829,4 @@ setInterval(() => { if (!bv) return; const now = performance.now();
   else toast(`${I.boom} Derelict spotted on the Fleet Rock!`);
 }, 1000);
 (window as any).__wreck = () => { if (bv) { bv.wreckE = null; wreckBorn = performance.now(); bv.wreckCome(bv.rock !== 1); } };
+
