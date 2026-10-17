@@ -78,7 +78,7 @@ export class BaseView {
   pad(): [number, number] { return this.rock ? iso(0, 0) : iso(6, 3); }
   private ptrs = new Map<number, { x: number; y: number }>(); private moved = 0; private pinch0 = 0; private z0 = 1; private craters: number[][] = [];
   constructor(parent: HTMLElement) {
-    this.cv = document.createElement('canvas'); this.cv.id = 'base'; parent.appendChild(this.cv); { const v = document.createElement('div'); v.className = 'bvig'; parent.appendChild(v); } this.c = this.cv.getContext('2d')!;
+    this.gcv = document.createElement('canvas'); this.gcv.className = 'bground'; parent.appendChild(this.gcv); this.cv = document.createElement('canvas'); this.cv.id = 'base'; parent.appendChild(this.cv); { const v = document.createElement('div'); v.className = 'bvig'; parent.appendChild(v); } this.c = this.cv.getContext('2d')!;
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     for (let k = 0; k < 26; k++) { const a = rnd() * 7, r = 3 + rnd() * 7.5; this.craters.push([Math.cos(a) * r, Math.sin(a) * r, .5 + rnd() * 1.3]); }
     this.resize(); new ResizeObserver(() => this.resize()).observe(parent);
@@ -98,8 +98,8 @@ export class BaseView {
   private pdist() { const [a, b] = [...this.ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; }
   zoomAt(nz: number, cx: number, cy: number) { nz = Math.max(.45, Math.min(1.8, nz)); const r = this.cv.getBoundingClientRect(), lx = cx - r.left, ly = cy - r.top; this.ox = lx - (lx - this.ox) * nz / this.z; this.oy = ly - (ly - this.oy) * nz / this.z; this.z = nz; }
   clamp() { const lx = 330 * this.z, ly = 200 * this.z; this.ox = Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.ox)); this.oy = Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.oy)); }
-  resize() { const host = this.cv.parentElement!.parentElement || this.cv.parentElement!; const r = host.getBoundingClientRect(); if (!r.width) return; const first = !this.w; this.w = r.width; this.h = r.height; this.cv.width = this.w * this.dpr; this.cv.height = this.h * this.dpr; this.cv.style.width = this.w + 'px'; this.cv.style.height = this.h + 'px'; if (first || !this.ox) { this.ox = this.w / 2; this.oy = this.h * FRAME_Y; } this.gcache = null; }
-  private gcache: HTMLCanvasElement | null = null; private gz = 0;
+  resize() { const host = this.cv.parentElement!.parentElement || this.cv.parentElement!; const r = host.getBoundingClientRect(); if (!r.width) return; const first = !this.w; this.w = r.width; this.h = r.height; this.cv.width = this.w * this.dpr; this.cv.height = this.h * this.dpr; this.cv.style.width = this.w + 'px'; this.cv.style.height = this.h + 'px'; this.gcv.width = this.cv.width; this.gcv.height = this.cv.height; this.gcv.style.width = this.w + 'px'; this.gcv.style.height = this.h + 'px'; this.gkey = ''; if (first || !this.ox) { this.ox = this.w / 2; this.oy = this.h * FRAME_Y; } this.gcache = null; }
+  private gcache: HTMLCanvasElement | null = null; private gz = 0; private gcv!: HTMLCanvasElement; private gkey = ''; private ggen = 0;
   /** world → client(page) coords */
   screen(gx: number, gy: number): [number, number] { const [x, y] = iso(gx, gy); const r = this.cv.getBoundingClientRect(); return [r.left + this.ox + x * this.z, r.top + this.oy + y * this.z]; }
   slotScreen(key: string): [number, number] { const sl = SLOTS.find(s => s.key === key)!; const [x, y] = this.screen(sl.gx, sl.gy); return [x, y - 40 * this.z]; }
@@ -243,7 +243,7 @@ export class BaseView {
     let tx = 0, tz = 1;
     if (this.travelT >= 0) { this.travelT += dt; const T = this.travelT, D = .55; if (T < D) { const f = T / D, e = f * f * f; tx = (this.travelTo ? -1 : 1) * e * this.w * 1.6; tz = 1 - e * .35; } else { if (this.rock !== this.travelTo) this.setRock(this.travelTo); const f = Math.min(1, (T - D) / (D * 1.4)), e = 1 - Math.pow(1 - f, 3); tx = (this.travelTo ? 1 : -1) * (1 - e) * this.w * 1.6; tz = .65 + e * .35; if (f >= 1) this.travelT = -1; } }
     c.translate(this.ox + sx + tx, this.oy + sy); c.scale(this.z * tz, this.z * tz);
-    this.groundCached();
+    this.groundLayer(this.ox + sx + tx, this.oy + sy, this.z * tz);
     // conveyors
     const L = this.links();
     for (const [a, b, r, on] of L) this.belt(a, b, RES[r].color, on);
@@ -317,11 +317,19 @@ export class BaseView {
     if (this.travelT >= 0) { const f = Math.sin(Math.min(1, this.travelT / 1.32) * Math.PI); c.strokeStyle = `rgba(200,230,255,${.5 * f})`; c.lineWidth = 2; let sd = 3; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647; for (let k = 0; k < 40; k++) { const yy = r() * this.h, xx = ((r() * this.w * 2 - this.travelT * 2600 * (this.travelTo ? 1 : -1)) % (this.w * 1.2) + this.w * 1.2) % (this.w * 1.2) - this.w * .1, L = 60 + r() * 140; c.beginPath(); c.moveTo(xx, yy); c.lineTo(xx + L * f, yy); c.stroke(); } }
     c.setTransform(1, 0, 0, 1, 0, 0);
   }
+  /** The ground lives on its own canvas under the main one and is only repainted when the camera moves:
+   *  a still camera (most frames) skips the biggest blit of the frame. */
+  private groundLayer(x: number, y: number, z: number) {
+    if (!this.gcache || Math.abs(this.gz - this.z) > .001) { this.gcache = null; }
+    const key = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(4)},${this.ggen},${this.gcache ? 1 : 0}`; if (key === this.gkey) return;
+    const main = this.c, g = this.gcv.getContext('2d')!; g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); g.clearRect(0, 0, this.w, this.h); g.translate(x, y); g.scale(z, z);
+    this.c = g; try { this.groundCached(); } finally { this.c = main; } this.gkey = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(4)},${this.ggen},1`;
+  }
   private groundCached() {
     const c = this.c, k = this.z * this.dpr, W = 1700, H = 1000;
     if (!this.gcache || Math.abs(this.gz - this.z) > .001) {
       const g = this.gcache || document.createElement('canvas'); g.width = Math.ceil(W * k); g.height = Math.ceil(H * k);
-      const save = this.c; const gc = g.getContext('2d')!; gc.setTransform(k, 0, 0, k, W / 2 * k, 420 * k); this.c = gc; this.ground(); this.c = save; this.gcache = g; this.gz = this.z;
+      const save = this.c; const gc = g.getContext('2d')!; gc.setTransform(k, 0, 0, k, W / 2 * k, 420 * k); this.c = gc; this.ground(); this.c = save; this.gcache = g; this.gz = this.z; this.ggen++;
     }
     c.save(); c.scale(1 / k, 1 / k); c.drawImage(this.gcache, -W / 2 * k, -420 * k); c.restore();
   }

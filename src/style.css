@@ -230,6 +230,7 @@ header{padding:calc(var(--st) + 6px) 12px 6px}
 main.basemode{padding:0;overflow:hidden}
 .basewrap{position:absolute;inset:0}
 #base{position:absolute;inset:0;touch-action:none;display:block}
+.bground{position:absolute;inset:0;display:block;pointer-events:none}
 .bvig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 15% 10%,rgba(255,190,120,.16),rgba(255,190,120,0) 60vh),radial-gradient(circle at 50% 47%,rgba(8,2,30,0) 20vh,rgba(8,2,30,.55) 75vh)}
 .bhint{position:absolute;left:50%;top:10px;transform:translateX(-50%);font:600 12px Fredoka;color:#fffa;background:#0008;padding:4px 12px;border-radius:12px;pointer-events:none}
 .bsheet{position:absolute;left:10px;right:10px;bottom:calc(var(--sb) + 92px);z-index:4;background:linear-gradient(#3a2a63,#24183f);border:3px solid #120a24;box-shadow:0 6px 0 #120a24,inset 0 2px 0 #ffffff30;border-radius:22px;padding:12px 14px 14px;transform:translateY(130%);transition:transform .3s cubic-bezier(.3,1.4,.5,1)}
