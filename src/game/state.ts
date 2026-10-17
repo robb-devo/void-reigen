@@ -21,7 +21,7 @@ export type State = {
   mines: Mine[]; tech: string[]; res: Bag; made: Bag; mach: number[]; on: boolean[]; gen: number;
   ships: Record<string, number>; conquered: string[]; missions: Mission[]; fupg: Record<string, number>; uid: number;
   ach: string[]; goal: number; gv: number; sold: number; lost: number; wins: number; w: number[]; auto: boolean;
-  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[]; fstock: Bag; lift: number; lifted: number; liftOn: boolean;
+  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[]; fstock: Bag; lift: number; lifted: number; liftOn: boolean; daily: { day: number; streak: number }; meteors: number;
 };
 export const KEY = 'starforge.v2';
 export const fresh = (keep?: Partial<State>): State => ({
@@ -29,7 +29,7 @@ export const fresh = (keep?: Partial<State>): State => ({
   mines: MINES.map((_, i) => ({ n: i === 0 ? 1 : 0, p: 0, m: false, run: false })),
   tech: [], res: bag(), made: bag(), mach: MACHINES.map(() => 0), on: MACHINES.map(() => true), gen: 1,
   ships: {}, conquered: [], missions: [], fupg: {}, uid: 1, ach: [], goal: 0, gv: 3, sold: 0, lost: 0, wins: 0, w: MACHINES.map(() => 50), auto: false,
-  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], fstock: bag(), lift: 1, lifted: 0, liftOn: true, ...keep,
+  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], fstock: bag(), lift: 1, lifted: 0, liftOn: true, daily: { day: 0, streak: 0 }, meteors: 0, ...keep,
 });
 export let S: State = fresh();
 export let clock = () => Date.now();
@@ -194,6 +194,15 @@ export function resolveMissions(rng = Math.random): Outcome[] {
 
 // ---------- main tick (shared by game + simulator) ----------
 export type MineEvent = { i: number; v: number; ore: number; ct: number; lode?: boolean };
+/** Tap-rush multiplier set by the UI while the player keeps a tap combo going (1 = off). Never on in sims/offline. */
+export let rush = 1; export const setRush = (m: number) => { rush = m; };
+// ---------- daily supply crate ----------
+export const today = () => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+const dayNum = (k: number) => Math.floor(new Date(Math.floor(k / 10000), Math.floor(k / 100) % 100 - 1, k % 100).getTime() / 864e5);
+export const dailyReady = () => S.daily.day !== today();
+/** Streak continues if the last claim was yesterday, otherwise restarts at day 1. 7-day ladder. */
+export function dailyNext() { const t = today(), cont = S.daily.day && dayNum(t) - dayNum(S.daily.day) === 1; const streak = cont ? S.daily.streak % 7 + 1 : 1; const secs = [60, 90, 120, 180, 240, 300, 600][streak - 1]; return { streak, cash: Math.max(300 * streak, perSec() * secs), xp: 10 + streak * 5 }; }
+export function claimDaily() { const n = dailyNext(); S.daily = { day: today(), streak: n.streak }; earn(n.cash); return n; }
 export function tick(dt: number, autoTap = false): MineEvent[] {
   const ev: MineEvent[] = [];
   for (let i = 0; i < MINES.length; i++) {
@@ -202,7 +211,7 @@ export function tick(dt: number, autoTap = false): MineEvent[] {
     if (!(b.run || b.m)) continue;
     const ct = cycle(i); b.p += dt / ct;
     if (b.p >= 1) {
-      const times = b.m ? Math.floor(b.p) : 1, lode = sk('mLode') && Math.random() < .04, v = revenue(i) * times * (lode ? 10 : 1), ore = orePerCycle(i) * times;
+      const times = b.m ? Math.floor(b.p) : 1, lode = sk('mLode') && Math.random() < .04, v = revenue(i) * times * (lode ? 10 : 1) * rush, ore = orePerCycle(i) * times;
       earn(v); S.res[MINES[i].res] += ore; b.p = b.m ? b.p - times : 0; if (!b.m) b.run = false;
       ev.push({ i, v, ore, ct, lode });
     }
@@ -224,7 +233,7 @@ export const offlineCap = () => ((S.warps >= 4 ? 24 : 8) + (sk('lCold') ? 8 : 0)
 /** Warp: reset the sector, keep meta-progress, apply perks. */
 export function doWarp() {
   const o = S, g = dmGain(), w = o.warps + 1;
-  const n = fresh({ dm: o.dm + g, total: o.total + o.life, warps: w, mute: o.mute, taps: o.taps, ach: o.ach, sold: o.sold, played: o.played, lost: o.lost, wins: o.wins, auto: o.auto, w: o.w, mult: o.mult, seen: o.seen, xp: o.xp, skills: o.skills, lifted: o.lifted, liftOn: o.liftOn });
+  const n = fresh({ dm: o.dm + g, total: o.total + o.life, warps: w, mute: o.mute, taps: o.taps, ach: o.ach, sold: o.sold, played: o.played, lost: o.lost, wins: o.wins, auto: o.auto, w: o.w, mult: o.mult, seen: o.seen, xp: o.xp, skills: o.skills, lifted: o.lifted, liftOn: o.liftOn, daily: o.daily, meteors: o.meteors });
   n.goal = GOAL_SECTOR;
   if (w >= 1) { n.mines[0].m = true; n.mines[1].m = true; n.mines[1].n = 1; n.cash = 1e4; }
   if (w >= 2) n.mach = o.mach.map(l => Math.floor(l * 0.25));
