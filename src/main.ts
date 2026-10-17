@@ -528,7 +528,8 @@ function offline() {
 
 $('#back').addEventListener('click', () => { sfx.tap(); setTab('base'); });
 setTab('base'); disclose(); offline(); setTimeout(storyIntro, 600); requestAnimationFrame(frame);
-setInterval(G.save, 5000);
+// never autosave while hidden: it would stamp `last` = now and the time spent in the background would be lost on return
+setInterval(() => { if (!document.hidden) G.save(); }, 5000);
 addEventListener('visibilitychange', () => { if (document.hidden) G.save(); else { prev = performance.now(); offline(); } });
 addEventListener('pagehide', G.save);
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('./sw.js').catch(() => {});
