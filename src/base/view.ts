@@ -112,14 +112,15 @@ export class BaseView {
   private tap(cx: number, cy: number) {
     if (this.travelT >= 0) return;
     const r = this.cv.getBoundingClientRect(); const lx = (cx - r.left - this.ox) / this.z, ly = (cy - r.top - this.oy) / this.z;
-    let best: Slot | null = null, bd = -1e9;
+    let best: Slot | null = null, bd = -1e9, onPad = false;
     for (const sl of SLOTS) {
       if (visible(sl) === 'hidden') continue;
       const [x, y] = iso(sl.gx, sl.gy), hw = sl.s * TW / 2, hh = sl.s * TH / 2;
       const inBase = Math.abs(lx - x) / hw + Math.abs(ly - y) / hh <= 1, inBody = Math.abs(lx - x) < hw * .6 && ly < y && ly > y - 70 - tier(sl) * 12;
-      if ((inBase || inBody) && sl.gx + sl.gy > bd) { bd = sl.gx + sl.gy; best = sl; }
+      if (inBase) onPad = true; if ((inBase || inBody) && sl.gx + sl.gy > bd) { bd = sl.gx + sl.gy; best = sl; }
     }
-    if (!best) { const d = this.propAt(lx, ly); if (d) { this.bounces.set(d[0] + ',' + d[1], this.t); this.onProp(d[2], this.rock); return; } }
+    // props win over the generous building body box, but never over a tap on the building's own pad
+    if (!onPad) { const d = this.propAt(lx, ly); if (d) { this.bounces.set(d[0] + ',' + d[1], this.t); this.onProp(d[2], this.rock); return; } }
     this.sel = best?.key ?? null; this.onTap(best, cx, cy);
   }
   drone(fromKey: string, toKey: string, col: string, done?: () => void) {
@@ -266,7 +267,7 @@ export class BaseView {
   }
   bounces = new Map<string, number>(); onProp: (kind: number, rock: number) => void = () => {};
   /** Tap hit-test for props (only when no building was hit). */
-  private propAt(lx: number, ly: number) { let best: [number, number, number] | null = null, bd = 1e9; for (const d of this.decorList) { const [x, y] = iso(d[0], d[1]), dx = Math.abs(lx - x), dy = ly - y; if (dx < 16 && dy < 8 && dy > -42) { const dd = dx + Math.abs(dy + 16) * .5; if (dd < bd) { bd = dd; best = d; } } } return best; }
+  private propAt(lx: number, ly: number) { let best: [number, number, number] | null = null, bd = 1e9; for (const d of this.decorList) { const [x, y] = iso(d[0], d[1]), dx = Math.abs(lx - x), dy = ly - y; if (dx < 13 && dy < 7 && dy > -40) { const dd = dx + Math.abs(dy + 16) * .5; if (dd < bd) { bd = dd; best = d; } } } return best; }
   private deck(q: (gx: number, gy: number, a: number, b: number) => void) {
     const c = this.c, seen = new Set<string>();
     for (const sl of SLOTS) for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { const u = sl.gx + i * .5, w = sl.gy + j * .5; if (Math.max(Math.abs(u - sl.gx), Math.abs(w - sl.gy)) < 1.2) continue; const k2 = `${u},${w}`; if (seen.has(k2)) continue; seen.add(k2);
@@ -342,8 +343,8 @@ export class BaseView {
     // surface details: boulders, crystal clusters, beacon posts (kept off building plots)
     let sd = 11; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647; const taken = (gx: number, gy: number) => SLOTS.some(s => Math.abs(s.gx - gx) < 1.9 && Math.abs(s.gy - gy) < 1.9);
     for (let k = 0; k < 70; k++) { const a = rnd() * 7, r = 2 + rnd() * (R - 2.4), gx = Math.cos(a) * r, gy = Math.sin(a) * r; if (taken(gx, gy)) continue; const [x, y] = iso(gx, gy), kind = rnd();
-      if (kind < .55) { const s2 = 4 + rnd() * 9; c.beginPath(); c.ellipse(x + 2, y + 2, s2 * 1.2, s2 * .5, 0, 0, 7); c.fillStyle = 'rgba(30,10,50,.35)'; c.fill(); c.beginPath(); c.moveTo(x - s2, y); c.quadraticCurveTo(x - s2 * .8, y - s2 * 1.1, x, y - s2); c.quadraticCurveTo(x + s2, y - s2 * .9, x + s2, y); c.quadraticCurveTo(x, y + s2 * .4, x - s2, y); c.fillStyle = '#6e4a86'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(); c.beginPath(); c.moveTo(x - s2 * .6, y - s2 * .6); c.quadraticCurveTo(x - s2 * .2, y - s2 * .95, x + s2 * .2, y - s2 * .85); c.strokeStyle = 'rgba(255,230,255,.35)'; c.lineWidth = 2; c.stroke(); }
-      else if (kind < .85) { const hue = rnd() < .5 ? 190 : 290; for (let j = 0; j < 3; j++) { const cx = x + (j - 1) * 5, h2 = 8 + rnd() * 10; c.beginPath(); c.moveTo(cx - 3, y); c.lineTo(cx - 1, y - h2); c.lineTo(cx + 2, y - h2 - 3); c.lineTo(cx + 3, y); c.closePath(); c.fillStyle = hsl(hue, 90, 70); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.5; c.stroke(); } }
+      if (kind < .55) { const s2 = 4 + rnd() * 9; c.beginPath(); c.ellipse(x + 2, y + 2, s2 * 1.2, s2 * .5, 0, 0, 7); c.fillStyle = 'rgba(30,10,50,.35)'; c.fill(); c.beginPath(); c.moveTo(x - s2, y); c.quadraticCurveTo(x - s2 * .8, y - s2 * 1.1, x, y - s2); c.quadraticCurveTo(x + s2, y - s2 * .9, x + s2, y); c.quadraticCurveTo(x, y + s2 * .4, x - s2, y); c.fillStyle = ice ? '#5a6f8c' : '#6e4a86'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(); if (ice) { c.beginPath(); c.moveTo(x - s2 * .85, y - s2 * .45); c.quadraticCurveTo(x - s2 * .7, y - s2 * 1.05, x, y - s2 * .98); c.quadraticCurveTo(x + s2 * .85, y - s2 * .85, x + s2 * .9, y - s2 * .3); c.quadraticCurveTo(x, y - s2 * .5, x - s2 * .85, y - s2 * .45); c.fillStyle = '#f2f9ff'; c.fill(); } else { c.beginPath(); c.moveTo(x - s2 * .6, y - s2 * .6); c.quadraticCurveTo(x - s2 * .2, y - s2 * .95, x + s2 * .2, y - s2 * .85); c.strokeStyle = 'rgba(255,230,255,.35)'; c.lineWidth = 2; c.stroke(); } }
+      else if (kind < .85) { const hue = ice ? 200 : rnd() < .5 ? 190 : 290; for (let j = 0; j < 3; j++) { const cx = x + (j - 1) * 5, h2 = 8 + rnd() * 10; c.beginPath(); c.moveTo(cx - 3, y); c.lineTo(cx - 1, y - h2); c.lineTo(cx + 2, y - h2 - 3); c.lineTo(cx + 3, y); c.closePath(); c.fillStyle = ice ? hsl(hue, 70, 86 - j * 6) : hsl(hue, 90, 70); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.5; c.stroke(); } }
       else if (ice) { c.strokeStyle = INK; c.lineWidth = 4; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - 20); c.stroke(); c.strokeStyle = '#ff7a2e'; c.lineWidth = 2; c.stroke(); c.strokeStyle = '#fff'; c.beginPath(); c.moveTo(x, y - 8); c.lineTo(x, y - 12); c.stroke(); }
       else { c.strokeStyle = INK; c.lineWidth = 3; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - 18); c.stroke(); c.beginPath(); c.arc(x, y - 20, 3, 0, 7); c.fillStyle = '#ffd23f'; c.fill(); c.stroke(); }
     }
