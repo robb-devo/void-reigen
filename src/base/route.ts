@@ -7,10 +7,17 @@ const idx = (x: number, y: number) => Math.round((y + LIM) / STEP) * N + Math.ro
  * @param obst footprint centres of every other building (blocked within ±1.1)
  * @param R    rock radius: nodes beyond R-1 are off-limits
  */
-export function route(a: Pt, b: Pt, obst: Pt[], R: number): Pt[] {
-  const blocked = new Uint8Array(N * N), lane = new Uint8Array(N * N);
+/** grid key of a node, for sharing usage between routes */
+export const nodeKey = (x: number, y: number) => idx(x, y);
+/**
+ * @param used  how many earlier belts already run through each node (spreads belts over parallel lanes)
+ */
+export function route(a: Pt, b: Pt, obst: Pt[], R: number, used?: Map<number, number>): Pt[] {
+  const blocked = new Uint8Array(N * N), lane = new Uint8Array(N * N), hidden = new Uint8Array(N * N);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const x = i * STEP - LIM, y = j * STEP - LIM; if (Math.hypot(x, y) > R - 1) blocked[j * N + i] = 1; }
   for (const [ox, oy] of [...obst, a, b]) for (let dy = -1.5; dy <= 1.5; dy += STEP) for (let dx = -1.5; dx <= 1.5; dx += STEP) { const x = ox + dx, y = oy + dy; if (Math.abs(x) > LIM || Math.abs(y) > LIM) continue; const k = idx(x, y); if (Math.max(Math.abs(dx), Math.abs(dy)) < 1.1) blocked[k] = 1; else lane[k] = 1; }
+  // nodes tucked behind a building's body (seen from the camera) are allowed but expensive, so belts prefer visible lanes
+  for (const [ox, oy] of obst) for (let dy = -2.5; dy <= 0; dy += STEP) for (let dx = -2.5; dx <= 0; dx += STEP) { if (dx + dy >= -.9 || Math.abs(dx - dy) >= 1.6) continue; const x = ox + dx, y = oy + dy; if (Math.abs(x) <= LIM && Math.abs(y) <= LIM) hidden[idx(x, y)] = 1; }
   // the endpoints' own footprints are open, so a belt can leave its building
   for (const [ox, oy] of [a, b]) for (let dy = -1; dy <= 1; dy += STEP) for (let dx = -1; dx <= 1; dx += STEP) { const x = ox + dx, y = oy + dy; if (Math.abs(x) <= LIM && Math.abs(y) <= LIM) blocked[idx(x, y)] = 0; }
   const s = idx(a[0], a[1]), t = idx(b[0], b[1]); blocked[s] = 0; blocked[t] = 0;
@@ -26,11 +33,12 @@ export function route(a: Pt, b: Pt, obst: Pt[], R: number): Pt[] {
     const st = pop(), k = st >> 2, d0 = st & 3; if (k === t) { end = st; break; }
     const x = k % N, y = Math.floor(k / N);
     for (let d = 0; d < 4; d++) { const nx = x + D[d][0], ny = y + D[d][1]; if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue; const nk = ny * N + nx; if (blocked[nk]) continue;
-      const c = G[st] + (lane[nk] ? 1 : 1.6) + (d !== d0 ? 2.5 : 0), ns = nk * 4 + d; if (c < G[ns]) { G[ns] = c; from[ns] = st; f[ns] = c + h(nk); push(ns); } }
+      const c = G[st] + (lane[nk] ? 1 : 1.6) + (d !== d0 ? 2.5 : 0) + (hidden[nk] ? 2.2 : 0) + (used ? Math.min(3, used.get(nk) || 0) * 1.8 : 0), ns = nk * 4 + d; if (c < G[ns]) { G[ns] = c; from[ns] = st; f[ns] = c + h(nk); push(ns); } }
   }
   if (end < 0) return [a, [b[0], a[1]], b]; // no route: fall back to the old L
   const pts: Pt[] = []; for (let st = end; st >= 0; st = from[st]) { const k = st >> 2; pts.push([(k % N) * STEP - LIM, Math.floor(k / N) * STEP - LIM]); }
   pts.reverse();
+  if (used) for (const [x, y] of pts) { const k = idx(x, y); used.set(k, (used.get(k) || 0) + 1); }
   // keep only corners
   const out: Pt[] = [pts[0]]; for (let i = 1; i < pts.length - 1; i++) { const p = out[out.length - 1], q = pts[i], r = pts[i + 1]; if ((q[0] - p[0]) * (r[1] - q[1]) !== (q[1] - p[1]) * (r[0] - q[0])) out.push(q); } out.push(pts[pts.length - 1]);
   return out;

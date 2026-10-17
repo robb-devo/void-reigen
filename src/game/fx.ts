@@ -125,6 +125,15 @@ export function ambient(k: keyof typeof raw, g = 1, pan = 0) {
   busO = 'amb'; gainO = Math.min(1, g); panO = Math.max(-1, Math.min(1, pan));
   try { sfx[k](); } finally { busO = null; gainO = 1; panO = 0; }
 }
+/** Event-driven world sounds the player didn't trigger (trader, landings, showers, motherlodes): stay on the
+ *  Effects & World bus but get the same spatial/zoom quieting and a rate limit. */
+let wT = 0, wN = 0;
+export function worldSfx(k: keyof typeof raw, g = 1, pan = 0) {
+  if (S.mute || document.hidden || g < .04) return; const n = performance.now();
+  if (n - wT > 1000) { wT = n; wN = 0; } if (wN >= 5) return; wN++;
+  gainO = Math.min(1, .75 * g); panO = Math.max(-1, Math.min(1, pan));
+  try { sfx[k](); } finally { gainO = 1; panO = 0; }
+}
 /** loudness/pan for a sound at screen point (x, y): quieter towards / beyond the edges and when zoomed out (z<1) */
 export function spatial(x: number, y: number, z = 1): [number, number] {
   const W = innerWidth, H = innerHeight, dx = (x - W / 2) / (W / 2), dy = (y - H / 2) / (H / 2), d = Math.hypot(dx, dy * .8);

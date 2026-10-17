@@ -2,7 +2,7 @@
 import { MINES, MACHINES, RES, Res } from '../game/data';
 import * as G from '../game/state';
 import { outlinedText } from '../design';
-import { route, along, polyLen, Pt } from './route';
+import { route, along, polyLen, Pt, nodeKey } from './route';
 import { drawBuilding, drawPlot, iso, TW, TH, Kind, hsl, scaffold, ship, glow, INK, box, traderShip, wreck } from './render';
 
 /** Vertical framing: the playfield visible between the HUD (cash + goal bar, ~top 24%) and the bottom hint sits centred at ~57%. */
@@ -34,7 +34,10 @@ export function syncPos() { for (const s of ALL_SLOTS) if (!s.rock && s.key !== 
 export const onMap = (sl: Slot) => visible(sl) === 'built' && (!!sl.rock || !!posOf(sl.key));
 let moveKey: string | null = null;
 /** can building `key` stand with its centre at (gx, gy)? 3×3 pad incl. lane ring must not overlap another pad, and stay on the rock */
+/** things a building may not be dropped on (landed meteors, the trader): set by the live view */
+let blockers: () => Pt[] = () => [];
 export function canPlace(key: string, gx: number, gy: number) {
+  if (blockers().some(([bx, by]) => Math.abs(bx - gx) < 2 && Math.abs(by - gy) < 2)) return false;
   for (const [a, b] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) if (Math.hypot(gx + a, gy + b) > MAIN_R - 1.25) return false;
   return !ALL_SLOTS.some(o => !o.rock && o.key !== key && onMap(o) && Math.max(Math.abs(o.gx - gx), Math.abs(o.gy - gy)) < 3);
 }
@@ -143,6 +146,7 @@ export class BaseView {
   private ptrs = new Map<number, { x: number; y: number }>(); private moved = 0; private pinch0 = 0; private z0 = 1; private craters: number[][] = [];
   constructor(parent: HTMLElement) {
     this.gcv = document.createElement('canvas'); this.gcv.className = 'bground'; parent.appendChild(this.gcv); this.cv = document.createElement('canvas'); this.cv.id = 'base'; parent.appendChild(this.cv); { const v = document.createElement('div'); v.className = 'bvig'; parent.appendChild(v); } this.c = this.cv.getContext('2d')!;
+    blockers = () => this.rock ? [] : [...this.meteors.filter(m => m.rock === 0 && m.st !== 2).map(m => [m.gx, m.gy] as Pt), ...(this.trader && this.trader.st !== 2 ? [[this.trader.gx, this.trader.gy] as Pt] : [])];
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     for (let k = 0; k < 26; k++) { const a = rnd() * 7, r = 3 + rnd() * 7.5; this.craters.push([Math.cos(a) * r, Math.sin(a) * r, .5 + rnd() * 1.3]); }
     this.resize(); new ResizeObserver(() => this.resize()).observe(parent);
@@ -305,7 +309,7 @@ export class BaseView {
   draw(dt: number) {
     this.t += dt; const { c, t } = this;
     if (!this.rock) { const fresh = autoPlace(); if (this.t > 1) for (const k of fresh) this.cons.set(k, this.t); }
-    { const sig = this.rock + '|' + (moveKey || '') + '|' + SLOTS.filter(onMap).map(s => s.key + ':' + s.gx + ',' + s.gy).join(';'); if (sig !== this.lsig) { this.lsig = sig; this.routes.clear(); this.gcache = null; this.gkey = ''; this.decorKey = ''; } }
+    { const sig = this.rock + '|' + (moveKey || '') + '|' + SLOTS.filter(onMap).map(s => s.key + ':' + s.gx + ',' + s.gy).join(';'); if (sig !== this.lsig) { this.lsig = sig; this.routes.clear(); this.used.clear(); this.gcache = null; this.gkey = ''; this.decorKey = ''; } }
     if (this.cam) { const k = 1 - Math.pow(.0008, dt); this.ox += (this.cam.x - this.ox) * k; this.oy += (this.cam.y - this.oy) * k; this.z += (this.cam.z - this.z) * k; if (Math.abs(this.cam.x - this.ox) + Math.abs(this.cam.y - this.oy) < .5 && Math.abs(this.cam.z - this.z) < .002) { this.z = this.cam.z; this.cam = null; } }
     for (const sl of SLOTS) { const v = visible(sl), tv = v === 'built' ? tier(sl) : -1, prev = this.lastTier.get(sl.key); if (prev !== undefined && tv > prev && this.t > 1 && this.warpT < 0) { this.cons.set(sl.key, this.t); this.onConstruct(); } this.lastTier.set(sl.key, tv); }
     // day/night: 6-minute cycle, nights are short and pretty
@@ -434,7 +438,7 @@ export class BaseView {
     this.workers = this.workers.filter(w => {
       const A = SLOTS[w.a], B = SLOTS[w.b]; if (!A || !B || !onMap(A) || !onMap(B) || A.key === moveKey || B.key === moveKey) return false;
       // walk the routed lanes between the two pads (same router as the conveyors)
-      const P = this.rock ? [[A.gx, A.gy], [B.gx, A.gy], [B.gx, B.gy]] as Pt[] : this.routeOf(A, B), L = polyLen(P) || 1; w.f += dt * w.sp * 6 / Math.max(3, L);
+      const P = this.rock ? [[A.gx, A.gy], [B.gx, A.gy], [B.gx, B.gy]] as Pt[] : this.routeOf(A, B, false), L = polyLen(P) || 1; w.f += dt * w.sp * 6 / Math.max(3, L);
       const [gx, gy] = along(P, Math.min(1, w.f) * L), off = this.rock ? 1.15 : .22;
       const [x, y] = iso(gx + off, gy + off), bob = Math.abs(Math.sin(this.t * 10 + w.a)) * 2.5;
       c.beginPath(); c.ellipse(x, y + 1, 5, 2.5, 0, 0, 7); c.fillStyle = 'rgba(20,8,40,.35)'; c.fill();
@@ -547,19 +551,22 @@ export class BaseView {
     if (ice) { c.strokeStyle = 'rgba(255,210,63,.55)'; c.lineWidth = 4; c.setLineDash([14, 10]); for (const [a, b] of [[-3, 0], [3, 0], [0, -3], [0, 3]]) { const [x1, y1] = iso(0, 0), [x2, y2] = iso(a, b); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); } c.setLineDash([]); }
     c.restore();
   }
-  private routes = new Map<string, Pt[]>();
-  routeOf(a: Slot, b: Slot): Pt[] {
-    const k = a.key + '>' + b.key; let r = this.routes.get(k);
-    if (!r) { const obst = SLOTS.filter(s => s !== a && s !== b && onMap(s) && s.key !== moveKey).map(s => [s.gx, s.gy] as Pt); r = route([a.gx, a.gy], [b.gx, b.gy], obst, MAIN_R); if (this.routes.size > 200) this.routes.clear(); this.routes.set(k, r); }
+  private routes = new Map<string, Pt[]>(); private used = new Map<number, number>();
+  routeOf(a: Slot, b: Slot, belt = true): Pt[] {
+    const k = (belt ? '' : 'w:') + a.key + '>' + b.key; let r = this.routes.get(k);
+    if (!r) { const obst = SLOTS.filter(s => s !== a && s !== b && onMap(s) && s.key !== moveKey).map(s => [s.gx, s.gy] as Pt); r = route([a.gx, a.gy], [b.gx, b.gy], obst, MAIN_R, belt ? this.used : undefined); if (this.routes.size > 200) { this.routes.clear(); this.used.clear(); } this.routes.set(k, r); }
     return r;
   }
   /** belt geometry: per link a list of half-tile pieces (grid + screen coords) and moving goods */
   private beltQueue(L: [Slot, Slot, Res, boolean][]) {
     const out: { pcs: { x: number; y: number; A: [number, number]; B: [number, number]; off: number }[]; items: { x: number; y: number; sx: number; sy: number }[]; col: string; on: boolean }[] = [], t = this.t;
+    const share = new Map<string, number>(); // belts that still share a lane piece are drawn side by side
     for (const [a, b, r, on] of L) {
       const G2 = this.routeOf(a, b), pcs: typeof out[0]['pcs'] = []; let acc = 0;
       for (let i = 1; i < G2.length; i++) { const [x0, y0] = G2[i - 1], [x1, y1] = G2[i], n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / .5));
-        for (let k = 0; k < n; k++) { const ga: Pt = [x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n], gb: Pt = [x0 + (x1 - x0) * (k + 1) / n, y0 + (y1 - y0) * (k + 1) / n], A = iso(...ga), B = iso(...gb); pcs.push({ x: (ga[0] + gb[0]) / 2, y: (ga[1] + gb[1]) / 2, A, B, off: acc }); acc += Math.hypot(B[0] - A[0], B[1] - A[1]); } }
+        for (let k = 0; k < n; k++) { const ga: Pt = [x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n], gb: Pt = [x0 + (x1 - x0) * (k + 1) / n, y0 + (y1 - y0) * (k + 1) / n], A = iso(...ga), B = iso(...gb), sk = Math.round((ga[0] + gb[0]) * 2) + ',' + Math.round((ga[1] + gb[1]) * 2), nth = share.get(sk) || 0; share.set(sk, nth + 1);
+          if (nth) { const ex = B[0] - A[0], ey = B[1] - A[1], l = Math.hypot(ex, ey) || 1, o = (nth % 2 ? 1 : -1) * Math.ceil(nth / 2) * 9; A[0] -= ey / l * o; A[1] += ex / l * o; B[0] -= ey / l * o; B[1] += ex / l * o; }
+          pcs.push({ x: (ga[0] + gb[0]) / 2, y: (ga[1] + gb[1]) / 2, A, B, off: acc }); acc += Math.hypot(B[0] - A[0], B[1] - A[1]); } }
       const items: typeof out[0]['items'] = [];
       if (on) { const P = G2.map(p => iso(p[0], p[1])), Ls = polyLen(P), Lg = polyLen(G2); for (let d = (t * 40) % 34; d < Ls; d += 34) { const [sx, sy] = along(P, d), gp = along(G2, d / Ls * Lg); items.push({ x: gp[0], y: gp[1], sx, sy }); } }
       out.push({ pcs, items, col: RES[r].color, on });

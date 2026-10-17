@@ -1,0 +1,1 @@
+export default async function(p, errs){ console.log(await p.evaluate(async()=>{ const b=window.bv; b.meteors.push({gx:7,gy:-3,t:b.t,st:1,ct:0,rock:0}); await new Promise(r=>setTimeout(r,100)); b.startPlace('f4','new',[7,-3]); const a=b.place.ok; b.placeAt(3,-6); const c=b.place.ok; b.endPlace(); return JSON.stringify({onMeteor:a, elsewhere:c}); }), errs); }

@@ -15,7 +15,7 @@ import { SKILLS, BRANCHES, LEVEL_GATE, XP } from './game/skills';
 import { TIER_NAMES } from './base/render';
 import { say, talking, setGate } from './commander';
 import { isNative, mirrorNow } from './native';
-import { sfx, buzz, initFx, stepFx, burst, fly, popup, toast, rocket, flash, ambient, spatial, applyVol, previewBus, vol, VOL_DEF } from './game/fx';
+import { sfx, buzz, initFx, stepFx, burst, fly, popup, toast, rocket, flash, ambient, spatial, worldSfx, applyVol, previewBus, vol, VOL_DEF } from './game/fx';
 
 const rawSave = localStorage.getItem(G.KEY); G.load(); G.migrateSeen(rawSave);
 const st = () => G.S;
@@ -164,6 +164,8 @@ function confirmPlace(ev: MouseEvent) {
   void ev; G.save();
 }
 
+/** background world sound at a grid point on the base (or the view centre), quieted by distance from screen centre and zoom */
+function wsfx(k: Parameters<typeof worldSfx>[0], at?: { gx: number; gy: number } | null) { if (!bv || tab !== 'base') { worldSfx(k, .5); return; } const [x, y] = at ? bv.screen(at.gx, at.gy) : [innerWidth / 2, innerHeight / 2]; worldSfx(k, ...spatial(x, y, bv.z / .7)); }
 let guided = -1; let wantGuide: string | null = null;
 function spotlight() {
   document.querySelectorAll('.coach').forEach(e => e.classList.remove('coach'));
@@ -237,7 +239,7 @@ function updateMine() {
 let ySeg = 0;
 let bv: BaseView | null = null; let bwrap: HTMLElement | null = null; let sheetKey: string | null = null; let lastDrone = 0;
 function renderBase() {
-  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); { const nb = SLOTS.filter(x => visible(x) === 'built').length; bv.z = nb <= 4 ? 1.08 : nb <= 9 ? 1 : Math.max(.62, Math.min(.95, 1 - nb * .03)); } bv.onTap = baseTap; bv.onMeteor = meteorHit; bv.onTrader = openTrader; bv.onTraderLand = traderLanded; bv.wreckHits = EV.WRECK_HITS; bv.onWreck = wreckHit; bv.onImpact = () => { sfx.land2(); buzz(12); }; bv.onProp = (k, r) => { (r ? [sfx.pMetal, sfx.pBarrel, sfx.pRadar, sfx.pMetal] : [sfx.pLamp, sfx.pCrystal, sfx.pFlag, sfx.pBarrel])[k](); buzz(8); }; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`); initBuild();
+  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); { const nb = SLOTS.filter(x => visible(x) === 'built').length; bv.z = nb <= 4 ? 1.08 : nb <= 9 ? 1 : Math.max(.62, Math.min(.95, 1 - nb * .03)); } bv.onTap = baseTap; bv.onMeteor = meteorHit; bv.onTrader = openTrader; bv.onTraderLand = traderLanded; bv.wreckHits = EV.WRECK_HITS; bv.onWreck = wreckHit; bv.onImpact = () => { wsfx('land2'); buzz(12); }; bv.onProp = (k, r) => { (r ? [sfx.pMetal, sfx.pBarrel, sfx.pRadar, sfx.pMetal] : [sfx.pLamp, sfx.pCrystal, sfx.pFlag, sfx.pBarrel])[k](); buzz(8); }; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`); initBuild();
     bv.onConstruct = () => sfx.build();
     bv.onTravel = () => { sfx.land(); };
     const sh = $('#sheet'); let y0 = -1; sh.addEventListener('pointerdown', e => { y0 = e.clientY; }); sh.addEventListener('pointerup', e => { if (y0 < 0) return; const dy = e.clientY - y0; y0 = -1; if (dy < -30) { sh.classList.remove('compact'); sfx.select(); } else if (dy > 40) { if (sh.classList.contains('compact')) closeSheet(); else sh.classList.add('compact'); sfx.select(); } }); }
@@ -502,7 +504,7 @@ function updateFleet() {
 }
 function missionsTick() {
   for (const o of G.resolveMissions()) {
-    if (bv && tab === 'base') sfx.land(), bv.land(Object.values(o.m.ships).reduce((a, b) => a + b, 0) - Object.values(o.lost).reduce((a, b) => a + b, 0));
+    if (bv && tab === 'base') wsfx('land'), bv.land(Object.values(o.m.ships).reduce((a, b) => a + b, 0) - Object.values(o.lost).reduce((a, b) => a + b, 0));
     const def = o.m.kind === 'run' ? RUNS.find(r => r.id === o.m.target)! : PLANETS.find(p => p.id === o.m.target)!;
     const lostN = Object.values(o.lost).reduce((a, b) => a + b, 0);
     if (o.ok && o.m.kind === 'planet') { xp(XP.conquer); flash(); sfx.warp(); celebrate(`${I.flag} ${def.name} conquered! Profit ×${(def as typeof PLANETS[number]).bonus}`); }
@@ -588,7 +590,7 @@ function frame(now: number) {
   const ev = G.tick(dt);
   for (const e of ev) {
     const c = cards[e.i], d = MINES[e.i];
-    if (e.lode && tab === 'base' && bv && !bv.rock) { const [x, y] = bv.slotScreen('m' + e.i); popup(x, y - 30, 'MOTHERLODE ×10', '#ffd23f'); burst(x, y, 24, 0, '#ffd23f'); sfx.lode(); }
+    if (e.lode && tab === 'base' && bv && !bv.rock) { const [x, y] = bv.slotScreen('m' + e.i); popup(x, y - 30, 'MOTHERLODE ×10', '#ffd23f'); burst(x, y, 24, 0, '#ffd23f'); worldSfx('lode', ...spatial(x, y, bv.z / .7)); }
     if (tab === 'base' && bv) { if (!bv.rock) baseEvent(e.i, e.v, e.ct, now); else acc += e.v; continue; }
     if (c && e.ct > 0.3) {
       const [x, y] = center(c.ico); popup(x, y - 40, '+$' + fmt(e.v));
@@ -766,7 +768,7 @@ setInterval(() => {
   if (talking() || document.querySelector('.modal, .tree')) { nextShower = now + 8e3; return; }
   nextShower = now + (4 + Math.random() * 3) * 60e3;
   if (lastEv === 'meteor' && traderOK() && traderArrive()) return;
-  lastEv = 'meteor'; bv.shower(5 + Math.floor(Math.random() * 3)); sfx.launch(); if (!seen('trader')) nextShower = now + (2.5 + Math.random()) * 60e3; // first trader follows the first shower quickly
+  lastEv = 'meteor'; bv.shower(5 + Math.floor(Math.random() * 3)); wsfx('launch'); if (!seen('trader')) nextShower = now + (2.5 + Math.random()) * 60e3; // first trader follows the first shower quickly
   if (!seen('meteor')) intro('meteor', [{ h: 'METEOR SHOWER', t: 'Incoming rocks! Meteors are packed with <b>ore and cash</b> – <b>tap them</b> before they cool off.' }]); else toast(`${I.boom} Meteor shower! Tap the glowing rocks`);
 }, 1000);
 (window as any).__shower = (n = 6) => bv?.shower(n);
@@ -775,12 +777,12 @@ setInterval(() => {
 // A cargo hauler lands for 2 minutes with three one-off deals: a swap aimed at what you're short of, a ×2 income
 // boost paid in goods, and a rotating third slot (ore surge or rare cargo for cash). Taking all three sends it off early.
 const TRADER_STAY = 120; let offers: EV.Offer[] = [], traderEnd = 0, traderMod: HTMLElement | null = null;
-function traderArrive() { if (!bv || !bv.traderCome(!document.querySelector('#sheet.open'))) return false; lastEv = 'trader'; offers = EV.traderOffers(); traderEnd = 0; sfx.launch(); buzz(10);
+function traderArrive() { if (!bv || !bv.traderCome(!document.querySelector('#sheet.open'))) return false; lastEv = 'trader'; offers = EV.traderOffers(); traderEnd = 0; wsfx('launch', bv.trader); buzz(10);
   if (seen('trader')) toast(`${I.coin} A trader is landing – tap the ship to deal`); return true; }
-function traderLanded() { sfx.land2(); sfx.clank(); buzz([20, 30]); traderEnd = performance.now() + TRADER_STAY * 1e3;
+function traderLanded() { wsfx('land2', bv?.trader); wsfx('clank', bv?.trader); buzz([20, 30]); traderEnd = performance.now() + TRADER_STAY * 1e3;
   if (!seen('trader')) intro('trader', [{ h: 'VOID TRADER', t: 'A trader just docked! Tap the ship for <b>one-time deals</b> – goods you\'re short of and <b>income boosts</b>. It leaves in 2 minutes.' }]);
   if (!seen('trader')) toast(`${I.coin} A trader docked – tap the ship to deal`); } // intro was blocked by an open panel
-function traderLeave() { if (!bv?.trader) return; traderMod?.remove(); traderMod = null; bv.traderGo(); setTimeout(() => { sfx.launch(); if (bv) bv.shake = Math.max(bv.shake, .1); }, 350); }
+function traderLeave() { if (!bv?.trader) return; traderMod?.remove(); traderMod = null; bv.traderGo(); setTimeout(() => { wsfx('launch', bv?.trader); if (bv) bv.shake = Math.max(bv.shake, .1); }, 350); }
 const goodHTML = (r: Res, n: number) => `<span class="tg" style="--c:${RES[r].color}">${ri(r)}<b>${fmt(n)}</b><small>${RES[r].name}</small></span>`;
 const offerSide = (o: EV.Offer, give: boolean) => { if (give) return o.give.r ? goodHTML(o.give.r, o.give.n) : `<span class="tg" style="--c:#ffd23f">${I.coin}<b>$${fmt(o.give.cash!)}</b><small>Cash</small></span>`;
   if (o.get.r) return goodHTML(o.get.r, o.get.n!); const b = o.get.boost!; return `<span class="tg boost" style="--c:${b.kind === 'cash' ? '#ffd23f' : '#ff9f43'}">${b.kind === 'cash' ? I.coin : ri('ore')}<b>×${b.m} ${b.kind === 'cash' ? 'income' : 'ore'}</b><small>${fmtT(b.secs)} boost</small></span>`; };
