@@ -331,18 +331,35 @@ export class BaseView {
     this.drawWorkers(dt);
     // buildings back-to-front
     guideKey = this.guide; const order = SLOTS.filter(sl => onMap(sl) && sl.key !== moveKey).sort((a, b) => a.gx + a.gy - (b.gx + b.gy));
-    // belts sit in the lanes between pads: pieces tucked behind a building's body are drawn under the buildings, the rest on top
-    // (a lane is exactly where two platforms meet, so plain depth sorting would hide most of it)
-    const hid = (x: number, y: number) => order.some(o => { const dx = x - o.gx, dy = y - o.gy; return (Math.abs(dx) < 1.05 && Math.abs(dy) < 1.05) || (Math.abs(dx) <= 2.1 && Math.abs(dy) <= 2.1 && dx + dy < -.9 && Math.abs(dx - dy) < 1.6); });
-    const pre: (() => void)[] = [], post: (() => void)[] = [];
-    for (const bl of bq) { let run: typeof bl.pcs = [], cur: boolean | null = null; const flush = () => { if (run.length) { const r2 = run, on = bl.on; (cur ? pre : post).push(() => this.beltRun(r2, on)); } run = []; };
-      for (const pc of bl.pcs) { const h = hid(pc.x, pc.y); if (h !== cur) { flush(); cur = h; } run.push(pc); } flush();
-      for (const it of bl.items) (hid(it.x, it.y) ? pre : post).push(() => this.beltItem(it.sx, it.sy, bl.col)); }
-    for (const f of pre) f();
+    // Conveyors are ground-level: every half-tile piece gets an iso depth (x+y) and is slotted into the same back-to-front
+    // order as buildings and props. Consecutive pieces in the same slot are drawn as one continuous run. Buildings are 2x2
+    // footprints separated by lanes, so x+y ordering is exact for anything outside a footprint; pieces inside a pad are cut
+    // and the belt ends in a port on the pad edge.
+    const dec = this.decor(); const DK: number[] = [];
+    { let di2 = 0; for (const sl of order) { while (di2 < dec.length && dec[di2][0] + dec[di2][1] < sl.gx + sl.gy + 1.4) DK.push(dec[di2++][0] + dec[di2 - 1][1] - 1.4); DK.push(sl.gx + sl.gy); } while (di2 < dec.length) DK.push(dec[di2++][0] + dec[di2 - 1][1] - 1.4); }
+    const slotOf = (k: number) => { let lo = 0, hi = DK.length; while (lo < hi) { const m = (lo + hi) >> 1; if (DK[m] <= k + 1e-6) lo = m + 1; else hi = m; } return lo; };
+    const slots: (() => void)[][] = Array.from({ length: DK.length + 1 }, () => []);
+    const inPad = (x: number, y: number) => order.some(o => Math.abs(x - o.gx) < .95 && Math.abs(y - o.gy) < .95);
+    const hid = (x: number, y: number) => order.some(o => { const dx = x - o.gx, dy = y - o.gy; return Math.abs(dx) <= 2.6 && Math.abs(dy) <= 2.6 && dx + dy < -.4 && Math.abs(dx - dy) < 2.6 && o.gx + o.gy > x + y; });
+    const ghosts: [number, number, string][] = [];
+    for (const bl of bq) {
+      let run: typeof bl.pcs = [], cur = -1, prevIn = true; const ports: [number, number, number, number, number][] = [];
+      const flush = () => { if (run.length) { const r2 = run, on = bl.on; slots[cur].push(() => this.beltRun(r2, on)); } run = []; };
+      bl.pcs.forEach((pc, i) => { const ip = inPad(pc.x, pc.y);
+        if (ip) { if (!prevIn && run.length) { const last = run[run.length - 1]; ports.push([last.B[0], last.B[1], last.B[0] - last.A[0], last.B[1] - last.A[1], cur]); } flush(); cur = -1; prevIn = true; return; }
+        const sl2 = slotOf(pc.x + pc.y); if (sl2 !== cur) { flush(); cur = sl2; }
+        let q = pc; if (prevIn && i > 0) { const ex = pc.B[0] - pc.A[0], ey = pc.B[1] - pc.A[1]; q = { ...pc, A: [pc.A[0] - ex * .22, pc.A[1] - ey * .22] as [number, number] }; ports.push([q.A[0], q.A[1], -ex, -ey, sl2]); }
+        run.push(q); prevIn = false; });
+      flush();
+      for (const [px, py, ex, ey, sl3] of ports) slots[sl3].push(() => this.beltPort(px, py, ex, ey));
+      for (const it of bl.items) { if (inPad(it.x, it.y)) continue; slots[slotOf(it.x + it.y)].push(() => this.beltItem(it.sx, it.sy, bl.col)); if (hid(it.x, it.y)) ghosts.push([it.sx, it.sy, bl.col]); }
+    }
+    let si = 0; const drawSlot = () => { for (const f of slots[si]) f(); si++; };
     this.drawMeteors(false);
-    const dec = this.decor(); let di = 0; const dings: number[][] = [];
+    let di = 0; const dings: number[][] = [];
     for (const sl of order) {
-      while (di < dec.length && dec[di][0] + dec[di][1] < sl.gx + sl.gy + 1.4) this.prop(dec[di++], t);
+      while (di < dec.length && dec[di][0] + dec[di][1] < sl.gx + sl.gy + 1.4) { drawSlot(); this.prop(dec[di++], t); }
+      drawSlot();
       const [x, y] = iso(sl.gx, sl.gy), v = visible(sl);
       if (sl.key === this.sel) { const hw = sl.s * TW / 2, hh = sl.s * TH / 2, p = 1 + Math.sin(t * 6) * .04; c.beginPath(); c.moveTo(x - hw * p, y); c.lineTo(x, y - hh * p); c.lineTo(x + hw * p, y); c.lineTo(x, y + hh * p); c.closePath(); c.fillStyle = 'rgba(255,255,255,.15)'; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 3; c.stroke(); }
       if (v === 'plot') { const k = cost(sl); drawPlot(c, x, y, sl.s, t + sl.gx, k !== null && G.S.cash >= k); continue; }
@@ -362,8 +379,10 @@ export class BaseView {
       if (dy) c.restore();
       if (scl !== 1) c.restore();
     }
-    for (const f of post) f();
-    while (di < dec.length) this.prop(dec[di++], t);
+    while (di < dec.length) { drawSlot(); this.prop(dec[di++], t); }
+    while (si < slots.length) drawSlot();
+    // goods hidden behind a building stay readable as a faint silhouette
+    if (ghosts.length) { c.save(); c.globalAlpha = .38; for (const [gx2, gy2, col] of ghosts) { c.beginPath(); c.moveTo(gx2, gy2 - 10); c.lineTo(gx2 + 8, gy2 - 5.5); c.lineTo(gx2, gy2 - 1); c.lineTo(gx2 - 8, gy2 - 5.5); c.closePath(); c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke(); c.fillStyle = col; c.globalAlpha = .18; c.fill(); c.globalAlpha = .38; } c.restore(); }
     this.drawMeteors(true);
     this.drawWreck(); this.drawTrader();
     // completion "ding": light pillar, double shock ring, star burst — drawn above every building
@@ -581,9 +600,20 @@ export class BaseView {
   private beltRun(run: { A: [number, number]; B: [number, number]; off: number }[], on: boolean) {
     if (!run.length) return; const c = this.c;
     const path = () => { c.beginPath(); c.moveTo(run[0].A[0], run[0].A[1]); for (const p of run) c.lineTo(p.B[0], p.B[1]); };
-    c.lineCap = 'round'; c.lineJoin = 'round'; path(); c.strokeStyle = '#24163a'; c.lineWidth = 17; c.stroke(); path(); c.strokeStyle = '#a9a3cf'; c.lineWidth = 13; c.stroke(); path(); c.strokeStyle = '#3a3262'; c.lineWidth = 8; c.stroke();
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    c.save(); c.translate(2, 4); path(); c.strokeStyle = 'rgba(14,6,34,.32)'; c.lineWidth = 19; c.stroke(); c.restore(); // ground shadow
+    c.save(); c.translate(0, 3); path(); c.strokeStyle = '#24163a'; c.lineWidth = 17; c.stroke(); path(); c.strokeStyle = '#5e5690'; c.lineWidth = 13; c.stroke(); c.restore(); // raised frame side
+    path(); c.strokeStyle = '#24163a'; c.lineWidth = 17; c.stroke(); path(); c.strokeStyle = '#a9a3cf'; c.lineWidth = 13; c.stroke(); path(); c.strokeStyle = '#3a3262'; c.lineWidth = 8; c.stroke();
     c.lineCap = 'butt'; path(); c.setLineDash([3, 7]); c.lineDashOffset = (on ? -this.t * 40 : 0) + run[0].off; c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 7; c.stroke(); c.setLineDash([]); c.lineCap = 'round';
   }
+  /** belt end tucked into a building pad: a framed hatch the conveyor disappears into */
+  private beltPort(x: number, y: number, ex: number, ey: number) { const c = this.c, l = Math.hypot(ex, ey) || 1, ux = ex / l, uy = ey / l;
+    // the hatch is iso-aligned with the pad edge: across the belt runs along the other grid axis
+    const [px, py] = ex * ey > 0 ? [-.894, .447] : [.894, .447], w = 10, d = 6;
+    const q = (a: number, b: number): [number, number] => [x + ux * a + px * b, y + uy * a + py * b];
+    const P = [q(-1, -w), q(d, -w), q(d, w), q(-1, w)]; c.beginPath(); c.moveTo(...P[0]); for (const p of P.slice(1)) c.lineTo(...p); c.closePath(); c.fillStyle = '#140b28'; c.fill(); c.strokeStyle = '#24163a'; c.lineWidth = 2.5; c.stroke();
+    c.beginPath(); c.moveTo(...q(-1, -w)); c.lineTo(...q(-1, w)); c.strokeStyle = '#ffd23f'; c.lineWidth = 2.5; c.lineCap = 'round'; c.stroke();
+    c.beginPath(); c.moveTo(...q(2.5, -w + 3)); c.lineTo(...q(2.5, w - 3)); c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 1.5; c.stroke(); }
   private beltItem(x: number, y: number, col: string) { const c = this.c; c.fillStyle = col; c.strokeStyle = '#24163a'; c.lineWidth = 2; c.beginPath(); c.moveTo(x, y - 10); c.lineTo(x + 8, y - 5.5); c.lineTo(x, y - 1); c.lineTo(x - 8, y - 5.5); c.closePath(); c.fill(); c.stroke(); c.fillStyle = 'rgba(255,255,255,.55)'; c.beginPath(); c.moveTo(x, y - 9); c.lineTo(x + 4, y - 6.5); c.lineTo(x, y - 5); c.lineTo(x - 4, y - 6.5); c.closePath(); c.fill(); }
   private label(sl: Slot) {
     const v = visible(sl); if (v === 'hidden' || sl.kind === 'hq') return;
