@@ -531,7 +531,7 @@ function storyIntro() {
 
 // ---------- offline ----------
 function offline() {
-  const secs = Math.min(G.offlineCap(), (Date.now() - st().last) / 1000);
+  const secs = Math.min(G.offlineCap(), G.awaySecs());
   if (secs < 30) return; if (G.perSec() <= 0 && !st().mach.some(Boolean) && !st().missions.length) return;
   const r = G.simulateOffline(secs); st().last = Date.now(); missionsTick();
   if (r.cash <= 1 && RES_ORDER.every(x => r.delta[x] <= 0.5)) return;

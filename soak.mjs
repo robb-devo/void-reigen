@@ -38,7 +38,7 @@ while(Date.now()-t0<MIN*60000){
   const after=await p.evaluate(()=>window.G.S.cash); log({tag:'bg',cyc,expect:Math.round(before.ps*90),gain:Math.round(after-before.cash),modal:gotModal}); await health('bg-return');
   // 3) every other cycle: offline return (close tab, wind clock back 2h, reopen)
   if(cyc%2===0){ await p.evaluate(()=>window.G.save()); const ps=await p.evaluate(()=>window.G.perSec()), c0=await p.evaluate(()=>window.G.S.cash); await p.close();
-    const tmp=await ctx.newPage(); await tmp.goto(URL+'sw.js'); /* not the game: its pagehide save would overwrite the rewound clock */ await tmp.evaluate(()=>{ const k='starforge.v2'; const o=JSON.parse(localStorage.getItem(k)); o.last-=2*3600e3; localStorage.setItem(k,JSON.stringify(o)); }); await tmp.close();
+    const tmp=await ctx.newPage(); await tmp.goto(URL+'sw.js'); /* not the game: its pagehide save would overwrite the rewound clock */ await tmp.evaluate(()=>{ const k='starforge.v2'; const o=JSON.parse(localStorage.getItem(k)); o.last-=2*3600e3; o.hw-=2*3600e3; localStorage.setItem(k,JSON.stringify(o)); }); await tmp.close();
     await open(); const wb2=await p.$('.modal #col'); if(wb2){ await p.screenshot({path:`shots/soak-off-${cyc}.png`}); await wb2.click({force:true}).catch(()=>{}); }
     await p.waitForTimeout(800); const c1=await p.evaluate(()=>window.G.S.cash); log({tag:'offline',cyc,psBefore:Math.round(ps),gain:Math.round(c1-c0),modal:!!wb2}); await health('off-return'); }
 }

@@ -21,7 +21,7 @@ export type State = {
   mines: Mine[]; tech: string[]; res: Bag; made: Bag; mach: number[]; on: boolean[]; gen: number;
   ships: Record<string, number>; conquered: string[]; missions: Mission[]; fupg: Record<string, number>; uid: number;
   ach: string[]; goal: number; gv: number; sold: number; lost: number; wins: number; w: number[]; auto: boolean;
-  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[]; fstock: Bag; lift: number; lifted: number; liftOn: boolean; daily: { day: number; streak: number }; meteors: number;
+  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[]; fstock: Bag; lift: number; lifted: number; liftOn: boolean; daily: { day: number; streak: number; at?: number }; meteors: number; hw: number; boost: { kind: 'cash' | 'ore'; m: number; left: number; dur: number } | null; trades: number; wrecks: number;
 };
 export const KEY = 'starforge.v2';
 export const fresh = (keep?: Partial<State>): State => ({
@@ -29,14 +29,14 @@ export const fresh = (keep?: Partial<State>): State => ({
   mines: MINES.map((_, i) => ({ n: i === 0 ? 1 : 0, p: 0, m: false, run: false })),
   tech: [], res: bag(), made: bag(), mach: MACHINES.map(() => 0), on: MACHINES.map(() => true), gen: 1,
   ships: {}, conquered: [], missions: [], fupg: {}, uid: 1, ach: [], goal: 0, gv: 3, sold: 0, lost: 0, wins: 0, w: MACHINES.map(() => 50), auto: false,
-  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], fstock: bag(), lift: 1, lifted: 0, liftOn: true, daily: { day: 0, streak: 0 }, meteors: 0, ...keep,
+  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], fstock: bag(), lift: 1, lifted: 0, liftOn: true, daily: { day: 0, streak: 0 }, meteors: 0, hw: 0, boost: null, trades: 0, wrecks: 0, ...keep,
 });
 export let S: State = fresh();
 export let clock = () => Date.now();
 export function setClock(f: () => number) { clock = f; }
-export function load() { try { const r = localStorage.getItem(KEY); if (r) { const o = JSON.parse(r); const f = fresh(); S = { ...f, ...o, res: { ...f.res, ...o.res }, made: { ...f.made, ...o.made }, fstock: { ...f.fstock, ...(o.fstock || {}) } }; if ((o.gv ?? 1) < 3) { const g = o.goal | 0; S.goal = g <= 13 ? g : g <= 16 ? g + 1 : g === 17 ? 20 : g <= 19 ? 21 : g === 20 ? 22 : g + 6; S.gv = 3; } if (!o.fstock && o.ships && Object.keys(o.ships).length) for (const r of FLEET_RES) { S.fstock[r] = S.res[r] * .5; S.res[r] *= .5; } if (!Array.isArray(S.skills)) S.skills = []; if (typeof S.xp !== 'number') S.xp = 0; while (S.mach.length < MACHINES.length) { S.mach.push(0); S.on.push(true); } while (S.w.length < MACHINES.length) S.w.push(50); while (S.mines.length < MINES.length) S.mines.push({ n: 0, p: 0, m: false, run: false }); } } catch { S = fresh(); } }
+export function load() { try { const r = localStorage.getItem(KEY); if (r) { const o = JSON.parse(r); const f = fresh(); S = { ...f, ...o, res: { ...f.res, ...o.res }, made: { ...f.made, ...o.made }, fstock: { ...f.fstock, ...(o.fstock || {}) } }; if ((o.gv ?? 1) < 3) { const g = o.goal | 0; S.goal = g <= 13 ? g : g <= 16 ? g + 1 : g === 17 ? 20 : g <= 19 ? 21 : g === 20 ? 22 : g + 6; S.gv = 3; } if (!o.fstock && o.ships && Object.keys(o.ships).length) for (const r of FLEET_RES) { S.fstock[r] = S.res[r] * .5; S.res[r] *= .5; } if (!Array.isArray(S.skills)) S.skills = []; if (typeof S.xp !== 'number') S.xp = 0; while (S.mach.length < MACHINES.length) { S.mach.push(0); S.on.push(true); } while (S.w.length < MACHINES.length) S.w.push(50); while (S.mines.length < MINES.length) S.mines.push({ n: 0, p: 0, m: false, run: false }); clockGuard(); } } catch { S = fresh(); } }
 export function migrateSeen(raw: string | null) { if (!raw) return; try { const o = JSON.parse(raw); if (!o.seen && (o.life > 0 || o.warps)) { S.seen = ['intro', 'factory', 'power', 'lab', 'export', 'foreman', 'tiers']; if (fleetOpen()) S.seen.push('fleet'); if (warpOpen() || o.warps) S.seen.push('warp'); } } catch {} }
-export function save() { S.last = clock(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
+export function save() { S.last = clock(); S.hw = Math.max(S.hw || 0, Date.now()); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
 export function setS(n: State) { S = n; }
 
 // ---------- mines ----------
@@ -196,13 +196,28 @@ export function resolveMissions(rng = Math.random): Outcome[] {
 export type MineEvent = { i: number; v: number; ore: number; ct: number; lode?: boolean };
 /** Tap-rush multiplier set by the UI while the player keeps a tap combo going (1 = off). Never on in sims/offline. */
 export let rush = 1; export const setRush = (m: number) => { rush = m; };
-// ---------- daily supply crate ----------
-export const today = () => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+// ---------- daily supply crate (clock-robust as far as an offline game can be) ----------
+// `hw` is the high-water mark of the wall clock (stamped on every save). Turning the device clock BACK can never
+// re-open a claim: the crate, its streak and offline earnings all run on max(now, hw). Jumping the clock forward
+// buys at most one early crate, after which nothing pays out until real time catches up; a clock that was far in
+// the future (>2 days, e.g. a fixed device clock) is accepted, but today's crate counts as taken and the streak resets.
+export const trusted = () => Math.max(Date.now(), S.hw || 0);
+const dayKey = (ms: number) => { const d = new Date(ms); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+export function clockGuard() { const now = Date.now(); if ((S.hw || 0) - now > 2 * 864e5) { S.hw = now; S.last = Math.min(S.last, now); S.daily = { day: dayKey(now), streak: 0, at: now }; } }
+export const today = () => dayKey(trusted());
 const dayNum = (k: number) => Math.floor(new Date(Math.floor(k / 10000), Math.floor(k / 100) % 100 - 1, k % 100).getTime() / 864e5);
-export const dailyReady = () => S.daily.day !== today();
+/** New calendar day (by the trusted clock) AND ≥ 4h since the last claim, so a 23:59 / 00:01 double-dip or a zone hop can't stack crates. */
+export const dailyReady = () => today() > S.daily.day && trusted() - (S.daily.at || 0) >= 4 * 3600e3;
 /** Streak continues if the last claim was yesterday, otherwise restarts at day 1. 7-day ladder. */
 export function dailyNext() { const t = today(), cont = S.daily.day && dayNum(t) - dayNum(S.daily.day) === 1; const streak = cont ? S.daily.streak % 7 + 1 : 1; const secs = [60, 90, 120, 180, 240, 300, 600][streak - 1]; return { streak, cash: Math.max(300 * streak, perSec() * secs), xp: 10 + streak * 5 }; }
-export function claimDaily() { const n = dailyNext(); S.daily = { day: today(), streak: n.streak }; earn(n.cash); return n; }
+export function claimDaily() { const n = dailyNext(); S.hw = trusted(); S.daily = { day: today(), streak: n.streak, at: S.hw }; earn(n.cash); return n; }
+/** Offline seconds since the last save, measured from the high-water mark so a rewound clock earns nothing. */
+export const awaySecs = () => (Date.now() - Math.max(S.last, S.hw || 0)) / 1000;
+// ---------- timed boosts (trader deals) ----------
+// Counted in played seconds, not wall time: immune to clock changes and never applied to offline catch-up.
+let simming = false;
+export const boostM = (k: 'cash' | 'ore') => S.boost && S.boost.kind === k && S.boost.left > 0 ? S.boost.m : 1;
+export function addBoost(kind: 'cash' | 'ore', m: number, secs: number) { if (S.boost && S.boost.kind === kind && S.boost.m === m && S.boost.left > 0) { S.boost.left += secs; S.boost.dur = S.boost.left; } else S.boost = { kind, m, left: secs, dur: secs }; }
 export function tick(dt: number, autoTap = false): MineEvent[] {
   const ev: MineEvent[] = [];
   for (let i = 0; i < MINES.length; i++) {
@@ -211,18 +226,19 @@ export function tick(dt: number, autoTap = false): MineEvent[] {
     if (!(b.run || b.m)) continue;
     const ct = cycle(i); b.p += dt / ct;
     if (b.p >= 1) {
-      const times = b.m ? Math.floor(b.p) : 1, lode = sk('mLode') && Math.random() < .04, v = revenue(i) * times * (lode ? 10 : 1) * rush, ore = orePerCycle(i) * times;
+      const times = b.m ? Math.floor(b.p) : 1, lode = sk('mLode') && Math.random() < .04, v = revenue(i) * times * (lode ? 10 : 1) * rush * boostM('cash'), ore = orePerCycle(i) * times * boostM('ore');
       earn(v); S.res[MINES[i].res] += ore; b.p = b.m ? b.p - times : 0; if (!b.m) b.run = false;
       ev.push({ i, v, ore, ct, lode });
     }
   }
   factoryTick(dt); liftTick(dt); autoSellTick(dt); S.played += dt;
+  if (S.boost && !simming) { S.boost.left -= dt; if (S.boost.left <= 0) S.boost = null; }
   return ev;
 }
 export function simulateOffline(secs: number) {
   const before = { ...S.res }, cash0 = S.cash; const steps = Math.min(600, Math.max(20, Math.floor(secs / 5))), dt = secs / steps;
   const saved = S.mines.map(m => m.run); S.mines.forEach(m => { if (!m.m) m.run = false; });
-  for (let k = 0; k < steps; k++) tick(dt);
+  const bo = S.boost; S.boost = null; simming = true; for (let k = 0; k < steps; k++) tick(dt); simming = false; S.boost = bo;
   S.mines.forEach((m, i) => { if (!m.m) m.run = saved[i] && false; });
   const delta = {} as Bag; for (const r of RES_ORDER) delta[r] = S.res[r] - before[r];
   return { cash: S.cash - cash0, delta };
@@ -233,7 +249,7 @@ export const offlineCap = () => ((S.warps >= 4 ? 24 : 8) + (sk('lCold') ? 8 : 0)
 /** Warp: reset the sector, keep meta-progress, apply perks. */
 export function doWarp() {
   const o = S, g = dmGain(), w = o.warps + 1;
-  const n = fresh({ dm: o.dm + g, total: o.total + o.life, warps: w, mute: o.mute, taps: o.taps, ach: o.ach, sold: o.sold, played: o.played, lost: o.lost, wins: o.wins, auto: o.auto, w: o.w, mult: o.mult, seen: o.seen, xp: o.xp, skills: o.skills, lifted: o.lifted, liftOn: o.liftOn, daily: o.daily, meteors: o.meteors });
+  const n = fresh({ dm: o.dm + g, total: o.total + o.life, warps: w, mute: o.mute, taps: o.taps, ach: o.ach, sold: o.sold, played: o.played, lost: o.lost, wins: o.wins, auto: o.auto, w: o.w, mult: o.mult, seen: o.seen, xp: o.xp, skills: o.skills, lifted: o.lifted, liftOn: o.liftOn, daily: o.daily, meteors: o.meteors, hw: o.hw, trades: o.trades, wrecks: o.wrecks });
   n.goal = GOAL_SECTOR;
   if (w >= 1) { n.mines[0].m = true; n.mines[1].m = true; n.mines[1].n = 1; n.cash = 1e4; }
   if (w >= 2) n.mach = o.mach.map(l => Math.floor(l * 0.25));

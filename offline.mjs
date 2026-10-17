@@ -9,7 +9,7 @@ let p=await ctx.newPage(); await p.goto(URL+'sw.js'); await p.evaluate(s=>localS
 for (const hrs of [0.25, 2, 30]) {
   p.on('pageerror',e=>errs.push(e.message)); await p.goto(URL); await p.waitForTimeout(1500); await p.evaluate(()=>document.querySelector('.modal #col')?.click());
   const ps=await p.evaluate(()=>window.G.perSec()), c0=await p.evaluate(()=>{window.G.save(); return window.G.S.cash}); await p.goto(URL+'sw.js'); // leaves the game (pagehide saves)
-  await p.evaluate(h=>{ const o=JSON.parse(localStorage.getItem('starforge.v2')); o.last-=h*3600e3; localStorage.setItem('starforge.v2',JSON.stringify(o)); },hrs);
+  await p.evaluate(h=>{ const o=JSON.parse(localStorage.getItem('starforge.v2')); o.last-=h*3600e3; o.hw-=h*3600e3; localStorage.setItem('starforge.v2',JSON.stringify(o)); },hrs);
   await p.goto(URL); await p.waitForTimeout(1500); const wb=await p.$('.modal #col'); if(wb) await p.screenshot({path:`shots/off-${hrs}h.png`});
   const txt=wb?await p.$eval('.modal',e=>e.innerText.replace(/\s+/g,' ').slice(0,120)):''; if(wb) await wb.click({force:true}); await p.waitForTimeout(400);
   const c1=await p.evaluate(()=>window.G.S.cash); const cap=Math.min(hrs,8)*3600; console.log(JSON.stringify({hrs,modal:!!wb,ps:Math.round(ps),gain:Math.round(c1-c0),naive:Math.round(ps*cap),ratio:+((c1-c0)/(ps*cap)).toFixed(2),txt}));
