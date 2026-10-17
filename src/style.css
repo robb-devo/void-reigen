@@ -439,3 +439,23 @@ body.placing .toast{bottom:calc(var(--sb) + 104px)}
 @keyframes cardin{from{transform:translateY(18px) scale(.9);opacity:0}}
 .scard.afford .price.ok{animation:pricepulse 1.6s ease-in-out infinite}
 @keyframes pricepulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18)}}
+/* ===== Stage 12 art pass: panels, ribbons, buttons ===== */
+.modal .sheet{background:radial-gradient(120% 50% at 50% 0,#ffffff1c,transparent 62%),linear-gradient(180deg,#3b2b68,#1c1335 88%);border:3px solid #120a24;box-shadow:0 8px 0 #120a24,0 34px 70px #000b,inset 0 2px 0 #ffffff38,inset 0 0 0 3px #ffffff0c;position:relative}
+.modal .sheet::after{content:'';position:absolute;inset:6px;border-radius:22px;border:1.5px dashed #ffffff10;pointer-events:none}
+.ribbon{position:relative;z-index:1;width:fit-content;max-width:calc(100% - 40px);margin:-4px auto 14px!important;padding:8px 22px 10px;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(#ff8cc3,#e04694 55%,#c4307c);color:#fff;font-size:21px!important;line-height:1.1;border:3px solid #120a24;border-radius:12px;box-shadow:0 4px 0 #120a24,inset 0 2px 0 #ffffffa0,inset 0 -4px 0 #0000002a;text-shadow:0 2px 0 #120a24,0 0 1px #120a24}
+.ribbon::before,.ribbon::after{content:'';position:absolute;z-index:-1;top:9px;width:26px;bottom:-9px;background:linear-gradient(#a8226a,#7e1650);filter:drop-shadow(0 0 0 #120a24);border:3px solid #120a24}
+.ribbon::before{left:-19px;clip-path:polygon(0 0,100% 0,100% 100%,0 100%,38% 50%);border-right:0}
+.ribbon::after{right:-19px;clip-path:polygon(0 0,100% 0,62% 50%,100% 100%,0 100%);border-left:0}
+.ribbon.gold{background:linear-gradient(#fff0a0,#ffc93d 55%,#f29a17);color:#4a2600;text-shadow:0 1px 0 #fff8}.ribbon.gold::before,.ribbon.gold::after{background:linear-gradient(#d97f10,#a95a06)}
+.ribbon small{color:#ffe1f0!important;font-size:13px!important;opacity:.9}.ribbon .hico svg{width:22px;height:22px;filter:drop-shadow(0 2px 0 #120a24)}
+.wbsub{margin:-6px 0 8px!important;font:600 13px Nunito;color:#cfc6ff!important}
+.modal.wb .hero{position:relative;isolation:isolate}
+.modal.wb .hero::before{content:'';position:absolute;z-index:-1;left:50%;top:50%;width:230px;height:230px;margin:-115px 0 0 -115px;border-radius:50%;background:repeating-conic-gradient(#ffd23f2e 0 10deg,transparent 10deg 24deg);-webkit-mask:radial-gradient(circle,#000 30%,transparent 70%);mask:radial-gradient(circle,#000 30%,transparent 70%);animation:spin 14s linear infinite}
+.modal.wb .amt{text-shadow:0 3px 0 #7a3d00,0 0 24px #ffd23f88;font-size:40px}
+.btn{position:relative;overflow:hidden}
+.btn.big::before,.btn.gold::before{content:'';position:absolute;left:8px;right:8px;top:3px;height:38%;border-radius:12px 12px 40% 40%;background:linear-gradient(#ffffff70,#ffffff00);pointer-events:none}
+.btn:disabled{filter:none;background:linear-gradient(#5d5184,#43386a);color:#bfb5e8;box-shadow:0 4px 0 #1a1030,inset 0 2px 0 #ffffff1c}
+.btn:disabled::before{opacity:.25}.btn:disabled b{color:#ffadc0;opacity:1}
+.wbhero{width:120px!important;height:110px!important;margin-top:-6px!important}.wbhero img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 6px 0 #0006)}
+.achs .ach.got b{color:#4a2600!important}.achs .ach.got small{color:#7a4a10!important;opacity:1}
+.bsheet .btn:disabled,.bsheet .buy:disabled{filter:none!important;background:linear-gradient(#5d5184,#43386a)!important;color:#c9c0ee!important;box-shadow:0 4px 0 #1a1030,inset 0 2px 0 #ffffff1c!important}

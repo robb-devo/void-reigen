@@ -532,7 +532,7 @@ function confirmModal(icon: string, title: string, txt: string, ok: string, fn: 
   const m = modal(`<div class="hero">${icon}</div><h2 class="h">${title}</h2><p>${txt}</p><div class="two"><button class="btn big ghost" data-x>Cancel</button><button class="btn gold big" data-ok>${ok}</button></div>`);
   m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('[data-ok]')!.addEventListener('click', () => { m.remove(); fn(); });
 }
-$('#trophy').addEventListener('click', () => { sfx.tap(); const s = st(); const m = modal(`<h2 class="h"><span class="hico">${$('#trophy svg')?.outerHTML || ''}</span> Trophies <small>${s.ach.length}/${ACHS.length}</small></h2><p>Each trophy: <b style="color:var(--mint)">+2% profit</b> forever</p><div class="achs">${ACHS.map(a => `<div class="ach ${s.ach.includes(a.id) ? 'got' : ''}"><i>${s.ach.includes(a.id) ? ($('#trophy svg')?.outerHTML || '') : `<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3" fill="#8b84b0" stroke="#24163a" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#24163a" stroke-width="2.5"/><circle cx="12" cy="15.5" r="1.8" fill="#24163a"/></svg>`}</i><b>${a.name}</b><small>${a.desc}</small></div>`).join('')}</div><button class="btn big" data-x>Close</button>`); m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('.sheet')!.classList.add('tall'); });
+$('#trophy').addEventListener('click', () => { sfx.tap(); const s = st(); const m = modal(`<h2 class="h ribbon"><span class="hico">${$('#trophy svg')?.outerHTML || ''}</span> Trophies <small>${s.ach.length}/${ACHS.length}</small></h2><p>Each trophy: <b style="color:var(--mint)">+2% profit</b> forever</p><div class="achs">${ACHS.map(a => `<div class="ach ${s.ach.includes(a.id) ? 'got' : ''}"><i>${s.ach.includes(a.id) ? ($('#trophy svg')?.outerHTML || '') : `<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3" fill="#8b84b0" stroke="#24163a" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#24163a" stroke-width="2.5"/><circle cx="12" cy="15.5" r="1.8" fill="#24163a"/></svg>`}</i><b>${a.name}</b><small>${a.desc}</small></div>`).join('')}</div><button class="btn big" data-x>Close</button>`); m.querySelector('[data-x]')!.addEventListener('click', () => m.remove()); m.querySelector('.sheet')!.classList.add('tall'); });
 function checkAch() { const s = st(); for (const a of ACHS) if (!s.ach.includes(a.id) && a.check(s)) { s.ach.push(a.id); xp(XP.ach); if (s.goal < 9) continue; sfx.fanfare(); buzz([20, 40, 20, 40]); toast(`${I.trophy} ${a.name} · +2% profit`); bump($('#trophy')); burst(...center($('#trophy')), 24); } }
 
 // ---------- tabs ----------
@@ -549,7 +549,7 @@ const VOLS: [keyof typeof VOL_DEF, string, string, string][] = [
 ];
 function settings() {
   sfx.select(); buzz(8); const s = st();
-  const m = modal(`<h2 class="h"><span class="hico">${GEAR}</span> Settings</h2>
+  const m = modal(`<h2 class="h ribbon"><span class="hico">${GEAR}</span> Settings</h2>
   <div class="setsec"><div class="setrow swrow"><div><b>Sound</b><small>All game audio</small></div><button class="switch ${s.mute ? '' : 'on'}" data-mute aria-label="Sound on/off"><i></i></button></div>
   ${VOLS.map(([k, n, d, c]) => `<div class="setrow vol ${s.mute ? 'dim' : ''}" style="--c:${c}"><div class="vl"><b>${n}</b><small>${d}</small></div><div class="vr"><input type="range" min="0" max="100" step="1" value="${Math.round(vol()[k] * 100)}" data-vol="${k}" aria-label="${n} volume"><output>${Math.round(vol()[k] * 100)}</output></div></div>`).join('')}
   <div class="setnote">No music yet: the game's soundtrack is its machines.</div></div>
@@ -661,7 +661,7 @@ function offline() {
   if (r.cash <= 1 && RES_ORDER.every(x => r.delta[x] <= 0.5)) return;
   document.querySelector('.modal.wb')?.remove();
   const lines = RES_ORDER.filter(x => r.delta[x] > 0.5).map(x => `<span style="color:${RES[x].color}">${ri(x)} +${fmt(r.delta[x])}</span>`).join('');
-  const m = modal(`<div class="hero art-hero">${art('cruiser')}</div><h2 class="h">Welcome back, Commander</h2><p>Your crew worked for ${fmtT(secs)}${secs >= G.offlineCap() ? ` (max ${G.offlineCap() / 3600}h)` : ''}.</p><div class="amt">+$${fmt(r.cash)}</div><div class="loot">${lines}</div><button class="btn gold big" id="col">Collect</button>`); m.classList.add('wb');
+  const m = modal(`<div class="hero art-hero wbhero">${(bv?.portrait('hq') && `<img src="${bv!.portrait('hq')}" alt="">`) || art('cruiser')}</div><h2 class="h ribbon">Welcome back!</h2><p class="wbsub">Commander, your base kept busy</p><p>Your crew worked for ${fmtT(secs)}${secs >= G.offlineCap() ? ` (max ${G.offlineCap() / 3600}h)` : ''}.</p><div class="amt">+$${fmt(r.cash)}</div><div class="loot">${lines}</div><button class="btn gold big" id="col">Collect</button>`); m.classList.add('wb');
   $('#col', m).addEventListener('click', ev => { m.remove(); sfx.fanfare(); buzz([30, 40, 80]); fly(ev.clientX, ev.clientY, ...center(cashEl), 24, 1, '#ffc94a', () => bump(cashEl)); burst(ev.clientX, ev.clientY, 30); G.save(); });
 }
 
@@ -738,7 +738,7 @@ function dailyCheck() {
   const s = st(); if (crateOpen || !G.dailyReady() || s.goal < 6 || tab !== 'base' || document.hidden || talking() || document.querySelector('.modal, .tree') || performance.now() - rushT < 3000 || bv?.travelT !== -1) return;
   crateOpen = true; const n = G.dailyNext();
   const pips = Array.from({ length: 7 }, (_, k) => `<span class="pip ${k + 1 < n.streak ? 'got' : k + 1 === n.streak ? 'now' : ''} ${k === 6 ? 'big' : ''}">${k + 1 < n.streak ? I.check : k + 1}</span>`).join('');
-  const m = modal(`<div class="dcrate"><small>DAILY SUPPLY CRATE</small><h2 class="h">Day ${n.streak} of 7</h2><div class="cwrap">${CRATE}</div><div class="pips">${pips}</div><div class="amt" hidden>+$${fmt(n.cash)}</div><p class="dsub">Come back tomorrow – the crate grows every day of your streak.</p><button class="btn gold big" id="dopen">Open crate</button></div>`);
+  const m = modal(`<div class="dcrate"><small>DAILY SUPPLY CRATE</small><h2 class="h ribbon gold">Day ${n.streak} of 7</h2><div class="cwrap">${CRATE}</div><div class="pips">${pips}</div><div class="amt" hidden>+$${fmt(n.cash)}</div><p class="dsub">Come back tomorrow – the crate grows every day of your streak.</p><button class="btn gold big" id="dopen">Open crate</button></div>`);
   m.classList.add('daily'); m.addEventListener('click', e => { if (e.target === m) e.stopImmediatePropagation(); }, true); // no dismiss-by-backdrop before opening
   sfx.select();
   const btn = $('#dopen', m) as HTMLButtonElement; let opened = false;
