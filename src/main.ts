@@ -110,7 +110,7 @@ function initBuild() {
   $('[data-pb="x"]').addEventListener('click', () => cancelPlace());
   $('[data-pb="ok"]').addEventListener('click', ev => confirmPlace(ev as MouseEvent));
   setInterval(() => { const b = $('#buildbtn'), n = readyCount(), bd = $('.bdg', b); bd.hidden = !n; bd.textContent = String(n); b.classList.toggle('show', tab === 'base' && !!bv && !bv.rock && bv.travelT < 0 && !bv.place && (st().goal >= 2 || st().warps > 0 || n > 0)); }, 250);
-  if (bv) bv.onPlace = moved => { updatePlacebar(); if (moved) { sfx.blip(); buzz(4); } };
+  if (bv) bv.onPlace = moved => { updatePlacebar(); if (moved) { sfx.snap(); buzz(4); } };
 }
 function openShop(cat?: ShopCat) {
   if (!bv) return; closeSheet(); sfx.select(); buzz(8);
@@ -159,8 +159,8 @@ function confirmPlace(ev: MouseEvent) {
   }
   bv.endPlace(); setPos(sl.key, p.gx, p.gy); document.body.classList.remove('placing'); updatePlacebar();
   const [x, y] = bv.slotScreen(sl.key);
-  if (p.mode === 'new') { bv.construct(sl.key); sfx.buy(); buzz([20, 20, 40]); burst(x, y + 30, 18); setTimeout(() => { celebrate(sl.kind === 'mach' && MACHINES[sl.idx].id === 'fab' ? 'Shipyard unlocked!' : `${slotName(sl)} built!`, x, y); spotlight(); }, 900); }
-  else { bv.puff(sl.key); sfx.clank(); buzz(14); burst(x, y + 30, 10, 0, '#5cf2ff'); }
+  if (p.mode === 'new') { bv.construct(sl.key); sfx.place(); buzz([20, 20, 40]); burst(x, y + 30, 18); setTimeout(() => { celebrate(sl.kind === 'mach' && MACHINES[sl.idx].id === 'fab' ? 'Shipyard unlocked!' : `${slotName(sl)} built!`, x, y); spotlight(); }, 900); }
+  else { bv.puff(sl.key); sfx.place(); buzz(14); burst(x, y + 30, 10, 0, '#5cf2ff'); }
   void ev; G.save();
 }
 

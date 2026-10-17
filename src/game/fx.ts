@@ -54,35 +54,55 @@ function noise(d = 0.3, vol = 0.08, freq = 800, at = 0, b: Bus = 'world', q = 1)
   const src = c.createBufferSource(); src.buffer = buf; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(vol * trim * gainO, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
   src.connect(f).connect(g); out(c, g, b); src.start(t); src.stop(t + d + .02);
 }
-// building blocks
+// building blocks: a cartoony, poppy kit (woody/plastic clicks, bubbly pops, bright metal tings, brass stabs, soft thumps)
 const pop = (f = 520, at = 0, vol = .32, b: Bus = 'ui') => { v({ f: f * 1.9, to: f * .7, d: .09, type: 'sine', vol, at, bus: b }); v({ f: f * 4, to: f * 2, d: .03, type: 'triangle', vol: vol * .45, at, bus: b }); };
 const click = (at = 0, vol = .12) => { noise(.016, vol * 6, 6500, at, 'ui', .9); v({ f: 3200, to: 2200, d: .012, type: 'triangle', vol: vol * .9, at, att: .001 }); };
-const chime = (f: number, at = 0, vol = .14) => { noise(.02, vol * .5, 9000, at, 'reward', 2); v({ f, d: .32, type: 'sine', vol, at, bus: 'reward', wet: true }); v({ f: f * 2.76, d: .12, type: 'sine', vol: vol * .35, at, bus: 'reward', wet: true }); v({ f: f * 5.4, d: .05, type: 'sine', vol: vol * .15, at, bus: 'reward' }); };
-const kick = (at = 0, vol = .5) => v({ f: 160, to: 45, d: .16, type: 'sine', vol, at, bus: 'world', att: .002 });
+/** woodblock / plastic "tok": resonant noise burst + short damped sine */
+const wood = (f: number, at = 0, vol = .3, b: Bus = 'ui') => { noise(.028, vol * 2.2, f * 1.6, at, b, 7); v({ f, to: f * .9, d: .05, type: 'sine', vol, at, bus: b, att: .0008 }); v({ f: f * 2.32, d: .022, type: 'triangle', vol: vol * .35, at, bus: b, att: .0008 }); };
+/** bubble "bloop": fast upward pitch sweep */
+const bub = (f: number, at = 0, vol = .2, b: Bus = 'ui') => { v({ f, to: f * 2.6, d: .075, type: 'sine', vol, at, bus: b, att: .002 }); v({ f: f * 2, to: f * 4.4, d: .04, type: 'sine', vol: vol * .25, at: at + .005, bus: b }); };
+/** bright metal ting (inharmonic partials) with a tiny sparkle on top */
+const ting = (f: number, at = 0, vol = .12, b: Bus = 'reward') => { noise(.012, vol * .9, 9500, at, b, 3); v({ f, d: .26, type: 'sine', vol, at, bus: b, wet: true, att: .001 }); v({ f: f * 2.76, d: .1, type: 'sine', vol: vol * .4, at, bus: b, wet: true, att: .001 }); v({ f: f * 5.4, d: .045, type: 'sine', vol: vol * .2, at, bus: b }); };
+const chime = (f: number, at = 0, vol = .14) => ting(f, at, vol);
+/** soft cartoon thump (building lands, chest hits the floor) */
+const thump = (at = 0, vol = .5, b: Bus = 'world') => { v({ f: 150, to: 42, d: .2, type: 'sine', vol, at, bus: b, att: .002 }); noise(.11, vol * .35, 260, at, b, .8); v({ f: 300, to: 120, d: .05, type: 'triangle', vol: vol * .25, at, bus: b }); };
+const kick = (at = 0, vol = .5) => thump(at, vol);
+/** brass stab: two detuned saws through a snappy low-pass envelope */
+function brass(f: number, at = 0, d = .22, vol = .07, b: Bus = 'reward') {
+  const c = live(); if (!c) return; const t = c.currentTime + at, g = c.createGain(), lp = c.createBiquadFilter(), V = vol * trim * gainO;
+  lp.type = 'lowpass'; lp.Q.value = 1.6; lp.frequency.setValueAtTime(450, t); lp.frequency.exponentialRampToValueAtTime(4200, t + .035); lp.frequency.exponentialRampToValueAtTime(1300, t + d);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(V, t + .014); g.gain.setValueAtTime(V * .8, t + d * .55); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  for (const dt of [-8, 8]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = dt; o.connect(lp); o.start(t); o.stop(t + d + .05); }
+  lp.connect(g); out(c, g, b); if (send && !busO) g.connect(send);
+}
+const sparkle = (base: number, at = 0, n = 4, vol = .08) => { for (let k = 0; k < n; k++) ting(st2(base, k * 2), at + k * .045, vol * (1 - k * .1)); };
 const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
 const st2 = (base: number, k: number) => base * Math.pow(2, PENTA[Math.min(PENTA.length - 1, k)] / 12);
 let trim = 1;
 /** pentatonic step for the tap sound: rises with the tap combo */
 let tapStep = 0; export const setTapStep = (k: number) => { tapStep = Math.max(0, Math.min(10, k)); };
 // loudness trims from the offline analysis (audio_an.py): keeps every SFX in its category's LU window
-export const TRIM: Record<string, number> = {blip: 15.817, build: 1.549, buy: 2.917, claim: 1.641, clank: 3.413, coin: 3.548, drill: 6.457, fanfare: 2.318, land: 1.288, land2: 3.236, launch: 5.433, lode: 1.659, no: 7.079, pBarrel: 3.981, pCrystal: 1.531, pFlag: 3.715, pLamp: 4.169, pMetal: 6.761, pRadar: 7.585, rank: 1.84, rushUp: 3.388, select: 2.884, tap: 4.467, warp: 1.758};
-let lastCoin = 0, combo = 0, comboT = 0, lastFan = 0, lastBlip = 0;
+export const TRIM: Record<string, number> = {blip: 6.153, build: 3.428, buy: 6.026, claim: 4.786, clank: 12.735, coin: 5.889, drill: 11.885, fanfare: 3.02, land: 4.168, land2: 8.81, launch: 10.352, lode: 4.731, no: 4.624, pBarrel: 9.549, pCrystal: 4.571, pFlag: 9.226, pLamp: 10.593, pMetal: 16, pRadar: 16, place: 6.918, rank: 3.63, rushUp: 5.433, select: 7.162, snap: 8.912, tap: 16, warp: 3.846};
+let lastCoin = 0, combo = 0, comboT = 0, lastFan = 0, lastBlip = 0, lastSnap = 0;
 const raw = {
-  // bright 'tick' transient (4-11 kHz) on top of a higher-pitched body: reads crisp on phone speakers
-  tap: () => { click(0, .13); pop(st2(760, tapStep), 0, .15); v({ f: 5300, to: 4100, d: .03, type: 'sine', vol: .1, att: .0008 }); noise(.016, 1, 9000, 0, 'ui', 1.2); },
-  select: () => { click(0, .12); pop(560, 0, .2); pop(1120, .042, .12); v({ f: 6272, d: .05, type: 'sine', vol: .04, at: .042, att: .001 }); noise(.014, .45, 9500, .042, 'ui', 1.4); },
-  drill: () => { pop(300, 0, .28, 'world'); noise(.07, .07, 1800, 0, 'world', 1.2); v({ f: 90, to: 60, d: .12, type: 'square', vol: .03, bus: 'world' }); },
-  coin: () => { const n = performance.now(); if (n - lastCoin < 70) return; combo = n - comboT < 700 ? Math.min(combo + 1, 10) : 0; comboT = n; lastCoin = n; chime(st2(1046, combo), 0, .1); },
-  buy: () => { pop(500, 0, .3); chime(1318, .04, .08); },
-  no: () => { v({ f: 330, to: 220, d: .12, type: 'square', vol: .05 }); v({ f: 280, to: 190, d: .14, type: 'square', vol: .05, at: .09 }); },
-  fanfare: () => { const n = performance.now(); if (n - lastFan < 350) return; lastFan = n; kick(0, .35); [523, 659, 784, 1047].forEach((f, k) => { v({ f, d: .28, type: 'triangle', vol: .12, at: k * .075, bus: 'reward', wet: true }); }); chime(2093, .32, .1); },
-  claim: () => { kick(0, .4); for (let k = 0; k < 6; k++) chime(st2(784, k + 2), k * .045, .08); pop(392, .3, .25, 'reward'); chime(1568, .34, .14); },
-  launch: () => { noise(.9, .12, 500, 0, 'world', .7); v({ f: 70, to: 260, d: .8, type: 'sawtooth', vol: .04, bus: 'world' }); kick(0, .4); },
-  warp: () => { v({ f: 60, to: 900, d: 1.6, type: 'sawtooth', vol: .07, bus: 'world' }); noise(1.5, .1, 1200, 0, 'world', .6); [523, 784, 1047, 1568].forEach((f, k) => chime(f, .6 + k * .1, .14)); kick(.6, .6); },
-  clank: () => { click(0, .14); v({ f: 900, to: 600, d: .03, type: 'square', vol: .03 }); },
-  blip: () => { const n = performance.now(); if (n - lastBlip < 45) return; lastBlip = n; v({ f: 700 + Math.random() * 300, d: .03, type: 'triangle', vol: .05 }); },
-  build: () => { for (let k = 0; k < 3; k++) { click(k * .2, .16); v({ f: 240 - k * 20, to: 140, d: .06, type: 'square', vol: .04, at: k * .2, bus: 'world' }); } kick(.85, .5); [784, 988, 1319, 1568].forEach((f, k) => chime(f, .88 + k * .055, .1)); },
-  land: () => { noise(.6, .07, 400, 0, 'world', .8); v({ f: 420, to: 140, d: .8, type: 'sine', vol: .05, bus: 'world' }); kick(1.4, .3); pop(380, 1.42, .3, 'world'); click(1.42, .2); },
+  // UI: woody "plock" that climbs the pentatonic scale with the tap combo
+  tap: () => { wood(st2(1400, tapStep), 0, .3); bub(st2(700, tapStep), 0, .1); noise(.008, .5, 7500, 0, 'ui', 1.5); },
+  select: () => { wood(1250, 0, .26); wood(1700, .05, .2); bub(820, .0, .08); },
+  drill: () => { thump(0, .22); wood(520, 0, .3, 'world'); noise(.06, .08, 2200, 0, 'world', 1.4); },
+  coin: () => { const n = performance.now(); if (n - lastCoin < 70) return; combo = n - comboT < 700 ? Math.min(combo + 1, 10) : 0; comboT = n; lastCoin = n; ting(st2(1568, combo), 0, .1); ting(st2(1568, combo) * 1.5, .035, .06); },
+  buy: () => { bub(480, 0, .28); wood(900, 0, .16); ting(1760, .05, .1); },
+  no: () => { wood(330, 0, .32); wood(250, .085, .3); v({ f: 210, to: 150, d: .14, type: 'triangle', vol: .08, at: .085 }); },
+  fanfare: () => { const n = performance.now(); if (n - lastFan < 350) return; lastFan = n; thump(0, .3); [523, 659, 784].forEach((f, k) => brass(f, k * .07, .16, .06)); [523, 659, 784, 1047].forEach(f => brass(f, .21, .42, .045)); sparkle(1568, .26, 4, .07); },
+  claim: () => { thump(0, .4); for (let k = 0; k < 6; k++) ting(st2(1046, k + 2), k * .04, .08); bub(392, .28, .22, 'reward'); brass(784, .3, .3, .05); brass(1047, .3, .3, .04); ting(2093, .34, .12); },
+  launch: () => { noise(.9, .12, 500, 0, 'world', .7); v({ f: 70, to: 260, d: .8, type: 'sawtooth', vol: .035, bus: 'world' }); thump(0, .4); bub(300, .05, .12, 'world'); },
+  warp: () => { v({ f: 60, to: 900, d: 1.6, type: 'sawtooth', vol: .06, bus: 'world' }); noise(1.5, .1, 1200, 0, 'world', .6); [523, 784, 1047, 1568].forEach((f, k) => ting(f, .6 + k * .1, .14)); [523, 659, 784].forEach(f => brass(f, .62, .6, .045)); thump(.6, .6); },
+  clank: () => { wood(2300, 0, .18); v({ f: 900, to: 600, d: .03, type: 'square', vol: .025 }); },
+  blip: () => { const n = performance.now(); if (n - lastBlip < 45) return; lastBlip = n; bub(900 + Math.random() * 400, 0, .3); },
+  // construction: three woody hammer knocks, then the satisfying thunk + sparkle
+  build: () => { for (let k = 0; k < 3; k++) { wood(640 - k * 40, k * .2, .26, 'world'); thump(k * .2, .12); } thump(.85, .55); wood(420, .85, .3, 'world'); sparkle(1318, .9, 5, .08); },
+  place: () => { thump(0, .6); wood(400, 0, .34, 'world'); noise(.18, .12, 900, .01, 'world', .6); bub(330, .02, .14, 'world'); sparkle(1568, .09, 4, .075); },
+  snap: () => { const n = performance.now(); if (n - lastSnap < 40) return; lastSnap = n; wood(1900 + Math.random() * 150, 0, .14); },
+  land: () => { noise(.6, .07, 400, 0, 'world', .8); v({ f: 420, to: 140, d: .8, type: 'sine', vol: .05, bus: 'world' }); thump(1.4, .3); bub(300, 1.42, .2, 'world'); wood(800, 1.42, .2, 'world'); },
   // tap-a-prop toys: tiny, playful, each with its own timbre (ui bus, quieter than a building tap)
   pLamp: () => { click(0, .1); v({ f: 2093, d: .18, type: 'sine', vol: .07, wet: true }); v({ f: 3136, d: .1, type: 'sine', vol: .035, at: .01 }); },
   pCrystal: () => { click(0, .08); chime(1568, 0, .07); chime(2349, .06, .05); },
@@ -90,10 +110,10 @@ const raw = {
   pBarrel: () => { pop(240, 0, .26); v({ f: 120, to: 70, d: .1, type: 'sine', vol: .14 }); click(0, .08); },
   pMetal: () => { click(0, .12); v({ f: 1180, to: 1120, d: .16, type: 'square', vol: .018 }); v({ f: 1770, d: .12, type: 'sine', vol: .04 }); },
   pRadar: () => { v({ f: 1760, d: .05, type: 'square', vol: .02 }); v({ f: 2349, d: .07, type: 'square', vol: .018, at: .08 }); click(0, .08); },
-  rushUp: () => { [0, 2, 4].forEach((k, j) => v({ f: st2(1046, k + tapStep), d: .09, type: 'triangle', vol: .09, at: j * .045, bus: 'reward', wet: true })); click(0, .12); },
-  land2: () => { kick(0, .45); noise(.25, .09, 700, 0, 'world', .8); pop(260, .02, .2, 'world'); },
-  lode: () => { kick(0, .5); for (let k = 0; k < 8; k++) chime(st2(1046, k + 1), k * .035, .09); },
-  rank: () => { kick(0, .5); [392, 523, 659, 784, 1047].forEach((f, k) => v({ f, d: .35, type: 'triangle', vol: .12, at: k * .07, bus: 'reward', wet: true })); chime(2093, .4, .14); chime(2637, .48, .1); },
+  rushUp: () => { [0, 2, 4].forEach((k, j) => ting(st2(1046, k + tapStep), j * .045, .08)); wood(1500, 0, .14); },
+  land2: () => { thump(0, .45); noise(.25, .09, 700, 0, 'world', .8); bub(260, .02, .18, 'world'); },
+  lode: () => { thump(0, .5); for (let k = 0; k < 8; k++) ting(st2(1046, k + 1), k * .035, .09); brass(1047, .28, .3, .04); },
+  rank: () => { thump(0, .5); [392, 523, 659, 784].forEach((f, k) => brass(f, k * .07, .2, .055)); [523, 659, 784, 1047].forEach(f => brass(f, .3, .5, .04)); ting(2093, .4, .14); ting(2637, .48, .1); },
 };
 export const sfx = Object.fromEntries(Object.entries(raw).map(([k, fn]) => [k, () => { trim = TRIM[k] ?? 1; try { fn(); } finally { trim = 1; } }])) as typeof raw;
 /** Automated/background sounds (idle mines, drones, auto rockets): own 'amb' bus, globally rate-limited,
@@ -155,8 +175,8 @@ export function rocket(x: number, y: number, force = false) { const n = performa
 export function flash() { const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:70;background:radial-gradient(circle,#fff,#7ee8ff 40%,#4a2f9a);pointer-events:none;transition:opacity 1.2s'; document.body.appendChild(d); requestAnimationFrame(() => requestAnimationFrame(() => d.style.opacity = '0')); setTimeout(() => d.remove(), 1300); }
 /** Dev/QA: render one SFX offline (for loudness/spectrum analysis). */
 export async function renderSfx(name: keyof typeof sfx, secs = 2, rate = 44100) {
-  const keepAC = AC, keepB = buses, keepS = send, keepM = S.mute;
+  const keepAC = AC, keepB = buses, keepS = send, keepM = S.mute, keepMG = masterG;
   AC = new OfflineAudioContext(1, Math.ceil(secs * rate), rate) as unknown as AudioContext; buses = null; send = null; S.mute = false;
   try { (sfx[name] as () => void)(); return (await (AC as unknown as OfflineAudioContext).startRendering()).getChannelData(0); }
-  finally { AC = keepAC; buses = keepB; send = keepS; S.mute = keepM; }
+  finally { AC = keepAC; buses = keepB; send = keepS; S.mute = keepM; masterG = keepMG; }
 }
