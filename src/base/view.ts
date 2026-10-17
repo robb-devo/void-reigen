@@ -2,11 +2,12 @@
 import { MINES, MACHINES, RES, Res } from '../game/data';
 import * as G from '../game/state';
 import { outlinedText } from '../design';
+import { route, along, polyLen, Pt } from './route';
 import { drawBuilding, drawPlot, iso, TW, TH, Kind, hsl, scaffold, ship, glow, INK, box, traderShip, wreck } from './render';
 
 /** Vertical framing: the playfield visible between the HUD (cash + goal bar, ~top 24%) and the bottom hint sits centred at ~57%. */
 const FRAME_Y = .57;
-export type Slot = { key: string; kind: Kind; idx: number; gx: number; gy: number; s: number; rock?: number };
+export type Slot = { key: string; kind: Kind; idx: number; gx: number; gy: number; s: number; rock?: number; dx?: number; dy?: number };
 export const ALL_SLOTS: Slot[] = [
   { key: 'hq', kind: 'hq', idx: 0, gx: 0, gy: 0, s: 2 },
   { key: 'gen', kind: 'gen', idx: 0, gx: 3, gy: -3, s: 2 },
@@ -22,6 +23,33 @@ export const ALL_SLOTS: Slot[] = [
   { key: 'gate', kind: 'gate', idx: 0, gx: 6, gy: -3, s: 2 },
   { key: 'lab', kind: 'lab', idx: 0, gx: -3, gy: -3, s: 2 },
 ];
+for (const s of ALL_SLOTS) { s.dx = s.gx; s.dy = s.gy; }
+// ---- free building: main-rock buildings live wherever the player put them (S.pos), on an integer grid ----
+export const MAIN_R = 10.2;
+const posOf = (k: string) => G.S.pos?.[k];
+/** apply saved positions (defaults = the old fixed layout) */
+export function syncPos() { for (const s of ALL_SLOTS) if (!s.rock) { const p = posOf(s.key); s.gx = p ? p[0] : s.dx!; s.gy = p ? p[1] : s.dy!; } }
+/** built and standing on the map */
+export const onMap = (sl: Slot) => visible(sl) === 'built' && (!!sl.rock || !!posOf(sl.key));
+let moveKey: string | null = null;
+/** can building `key` stand with its centre at (gx, gy)? 3×3 pad incl. lane ring must not overlap another pad, and stay on the rock */
+export function canPlace(key: string, gx: number, gy: number) {
+  for (const [a, b] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) if (Math.hypot(gx + a, gy + b) > MAIN_R - 1.25) return false;
+  return !ALL_SLOTS.some(o => !o.rock && o.key !== key && onMap(o) && Math.max(Math.abs(o.gx - gx), Math.abs(o.gy - gy)) < 3);
+}
+/** nearest valid spot to `pref` (spiral over integer cells) */
+export function findSpot(key: string, pref: [number, number]): [number, number] | null {
+  let best: [number, number] | null = null, bd = 1e9; const px = Math.round(pref[0]), py = Math.round(pref[1]);
+  for (let y = -9; y <= 9; y++) for (let x = -9; x <= 9; x++) { const d = Math.hypot(x - px, y - py) + Math.hypot(x, y) * .15; if (d < bd && canPlace(key, x, y)) { bd = d; best = [x, y]; } }
+  return best;
+}
+/** buildings that became 'built' without being placed (auto-unlocks like the generator, old saves, list buys) get a spot */
+export function autoPlace(): string[] {
+  const out: string[] = []; G.S.pos ||= {}; syncPos();
+  for (const s of ALL_SLOTS) { if (s.rock || posOf(s.key) || visible(s) !== 'built') continue; const p = findSpot(s.key, [s.dx!, s.dy!]); if (p) { G.S.pos[s.key] = p; s.gx = p[0]; s.gy = p[1]; out.push(s.key); } }
+  return out;
+}
+export function setPos(key: string, gx: number, gy: number) { (G.S.pos ||= {})[key] = [gx, gy]; syncPos(); }
 const tierOf = (n: number, steps: number[]) => Math.max(0, steps.filter(v => n >= v).length - 1);
 const TRADER_SC = 1.35, WRECK_SC = 1.45;
 export let SLOTS: Slot[] = ALL_SLOTS.filter(s => !s.rock);
@@ -46,7 +74,6 @@ export function visible(sl: Slot): 'built' | 'plot' | 'hidden' {
   return 'built';
 }
 export let guideKey: string | null = null; export const setGuideKey = (k: string | null) => { guideKey = k; };
-function relevantPlot(sl: Slot) { if (sl.key === guideKey) return true; const k = cost(sl); return k !== null && G.S.cash >= k * .5; }
 export function cost(sl: Slot): number | null {
   if (sl.kind === 'mine') return G.costN(sl.idx, G.S.mines[sl.idx].n ? G.buyK(sl.idx) : 1);
   if (sl.kind === 'mach') return G.machCostK(sl.idx, G.machK(sl.idx));
@@ -81,8 +108,34 @@ export class BaseView {
   /** fly the camera between asteroids */
   travel(r: number) { if (this.travelT >= 0 || r === this.rock) return; this.travelTo = r; this.travelT = 0; this.cam = null; }
   setRock(r: number) { this.rock = r; SLOTS = ALL_SLOTS.filter(s => (s.rock || 0) === r); this.workers = []; this.drones = []; this.gcache = null; this.sel = null; this.cam = null; this.ox = this.w / 2; this.oy = this.h * .52; if (r) { this.zMain = this.z; this.z = Math.max(this.z, .95); } else this.z = this.zMain || this.z; this.onTravel(r); }
-  private zMain = 0;
-  pad(): [number, number] { return this.rock ? iso(0, 0) : iso(6, 3); }
+  private zMain = 0; private lsig = '';
+  // ---- placement mode (Build menu / Move): a ghost that snaps to the grid, green when it fits ----
+  place: { key: string; gx: number; gy: number; mode: 'new' | 'move'; ok: boolean; from?: [number, number]; t: number } | null = null;
+  onPlace: (moved: boolean) => void = () => {};
+  private drag: { dx: number; dy: number } | null = null;
+  gridAt(cx: number, cy: number, raw = false): [number, number] { const r = this.cv.getBoundingClientRect(), lx = (cx - r.left - this.ox) / this.z, ly = (cy - r.top - this.oy) / this.z; const gx = (lx / (TW / 2) + ly / (TH / 2)) / 2, gy = (ly / (TH / 2) - lx / (TW / 2)) / 2; return raw ? [gx, gy] : [Math.round(gx), Math.round(gy)]; }
+  startPlace(key: string, mode: 'new' | 'move', at: [number, number]) {
+    const sl = slotByKey(key)!; moveKey = mode === 'move' ? key : null; this.lsig = ''; this.sel = null;
+    this.place = { key, gx: at[0], gy: at[1], mode, ok: false, from: mode === 'move' ? [sl.gx, sl.gy] : undefined, t: this.t };
+    sl.gx = at[0]; sl.gy = at[1]; this.place.ok = canPlace(key, at[0], at[1]); this.focusAt(at[0], at[1]); this.onPlace(false);
+  }
+  placeAt(gx: number, gy: number) { const p = this.place; if (!p || (p.gx === gx && p.gy === gy)) return; const sl = slotByKey(p.key)!; p.gx = gx; p.gy = gy; sl.gx = gx; sl.gy = gy; p.ok = canPlace(p.key, gx, gy); p.t = this.t; this.onPlace(true); }
+  endPlace() { const p = this.place; this.place = null; moveKey = null; this.drag = null; this.lsig = ''; syncPos(); return p; }
+  focusAt(gx: number, gy: number) { const [x, y] = iso(gx, gy), z = Math.max(this.z, .75), lx = 330 * z, ly = 200 * z; this.cam = { x: Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.w / 2 - x * z)), y: Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.h * .52 - y * z)), z }; }
+  private onGhost(cx: number, cy: number) { const p = this.place; if (!p) return false; const [gx, gy] = this.gridAt(cx, cy, true); return Math.abs(gx - p.gx) + Math.abs(gy - p.gy) < 2.6 || (() => { const r = this.cv.getBoundingClientRect(), lx = (cx - r.left - this.ox) / this.z, ly = (cy - r.top - this.oy) / this.z, [x, y] = iso(p.gx, p.gy); return Math.abs(lx - x) < 50 && ly < y && ly > y - 110; })(); }
+  private drawGhost() {
+    const p = this.place!, c = this.c, sl = slotByKey(p.key)!, [x, y] = iso(p.gx, p.gy), t = this.t, hop = Math.max(0, 1 - (t - p.t) / .18);
+    const col = p.ok ? '92,255,157' : '255,91,91', q = (h: number) => { const a = iso(p.gx - h, p.gy - h), b = iso(p.gx + h, p.gy - h), d = iso(p.gx + h, p.gy + h), e = iso(p.gx - h, p.gy + h); c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo(d[0], d[1]); c.lineTo(e[0], e[1]); c.closePath(); };
+    q(1.5); c.fillStyle = `rgba(${col},.28)`; c.fill(); c.lineWidth = 3; c.strokeStyle = `rgba(${col},.95)`; c.setLineDash([10, 6]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
+    // tile grid inside the footprint
+    c.strokeStyle = `rgba(${col},.45)`; c.lineWidth = 1.5; for (const k of [-.5, .5]) { let [a, b] = iso(p.gx + k, p.gy - 1.5), [d, e] = iso(p.gx + k, p.gy + 1.5); c.beginPath(); c.moveTo(a, b); c.lineTo(d, e); c.stroke(); [a, b] = iso(p.gx - 1.5, p.gy + k); [d, e] = iso(p.gx + 1.5, p.gy + k); c.beginPath(); c.moveTo(a, b); c.lineTo(d, e); c.stroke(); }
+    // the building itself, lifted and see-through
+    c.save(); c.globalAlpha = p.ok ? .88 : .6; c.translate(0, -10 - Math.sin(t * 4) * 3 - hop * 10); this.building(sl, x, y); c.restore();
+    // move arrows on the four sides
+    const b = Math.sin(t * 5) * 3; for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) { const [px, py] = iso(p.gx + ax * (2.25 + b * .03), p.gy + ay * (2.25 + b * .03)), [qx, qy] = iso(p.gx + ax * 3, p.gy + ay * 3), ang = Math.atan2(qy - py, qx - px);
+      c.save(); c.translate(px, py); c.rotate(ang); c.beginPath(); c.moveTo(10, 0); c.lineTo(-3, -9); c.lineTo(-3, -4); c.lineTo(-10, -4); c.lineTo(-10, 4); c.lineTo(-3, 4); c.lineTo(-3, 9); c.closePath(); c.fillStyle = p.ok ? '#5cff9d' : '#ff7a7a'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke(); c.restore(); }
+  }
+  pad(): [number, number] { const l = slotByKey('lift')!; return this.rock ? iso(0, 0) : iso(l.gx, l.gy); }
   private ptrs = new Map<number, { x: number; y: number }>(); private moved = 0; private pinch0 = 0; private z0 = 1; private craters: number[][] = [];
   constructor(parent: HTMLElement) {
     this.gcv = document.createElement('canvas'); this.gcv.className = 'bground'; parent.appendChild(this.gcv); this.cv = document.createElement('canvas'); this.cv.id = 'base'; parent.appendChild(this.cv); { const v = document.createElement('div'); v.className = 'bvig'; parent.appendChild(v); } this.c = this.cv.getContext('2d')!;
@@ -90,15 +143,20 @@ export class BaseView {
     for (let k = 0; k < 26; k++) { const a = rnd() * 7, r = 3 + rnd() * 7.5; this.craters.push([Math.cos(a) * r, Math.sin(a) * r, .5 + rnd() * 1.3]); }
     this.resize(); new ResizeObserver(() => this.resize()).observe(parent);
     const cv = this.cv;
-    cv.addEventListener('pointerdown', e => { this.cam = null; cv.setPointerCapture(e.pointerId); this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.moved = 0; if (this.ptrs.size === 2) { this.pinch0 = this.pdist(); this.z0 = this.z; } });
+    cv.addEventListener('pointerdown', e => { this.cam = null; cv.setPointerCapture(e.pointerId);
+      if (this.place && this.ptrs.size === 0 && this.onGhost(e.clientX, e.clientY)) { const [gx, gy] = this.gridAt(e.clientX, e.clientY, true); this.drag = { dx: this.place.gx - gx, dy: this.place.gy - gy }; } this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.moved = 0; if (this.ptrs.size === 2) { this.pinch0 = this.pdist(); this.z0 = this.z; } });
     cv.addEventListener('pointermove', e => {
       const p = this.ptrs.get(e.pointerId); if (!p) return;
+      if (this.drag && this.ptrs.size === 1) { const [gx, gy] = this.gridAt(e.clientX, e.clientY, true); this.placeAt(Math.round(gx + this.drag.dx), Math.round(gy + this.drag.dy)); this.moved = 99; p.x = e.clientX; p.y = e.clientY;
+        // nudge the camera when dragging near an edge
+        const r = this.cv.getBoundingClientRect(), m = 40; if (e.clientX < r.left + m) this.ox += 6; else if (e.clientX > r.right - m) this.ox -= 6; if (e.clientY < r.top + m + 60) this.oy += 6; else if (e.clientY > r.bottom - m - 90) this.oy -= 6; this.clamp(); return; }
+      if (this.ptrs.size === 2) this.drag = null;
       if (this.ptrs.size === 1) { this.ox += e.clientX - p.x; this.oy += e.clientY - p.y; this.moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y); }
       p.x = e.clientX; p.y = e.clientY;
       if (this.ptrs.size === 2) { const [a, b] = [...this.ptrs.values()]; this.zoomAt(this.z0 * this.pdist() / this.pinch0, (a.x + b.x) / 2, (a.y + b.y) / 2); this.moved = 99; }
       this.clamp();
     });
-    const up = (e: PointerEvent) => { const had = this.ptrs.delete(e.pointerId); if (had && this.ptrs.size === 0 && this.moved < 10) this.tap(e.clientX, e.clientY); };
+    const up = (e: PointerEvent) => { if (this.drag) { this.drag = null; this.ptrs.delete(e.pointerId); return; } const had = this.ptrs.delete(e.pointerId); if (had && this.ptrs.size === 0 && this.moved < 10) this.tap(e.clientX, e.clientY); };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', e => this.ptrs.delete(e.pointerId));
     cv.addEventListener('wheel', e => { e.preventDefault(); this.zoomAt(this.z * Math.exp(-e.deltaY * .0015), e.clientX, e.clientY); this.clamp(); }, { passive: false });
   }
@@ -139,7 +197,7 @@ export class BaseView {
   private freeSpot(clear: number, minR: number, maxR: number): [number, number] | null {
     let best: [number, number] | null = null, bs = -1e9;
     for (let k = 0; k < 160; k++) { const a = Math.random() * 6.283, r = minR + Math.random() * (maxR - minR), gx = Math.cos(a) * r, gy = Math.sin(a) * r;
-      const d = Math.min(99, ...SLOTS.filter(s2 => visible(s2) !== 'hidden').map(s2 => Math.max(Math.abs(s2.gx - gx), Math.abs(s2.gy - gy)) - s2.s / 2)); if (d < clear) continue;
+      const d = Math.min(99, ...SLOTS.filter(s2 => onMap(s2)).map(s2 => Math.max(Math.abs(s2.gx - gx), Math.abs(s2.gy - gy)) - s2.s / 2)); if (d < clear) continue;
       if (this.meteors.some(m => Math.hypot(m.gx - gx, m.gy - gy) < 2)) continue;
       const [sx, sy] = iso(gx, gy), X = this.ox + sx * this.z, Y = this.oy + sy * this.z; if (Math.abs(X - this.w / 2) > this.w * .3 || Y < this.h * .38 || Y > this.h * .72) continue;
       const sc = Math.min(d, 1.6) - Math.abs(X - this.w / 2) / 140 - Math.abs(Y - this.h * .58) / 220; if (sc > bs) { bs = sc; best = [gx, gy]; } }
@@ -209,8 +267,9 @@ export class BaseView {
     if (this.traderAt(lx, ly)) { this.onTrader(); return; }
     if (this.wreckAt(lx, ly)) { const w = this.wreckE!; w.hits++; w.ht = this.t; const fin = w.hits >= this.wreckHits; this.shake = Math.max(this.shake, fin ? .25 : .08); if (fin) { w.st = 2; w.ct = this.t; } this.onWreck(fin, cx, cy); return; }
     let best: Slot | null = null, bd = -1e9, onPad = false;
+    if (this.place) { const p = this.gridAt(cx, cy); this.placeAt(p[0], p[1]); return; }
     for (const sl of SLOTS) {
-      if (visible(sl) === 'hidden') continue;
+      if (!onMap(sl) || sl.key === moveKey) continue;
       const [x, y] = iso(sl.gx, sl.gy), hw = sl.s * TW / 2, hh = sl.s * TH / 2;
       const inBase = Math.abs(lx - x) / hw + Math.abs(ly - y) / hh <= 1, inBody = Math.abs(lx - x) < hw * .6 && ly < y && ly > y - 70 - tier(sl) * 12;
       if (inBase) onPad = true; if ((inBase || inBody) && sl.gx + sl.gy > bd) { bd = sl.gx + sl.gy; best = sl; }
@@ -229,9 +288,9 @@ export class BaseView {
   links(): [Slot, Slot, Res, boolean][] {
     const out: [Slot, Slot, Res, boolean][] = []; const S = G.S; if (this.rock) return out;
     MACHINES.forEach((d, j) => {
-      const to = SLOTS.find(s => s.key === 'f' + j)!; if (!S.mach[j] || visible(to) !== 'built') return;
+      const to = SLOTS.find(s => s.key === 'f' + j)!; if (!S.mach[j] || !onMap(to) || to.key === moveKey) return;
       (Object.keys(d.inp) as Res[]).forEach(r => {
-        const srcs = SLOTS.filter(sl => visible(sl) === 'built' && ((sl.kind === 'mine' && MINES[sl.idx].res === r) || (sl.kind === 'mach' && MACHINES[sl.idx].out === r)));
+        const srcs = SLOTS.filter(sl => onMap(sl) && sl.key !== moveKey && ((sl.kind === 'mine' && MINES[sl.idx].res === r) || (sl.kind === 'mach' && MACHINES[sl.idx].out === r)));
         srcs.sort((a, b) => Math.hypot(a.gx - to.gx, a.gy - to.gy) - Math.hypot(b.gx - to.gx, b.gy - to.gy));
         srcs.slice(0, 2).forEach(sv => out.push([sv, to, r, G.machStats[j].eff > 0.01]));
       });
@@ -241,6 +300,8 @@ export class BaseView {
 
   draw(dt: number) {
     this.t += dt; const { c, t } = this;
+    if (!this.rock) { const fresh = autoPlace(); if (this.t > 1) for (const k of fresh) this.cons.set(k, this.t); }
+    { const sig = this.rock + '|' + (moveKey || '') + '|' + SLOTS.filter(onMap).map(s => s.key + ':' + s.gx + ',' + s.gy).join(';'); if (sig !== this.lsig) { this.lsig = sig; this.routes.clear(); this.gcache = null; this.gkey = ''; this.decorKey = ''; } }
     if (this.cam) { const k = 1 - Math.pow(.0008, dt); this.ox += (this.cam.x - this.ox) * k; this.oy += (this.cam.y - this.oy) * k; this.z += (this.cam.z - this.z) * k; if (Math.abs(this.cam.x - this.ox) + Math.abs(this.cam.y - this.oy) < .5 && Math.abs(this.cam.z - this.z) < .002) { this.z = this.cam.z; this.cam = null; } }
     for (const sl of SLOTS) { const v = visible(sl), tv = v === 'built' ? tier(sl) : -1, prev = this.lastTier.get(sl.key); if (prev !== undefined && tv > prev && this.t > 1 && this.warpT < 0) { this.cons.set(sl.key, this.t); this.onConstruct(); } this.lastTier.set(sl.key, tv); }
     // day/night: 6-minute cycle, nights are short and pretty
@@ -257,7 +318,7 @@ export class BaseView {
     for (const [a, b, r, on] of L) this.belt(a, b, RES[r].color, on);
     this.drawWorkers(dt);
     // buildings back-to-front
-    guideKey = this.guide; const order = SLOTS.filter(sl => visible(sl) === 'built' || (visible(sl) === 'plot' && relevantPlot(sl))).sort((a, b) => a.gx + a.gy - (b.gx + b.gy));
+    guideKey = this.guide; const order = SLOTS.filter(sl => onMap(sl) && sl.key !== moveKey).sort((a, b) => a.gx + a.gy - (b.gx + b.gy));
     this.drawMeteors(false);
     const dec = this.decor(); let di = 0; const dings: number[][] = [];
     for (const sl of order) {
@@ -303,7 +364,7 @@ export class BaseView {
     // ships
     this.ships = this.ships.filter(s => { s.t += dt; if (s.t < 0) return true; if (s.dir > 0) { s.vy -= dt * 900; s.y += s.vy * dt; ship(c, s.x, s.y, s.sc, 1); if (s.t < .4) for (let k = 0; k < 2; k++) this.puffs.push({ x: s.x + (Math.random() - .5) * 40, y: s.y + 10, t: 0, c: 'rgba(230,220,255,.8)' }); return s.y > -1200; } const ty = this.pad()[1] - 14, f = Math.min(1, s.t / 1.6), e = 1 - Math.pow(1 - f, 3); const yy = ty - 700 * (1 - e); ship(c, s.x, yy, s.sc, 1 - e * .8); return f < 1; });
     // warp sequence
-    if (this.warpT >= 0) { this.warpT += dt; const [gx, gy] = iso(6, -3); const f = Math.min(1, this.warpT / 2.2); glow(c, gx, gy - 50, 120 + f * 900, '#b06bff', .4 + f * .6); c.save(); c.translate(gx, gy - 50); c.rotate(this.warpT * 4 * f); for (let k = 0; k < 6; k++) { c.rotate(1.047); c.beginPath(); c.ellipse(0, 0, 60 + f * 500, 20 + f * 160, 0, 0, Math.PI); c.strokeStyle = `hsla(${270 + k * 15},100%,75%,${.6 * f})`; c.lineWidth = 6 + f * 10; c.stroke(); } c.restore(); this.shake = Math.max(this.shake, f * .2); if (this.warpT > 2.2 && this.warpCb) { const cb = this.warpCb; this.warpCb = null; cb(); } if (this.warpT > 3.2) { this.warpT = -1; this.sprites.clear(); } }
+    if (this.warpT >= 0) { this.warpT += dt; const gs = slotByKey('gate')!, [gx, gy] = iso(gs.gx, gs.gy); const f = Math.min(1, this.warpT / 2.2); glow(c, gx, gy - 50, 120 + f * 900, '#b06bff', .4 + f * .6); c.save(); c.translate(gx, gy - 50); c.rotate(this.warpT * 4 * f); for (let k = 0; k < 6; k++) { c.rotate(1.047); c.beginPath(); c.ellipse(0, 0, 60 + f * 500, 20 + f * 160, 0, 0, Math.PI); c.strokeStyle = `hsla(${270 + k * 15},100%,75%,${.6 * f})`; c.lineWidth = 6 + f * 10; c.stroke(); } c.restore(); this.shake = Math.max(this.shake, f * .2); if (this.warpT > 2.2 && this.warpCb) { const cb = this.warpCb; this.warpCb = null; cb(); } if (this.warpT > 3.2) { this.warpT = -1; this.sprites.clear(); } }
     // labels on top
     if (this.night > .01) {
       c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = `rgba(10,4,48,${.52 * this.night})`; c.fillRect(0, 0, this.cv.width, this.cv.height); c.restore();
@@ -316,14 +377,15 @@ export class BaseView {
           { const c = g; void main;
       for (const d of dec) if (d[2] === 0) { const [x, y] = iso(d[0], d[1]), ice = this.rock === 1, col = ice ? '#dff2ff' : '#ffcf6a'; glow(c, x, y - (ice ? 32 : 28), ice ? 30 : 26, col, this.night * .55); glow(c, x + (ice ? 14 : 0), y + (ice ? 8 : 2), ice ? 38 : 26, col, this.night * (ice ? .3 : .2)); }
       for (const sl of order) { if (visible(sl) !== 'built') continue; const [x, y] = iso(sl.gx, sl.gy), on = activeOf(sl); glow(c, x, y - 4, 90, on ? accentOf(sl) : '#5a6aff', this.night * (on ? .3 : .12)); glow(c, x - 10, y - 30 - tier(sl) * 6, 26, '#ffe9a0', this.night * .38); glow(c, x + 14, y - 12, 14, '#ffd28a', this.night * .32); }
-      for (const [a, b, r, on] of L) if (on) { const [x1, y1] = iso(b.gx, a.gy); glow(c, x1, y1, 26, RES[r].color, this.night * .3); }
+      for (const [a, b, r, on] of L) if (on) { const rp = this.routeOf(a, b), [x1, y1] = iso(...rp[Math.min(1, rp.length - 1)]); glow(c, x1, y1, 26, RES[r].color, this.night * .3); }
           } }
         c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(this.nl, 0, 0); c.restore(); }
-      { const [hx, hy] = iso(0, 0), ang = this.t * .35, len = 520; c.save(); c.translate(hx + 8, hy - 70); c.rotate(ang); const g = c.createLinearGradient(0, 0, len, 0); g.addColorStop(0, `rgba(255,240,190,${.28 * this.night})`); g.addColorStop(1, 'rgba(255,240,190,0)'); c.fillStyle = g; c.beginPath(); c.moveTo(0, 0); c.lineTo(len, -70); c.lineTo(len, 70); c.closePath(); c.fill(); c.restore(); }
+      { const hs = slotByKey('hq')!, [hx, hy] = iso(hs.gx, hs.gy), ang = this.t * .35, len = 520; c.save(); c.translate(hx + 8, hy - 70); c.rotate(ang); const g = c.createLinearGradient(0, 0, len, 0); g.addColorStop(0, `rgba(255,240,190,${.28 * this.night})`); g.addColorStop(1, 'rgba(255,240,190,0)'); c.fillStyle = g; c.beginPath(); c.moveTo(0, 0); c.lineTo(len, -70); c.lineTo(len, 70); c.closePath(); c.fill(); c.restore(); }
       c.globalCompositeOperation = 'source-over';
     }
     if (this.warpT < 0) for (const sl of order) this.label(sl);
-    if (this.guide) { const sl = SLOTS.find(s => s.key === this.guide); if (sl && visible(sl) !== 'hidden') { const [x, y] = iso(sl.gx, sl.gy), b = Math.abs(Math.sin(t * 5)) * 14, ay = y - 120 - tier(sl) * 12 - b;
+    if (this.place) this.drawGhost();
+    if (this.guide && !this.place) { const sl = SLOTS.find(s => s.key === this.guide); if (sl && onMap(sl)) { const [x, y] = iso(sl.gx, sl.gy), b = Math.abs(Math.sin(t * 5)) * 14, ay = y - 120 - tier(sl) * 12 - b;
       c.beginPath(); c.moveTo(x, ay + 34); c.lineTo(x - 20, ay + 10); c.lineTo(x - 9, ay + 10); c.lineTo(x - 9, ay - 14); c.lineTo(x + 9, ay - 14); c.lineTo(x + 9, ay + 10); c.lineTo(x + 20, ay + 10); c.closePath(); c.fillStyle = '#ffd23f'; c.fill(); c.strokeStyle = '#24163a'; c.lineWidth = 4; c.stroke();
       c.beginPath(); c.ellipse(x, y, sl.s * TW / 2 * (1 + b / 60), sl.s * TH / 2 * (1 + b / 60), 0, 0, 7); c.strokeStyle = 'rgba(255,210,63,.8)'; c.lineWidth = 3; c.stroke(); } }
     // ambient lighting: cool vignette + warm key light (screen space)
@@ -349,15 +411,15 @@ export class BaseView {
     c.save(); c.scale(1 / k, 1 / k); c.drawImage(this.gcache, -W / 2 * k, -420 * k); c.restore();
   }
   private drawWorkers(dt: number) {
-    const c = this.c, built = SLOTS.filter(s => visible(s) === 'built');
+    const c = this.c, built = SLOTS.filter(s => onMap(s) && s.key !== moveKey);
     const want = Math.min(10, 2 + Math.floor(built.length / 2));
     while (this.workers.length < want && built.length > 1) { const a = Math.floor(Math.random() * built.length); let b = Math.floor(Math.random() * built.length); if (b === a) b = (a + 1) % built.length; this.workers.push({ a: SLOTS.indexOf(built[a]), b: SLOTS.indexOf(built[b]), f: 0, sp: .12 + Math.random() * .1, c: ['#ffd23f', '#ff9f43', '#5cf2ff', '#ff7bd5'][Math.floor(Math.random() * 4)] }); }
     this.workers = this.workers.filter(w => {
-      w.f += dt * w.sp; const A = SLOTS[w.a], B = SLOTS[w.b]; if (!A || !B) return false;
-      // walk an L path just off the building corners
-      const f = Math.min(1, w.f), mx = B.gx, my = A.gy, l1 = Math.abs(mx - A.gx), l2 = Math.abs(B.gy - my), L = l1 + l2 || 1, d = f * L;
-      const gx = d < l1 ? A.gx + Math.sign(mx - A.gx) * d : mx, gy = d < l1 ? A.gy : my + Math.sign(B.gy - my) * (d - l1);
-      const [x, y] = iso(gx + 1.15, gy + 1.15), bob = Math.abs(Math.sin(this.t * 10 + w.a)) * 2.5;
+      const A = SLOTS[w.a], B = SLOTS[w.b]; if (!A || !B || !onMap(A) || !onMap(B) || A.key === moveKey || B.key === moveKey) return false;
+      // walk the routed lanes between the two pads (same router as the conveyors)
+      const P = this.rock ? [[A.gx, A.gy], [B.gx, A.gy], [B.gx, B.gy]] as Pt[] : this.routeOf(A, B), L = polyLen(P) || 1; w.f += dt * w.sp * 6 / Math.max(3, L);
+      const [gx, gy] = along(P, Math.min(1, w.f) * L), off = this.rock ? 1.15 : .22;
+      const [x, y] = iso(gx + off, gy + off), bob = Math.abs(Math.sin(this.t * 10 + w.a)) * 2.5;
       c.beginPath(); c.ellipse(x, y + 1, 5, 2.5, 0, 0, 7); c.fillStyle = 'rgba(20,8,40,.35)'; c.fill();
       c.fillStyle = '#3a4a8a'; c.strokeStyle = INK; c.lineWidth = 1.5; c.beginPath(); c.roundRect(x - 3.5, y - 11 - bob, 7, 9, 2); c.fill(); c.stroke();
       c.beginPath(); c.arc(x, y - 14 - bob, 3.6, 0, 7); c.fillStyle = w.c; c.fill(); c.stroke(); c.fillStyle = '#9af3ff'; c.fillRect(x - 2, y - 15 - bob, 4, 2);
@@ -375,7 +437,7 @@ export class BaseView {
   private decorKey = ''; private decorList: [number, number, number][] = [];
   /** Props at lane intersections next to built plots: 0 lamp, 1 crystal planter, 2 banner, 3 barrels. Sorted back-to-front. */
   private decor() {
-    const built = SLOTS.filter(sl => visible(sl) === 'built'), key = this.rock + ':' + built.map(b => b.key).join();
+    const built = SLOTS.filter(sl => onMap(sl) && sl.key !== moveKey), key = this.rock + ':' + built.map(b => b.key + b.gx + ',' + b.gy).join();
     if (key === this.decorKey) return this.decorList; this.decorKey = key;
     const R = this.rock ? 7 : 10.2, m = new Map<string, [number, number, number]>();
     for (const sl of built) for (const [a, b] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) { const gx = sl.gx + a, gy = sl.gy + b, k = gx + ',' + gy; if (m.has(k) || Math.hypot(gx, gy) > R - 1.2) continue; const h = Math.abs(Math.sin(gx * 12.9898 + gy * 78.233) * 43758.5453) % 1; m.set(k, [gx, gy, h < .42 ? 0 : h < .66 ? 1 : h < .8 ? 2 : 3]); }
@@ -384,17 +446,18 @@ export class BaseView {
   bounces = new Map<string, number>(); onProp: (kind: number, rock: number) => void = () => {};
   /** Tap hit-test for props (only when no building was hit). */
   private propAt(lx: number, ly: number) { let best: [number, number, number] | null = null, bd = 1e9; for (const d of this.decorList) { const [x, y] = iso(d[0], d[1]), dx = Math.abs(lx - x), dy = ly - y; if (dx < 13 && dy < 7 && dy > -40) { const dd = dx + Math.abs(dy + 16) * .5; if (dd < bd) { bd = dd; best = d; } } } return best; }
+  private padSlots() { return this.rock ? SLOTS : SLOTS.filter(sl => onMap(sl) && sl.key !== moveKey); }
   private deck(q: (gx: number, gy: number, a: number, b: number) => void) {
     const c = this.c, seen = new Set<string>();
-    for (const sl of SLOTS) for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { const u = sl.gx + i * .5, w = sl.gy + j * .5; if (Math.max(Math.abs(u - sl.gx), Math.abs(w - sl.gy)) < 1.2) continue; const k2 = `${u},${w}`; if (seen.has(k2)) continue; seen.add(k2);
+    for (const sl of this.padSlots()) for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { const u = sl.gx + i * .5, w = sl.gy + j * .5; if (Math.max(Math.abs(u - sl.gx), Math.abs(w - sl.gy)) < 1.2) continue; const k2 = `${u},${w}`; if (seen.has(k2)) continue; seen.add(k2);
       const L = ((u * 7 + w * 13) % 3 + 3) % 3; c.beginPath(); q(u, w, .23, .23); c.fillStyle = ['#5d7898', '#6a86a8', '#557090'][L]; c.fill(); c.strokeStyle = 'rgba(16,24,48,.55)'; c.lineWidth = 1.4; c.stroke();
       c.fillStyle = 'rgba(220,240,255,.55)'; for (const [a, b] of [[-.16, -.16], [.16, -.16], [.16, .16], [-.16, .16]]) { const [px, py] = iso(u + a, w + b); c.fillRect(px - .8, py - .8, 1.6, 1.6); } }
     // hazard stripes framing each pad
-    for (const sl of SLOTS) { c.beginPath(); q(sl.gx, sl.gy, 1.15, 1.15); c.setLineDash([7, 7]); c.strokeStyle = '#ffcc33'; c.lineWidth = 3; c.stroke(); c.lineDashOffset = 7; c.strokeStyle = '#1c2236'; c.stroke(); c.setLineDash([]); c.lineDashOffset = 0; }
+    for (const sl of this.padSlots()) { c.beginPath(); q(sl.gx, sl.gy, 1.15, 1.15); c.setLineDash([7, 7]); c.strokeStyle = '#ffcc33'; c.lineWidth = 3; c.stroke(); c.lineDashOffset = 7; c.strokeStyle = '#1c2236'; c.stroke(); c.setLineDash([]); c.lineDashOffset = 0; }
   }
   /** Icy terrain: snow drifts + frost cracks on the fleet rock. */
   private frost(R: number) {
-    const c = this.c; let sd = 29; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647; const free = (gx: number, gy: number) => !SLOTS.some(s2 => Math.abs(s2.gx - gx) < 1.8 && Math.abs(s2.gy - gy) < 1.8);
+    const c = this.c; let sd = 29; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647; const free = (gx: number, gy: number) => !this.padSlots().some(s2 => Math.abs(s2.gx - gx) < 1.8 && Math.abs(s2.gy - gy) < 1.8);
     for (let k = 0; k < 40; k++) { const a = r() * 6.28, rr = 1 + r() * (R - 1.6), gx = Math.cos(a) * rr, gy = Math.sin(a) * rr; if (!free(gx, gy)) continue; const [x, y] = iso(gx, gy);
       if (k % 3) { const w = 14 + r() * 26; c.beginPath(); c.ellipse(x, y, w, w * .42, 0, 0, 7); c.fillStyle = 'rgba(236,248,255,.75)'; c.fill(); c.beginPath(); c.ellipse(x - w * .2, y - w * .1, w * .55, w * .2, 0, 0, 7); c.fillStyle = 'rgba(255,255,255,.8)'; c.fill(); c.beginPath(); c.ellipse(x, y + 2, w, w * .42, 0, .3, Math.PI - .3); c.strokeStyle = 'rgba(70,110,160,.45)'; c.lineWidth = 2; c.stroke(); }
       else { c.beginPath(); let px = x, py = y; c.moveTo(px, py); for (let j = 0; j < 5; j++) { px += (r() - .3) * 22; py += (r() - .5) * 10; c.lineTo(px, py); } c.strokeStyle = 'rgba(20,40,80,.5)'; c.lineWidth = 2.5; c.stroke(); c.strokeStyle = 'rgba(200,240,255,.7)'; c.lineWidth = 1; c.stroke(); } }
@@ -447,17 +510,17 @@ export class BaseView {
     for (const [cx, cy, r] of this.craters) { if (Math.hypot(cx, cy) > R - 1) continue; const [x, y] = iso(cx, cy); c.beginPath(); c.ellipse(x, y, r * TW / 2, r * TH / 2, 0, 0, 7); c.fillStyle = 'rgba(40,16,60,.35)'; c.fill(); c.beginPath(); c.ellipse(x, y + 2, r * TW / 2, r * TH / 2, 0, .2, Math.PI - .2); c.strokeStyle = 'rgba(255,220,255,.18)'; c.lineWidth = 3; c.stroke(); }
     // paved lanes: a cobblestone ring around every plot cell; neighbouring rings merge into CoC-style paths
     { let sd3 = 3; const r3 = () => (sd3 = (sd3 * 16807) % 2147483647) / 2147483647; const q = (gx: number, gy: number, a: number, b: number) => { const p = [iso(gx - a, gy - b), iso(gx + a, gy - b), iso(gx + a, gy + b), iso(gx - a, gy + b)]; c.moveTo(p[0][0], p[0][1]); for (let k = 1; k < 4; k++) c.lineTo(p[k][0], p[k][1]); c.closePath(); };
-      c.beginPath(); for (const sl of SLOTS) q(sl.gx, sl.gy, 1.62, 1.62); c.fillStyle = 'rgba(20,8,40,.35)'; c.fill();
-      c.beginPath(); for (const sl of SLOTS) q(sl.gx, sl.gy, 1.5, 1.5); c.fillStyle = ice ? '#56789e' : '#6a4a84'; c.fill();
+      c.beginPath(); for (const sl of this.padSlots()) q(sl.gx, sl.gy, 1.62, 1.62); c.fillStyle = 'rgba(20,8,40,.35)'; c.fill();
+      c.beginPath(); for (const sl of this.padSlots()) q(sl.gx, sl.gy, 1.5, 1.5); c.fillStyle = ice ? '#56789e' : '#6a4a84'; c.fill();
       if (ice) this.deck(q); else {
       const seen = new Set<string>();
-      for (const sl of SLOTS) for (let i = -5; i <= 5; i++) for (let j = -5; j <= 5; j++) { const u = sl.gx + i * .25 + .125, w = sl.gy + j * .25 + .125; if (Math.max(Math.abs(u - sl.gx), Math.abs(w - sl.gy)) < 1.05) continue; const k2 = `${Math.round(u * 8)},${Math.round(w * 8)}`; if (seen.has(k2)) continue; seen.add(k2);
+      for (const sl of this.padSlots()) for (let i = -5; i <= 5; i++) for (let j = -5; j <= 5; j++) { const u = sl.gx + i * .25 + .125, w = sl.gy + j * .25 + .125; if (Math.max(Math.abs(u - sl.gx), Math.abs(w - sl.gy)) < 1.05) continue; const k2 = `${Math.round(u * 8)},${Math.round(w * 8)}`; if (seen.has(k2)) continue; seen.add(k2);
         const jx = (r3() - .5) * .05, jy = (r3() - .5) * .05, L = r3(); c.beginPath(); q(u + jx, w + jy, .1, .1); c.fillStyle = ice ? `hsl(208,${25 + L * 15}%,${56 + L * 14}%)` : `hsl(${268 + L * 14},${18 + L * 12}%,${50 + L * 14}%)`; c.fill(); c.strokeStyle = 'rgba(20,8,40,.45)'; c.lineWidth = 1.2; c.stroke(); }
       }
-      c.beginPath(); for (const sl of SLOTS) q(sl.gx, sl.gy, 1.5, 1.5); c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 2; c.stroke(); }
+      c.beginPath(); for (const sl of this.padSlots()) q(sl.gx, sl.gy, 1.5, 1.5); c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 2; c.stroke(); }
     if (ice) this.frost(R);
     // surface details: boulders, crystal clusters, beacon posts (kept off building plots)
-    let sd = 11; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647; const taken = (gx: number, gy: number) => SLOTS.some(s => Math.abs(s.gx - gx) < 1.9 && Math.abs(s.gy - gy) < 1.9);
+    let sd = 11; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647; const taken = (gx: number, gy: number) => this.padSlots().some(s => Math.abs(s.gx - gx) < 1.9 && Math.abs(s.gy - gy) < 1.9);
     for (let k = 0; k < 70; k++) { const a = rnd() * 7, r = 2 + rnd() * (R - 2.4), gx = Math.cos(a) * r, gy = Math.sin(a) * r; if (taken(gx, gy)) continue; const [x, y] = iso(gx, gy), kind = rnd();
       if (kind < .55) { const s2 = 4 + rnd() * 9; c.beginPath(); c.ellipse(x + 2, y + 2, s2 * 1.2, s2 * .5, 0, 0, 7); c.fillStyle = 'rgba(30,10,50,.35)'; c.fill(); c.beginPath(); c.moveTo(x - s2, y); c.quadraticCurveTo(x - s2 * .8, y - s2 * 1.1, x, y - s2); c.quadraticCurveTo(x + s2, y - s2 * .9, x + s2, y); c.quadraticCurveTo(x, y + s2 * .4, x - s2, y); c.fillStyle = ice ? '#5a6f8c' : '#6e4a86'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(); if (ice) { c.beginPath(); c.moveTo(x - s2 * .85, y - s2 * .45); c.quadraticCurveTo(x - s2 * .7, y - s2 * 1.05, x, y - s2 * .98); c.quadraticCurveTo(x + s2 * .85, y - s2 * .85, x + s2 * .9, y - s2 * .3); c.quadraticCurveTo(x, y - s2 * .5, x - s2 * .85, y - s2 * .45); c.fillStyle = '#f2f9ff'; c.fill(); } else { c.beginPath(); c.moveTo(x - s2 * .6, y - s2 * .6); c.quadraticCurveTo(x - s2 * .2, y - s2 * .95, x + s2 * .2, y - s2 * .85); c.strokeStyle = 'rgba(255,230,255,.35)'; c.lineWidth = 2; c.stroke(); } }
       else if (kind < .85) { const hue = ice ? 200 : rnd() < .5 ? 190 : 290; for (let j = 0; j < 3; j++) { const cx = x + (j - 1) * 5, h2 = 8 + rnd() * 10; c.beginPath(); c.moveTo(cx - 3, y); c.lineTo(cx - 1, y - h2); c.lineTo(cx + 2, y - h2 - 3); c.lineTo(cx + 3, y); c.closePath(); c.fillStyle = ice ? hsl(hue, 70, 86 - j * 6) : hsl(hue, 90, 70); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.5; c.stroke(); } }
@@ -467,17 +530,22 @@ export class BaseView {
     if (ice) { c.strokeStyle = 'rgba(255,210,63,.55)'; c.lineWidth = 4; c.setLineDash([14, 10]); for (const [a, b] of [[-3, 0], [3, 0], [0, -3], [0, 3]]) { const [x1, y1] = iso(0, 0), [x2, y2] = iso(a, b); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); } c.setLineDash([]); }
     c.restore();
   }
+  private routes = new Map<string, Pt[]>();
+  routeOf(a: Slot, b: Slot): Pt[] {
+    const k = a.key + '>' + b.key; let r = this.routes.get(k);
+    if (!r) { const obst = SLOTS.filter(s => s !== a && s !== b && onMap(s) && s.key !== moveKey).map(s => [s.gx, s.gy] as Pt); r = route([a.gx, a.gy], [b.gx, b.gy], obst, MAIN_R); if (this.routes.size > 200) this.routes.clear(); this.routes.set(k, r); }
+    return r;
+  }
   private belt(a: Slot, b: Slot, col: string, on: boolean) {
-    const c = this.c; const mid: [number, number] = [b.gx, a.gy];
-    const P = [iso(a.gx, a.gy), iso(...mid), iso(b.gx, b.gy)];
+    const c = this.c, P = this.routeOf(a, b).map(p => iso(p[0], p[1]));
     c.lineCap = 'round'; c.lineJoin = 'round';
-    const path = () => { c.beginPath(); c.moveTo(P[0][0], P[0][1]); c.lineTo(P[1][0], P[1][1]); c.lineTo(P[2][0], P[2][1]); };
+    const path = () => { c.beginPath(); c.moveTo(P[0][0], P[0][1]); for (let i = 1; i < P.length; i++) c.lineTo(P[i][0], P[i][1]); };
     path(); c.strokeStyle = '#24163a'; c.lineWidth = 15; c.stroke(); path(); c.strokeStyle = '#4a4470'; c.lineWidth = 10; c.stroke();
     path(); c.setLineDash([4, 8]); c.lineDashOffset = on ? -this.t * 30 : 0; c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 8; c.stroke(); c.setLineDash([]);
     if (!on) return;
-    const l1 = Math.hypot(P[1][0] - P[0][0], P[1][1] - P[0][1]), l2 = Math.hypot(P[2][0] - P[1][0], P[2][1] - P[1][1]), L = l1 + l2;
+    const L = polyLen(P);
     for (let d = (this.t * 40) % 34; d < L; d += 34) {
-      const [x, y] = d < l1 ? [P[0][0] + (P[1][0] - P[0][0]) * d / l1, P[0][1] + (P[1][1] - P[0][1]) * d / l1] : [P[1][0] + (P[2][0] - P[1][0]) * (d - l1) / l2, P[1][1] + (P[2][1] - P[1][1]) * (d - l1) / l2];
+      const [x, y] = along(P, d);
       c.fillStyle = col; c.strokeStyle = '#24163a'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x, y - 7); c.lineTo(x + 6, y - 4); c.lineTo(x, y - 1); c.lineTo(x - 6, y - 4); c.closePath(); c.fill(); c.stroke();
     }
   }

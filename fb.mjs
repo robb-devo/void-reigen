@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch(); const errs=[];
+const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+const z={ore:0,quartz:0,ingot:0,glass:0,part:0,alloy:0,chip:0,hull:0};
+const mid={v:2,cash:3.2e7,life:9e7,total:0,dm:0,warps:0,mines:[[160,1],[90,1],[64,1],[40,1],[0,0],[0,0],[0,0],[0,0]].map(([n,m])=>({n,p:0,m:!!m,run:false})),tech:[],res:{...z,ore:52000},made:{...z},mach:[38,30,14,6,0,0],on:[true,true,true,true,true,true],gen:22,ships:{},conquered:[],missions:[],fupg:{},uid:2,ach:[],goal:20,last:Date.now(),taps:640,played:3000,seen:['intro','factory','power','lab','export','foreman','tiers','skills']};
+await ctx.addInitScript(s=>{if(!sessionStorage.seed){sessionStorage.seed=1;localStorage.setItem('starforge.v2',s)}},JSON.stringify(mid));
+const p=await ctx.newPage(); p.on('console',m=>m.type()==='error'&&errs.push(m.text())); p.on('pageerror',e=>errs.push(e.message));
+await p.goto('http://localhost:4190/'); await p.waitForTimeout(2500);
+await p.screenshot({path:'shots/s11-fb-migrated.png'});
+console.log(JSON.stringify(await p.evaluate(()=>{const o=JSON.parse(localStorage.getItem('starforge.v2'));return o.pos})), 'errs', JSON.stringify(errs));
+globalThis.P=p; if(process.env.MORE) await (await import(process.env.MORE)).default(p, errs);
+await b.close();
