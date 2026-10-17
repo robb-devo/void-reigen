@@ -92,6 +92,7 @@ const activeOf = (sl: Slot) => sl.kind === 'mine' ? (G.S.mines[sl.idx].m || G.S.
 
 type Drone = { a: [number, number]; b: [number, number]; t: number; col: string; done?: () => void };
 type Puff = { x: number; y: number; t: number; c: string };
+type Vfx = { k: 'dust' | 'up' | 'lvl'; x: number; y: number; t: number; col: string; sz: number; seed: number };
 type Ship = { x: number; y: number; vy: number; t: number; dir: 1 | -1; sc: number };
 type Sprite = { cv: HTMLCanvasElement; k: number; bx: number; by: number };
 /** Crop a baked sprite to its opaque bounds: most of the 240×300 bake box is empty, and blitting empty pixels isn't free. */
@@ -103,7 +104,7 @@ function trim(cv: HTMLCanvasElement): [HTMLCanvasElement, number, number] {
 }
 export class BaseView {
   cv: HTMLCanvasElement; c: CanvasRenderingContext2D; z = 0.66; ox = 0; oy = 0; dpr = Math.min(1.5, devicePixelRatio || 1);
-  w = 0; h = 0; sel: string | null = null; guide: string | null = null; drones: Drone[] = []; puffs: Puff[] = []; t = 0;
+  w = 0; h = 0; sel: string | null = null; guide: string | null = null; drones: Drone[] = []; puffs: Puff[] = []; fxs: Vfx[] = []; t = 0;
   ships: Ship[] = []; cons = new Map<string, number>(); sprites = new Map<string, Sprite>(); cam: { x: number; y: number; z: number } | null = null; warpT = -1; warpCb: (() => void) | null = null; shake = 0;
   onTap: (sl: Slot | null, x: number, y: number) => void = () => {};
   onConstruct: () => void = () => {};
@@ -290,6 +291,8 @@ export class BaseView {
     if (this.drones.length > 40) return; const a = SLOTS.find(s => s.key === fromKey)!, b = SLOTS.find(s => s.key === toKey)!;
     this.drones.push({ a: iso(a.gx, a.gy), b: iso(b.gx, b.gy), t: 0, col, done });
   }
+  /** world-space VFX: 'dust' = placement slam, 'up' = upgrade burst, 'lvl' = level-up / evolution */
+  vfx(key: string, k: Vfx['k'], col = '#7affd1') { const sl = SLOTS.find(s => s.key === key); if (!sl) return; const [x, y] = iso(sl.gx, sl.gy); if (this.fxs.length > 24) this.fxs.shift(); this.fxs.push({ k, x, y, t: 0, col, sz: sl.s || 2, seed: Math.random() * 1000 }); }
   puff(key: string, col = 'rgba(255,255,255,.8)') { const sl = SLOTS.find(s => s.key === key)!; const [x, y] = iso(sl.gx, sl.gy); for (let k = 0; k < 10; k++) this.puffs.push({ x: x + (Math.random() - .5) * 70, y: y + (Math.random() - .5) * 30, t: -Math.random() * .2, c: col }); }
 
   /** links: [fromSlot, toSlot, res, flowing] */
@@ -378,6 +381,7 @@ export class BaseView {
       const sp = t * 40; c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 1.5; for (const s of [-1, 1]) { c.beginPath(); c.moveTo(x + s * 10 - Math.cos(sp) * 5, y - 4); c.lineTo(x + s * 10 + Math.cos(sp) * 5, y - 4); c.stroke(); }
       if (d.t >= 1) { d.done?.(); return false; } return true;
     });
+    this.fxs = this.fxs.filter(v => { v.t += dt; return drawVfx(c, v, t); });
     this.puffs = this.puffs.filter(p => { p.t += dt; if (p.t < 0) return true; const f = p.t / .8; c.globalAlpha = Math.max(0, 1 - f); c.beginPath(); c.arc(p.x, p.y - f * 30, 6 + f * 14, 0, 7); c.fillStyle = p.c; c.fill(); c.globalAlpha = 1; return f < 1; });
     // cargo pods arriving from the lift on the fleet rock
     if (this.rock && G.fleetOpen() && G.S.liftOn) { this.podT -= dt; if (this.podT <= 0) { this.podT = 2.2 + Math.random() * 1.5; this.pods.push({ t: 0, x: (Math.random() - .5) * 60 }); } }
@@ -617,3 +621,41 @@ function rr(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: num
 function short(v: number) { const s = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx']; let e = 0; while (v >= 1000 && e < s.length - 1) { v /= 1000; e++; } return (v >= 100 || e === 0 ? Math.floor(v).toString() : v.toFixed(1)) + s[e]; }
 
 function star(c: CanvasRenderingContext2D, x: number, y: number, r: number) { c.beginPath(); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, rr2 = k % 2 ? r * .38 : r; c.lineTo(x + Math.cos(a) * rr2, y + Math.sin(a) * rr2); } c.closePath(); c.fillStyle = '#fff6c0'; c.fill(); c.strokeStyle = '#24163a'; c.lineWidth = 1.5; c.stroke(); }
+
+// ---- world VFX ----
+function rnd(seed: number) { let sd = Math.floor(seed * 9301) % 233280 + 1; return () => (sd = (sd * 9301 + 49297) % 233280) / 233280; }
+function drawVfx(c: CanvasRenderingContext2D, v: Vfx, t: number): boolean {
+  const R = v.sz * TW * .5, r = rnd(v.seed), x = v.x, y = v.y;
+  if (v.k === 'dust') { const D = 1.1, f = v.t / D; if (f >= 1) return false; const e = 1 - Math.pow(1 - f, 3);
+    // ground shock ring + dust clouds rolling outward + bouncing pebbles
+    c.beginPath(); c.ellipse(x, y, R * (.7 + e * .9), R * .5 * (.7 + e * .9), 0, 0, 7); c.strokeStyle = `rgba(255,240,210,${(1 - f) * .7})`; c.lineWidth = 5 * (1 - f) + 1; c.stroke();
+    for (let q = 0; q < 16; q++) { const a = q / 16 * 6.283 + r() * .4, d = R * (.75 + e * (.7 + r() * .5)), cx = x + Math.cos(a) * d, cy = y + Math.sin(a) * d * .5 - e * (6 + r() * 10), rr = (7 + r() * 7) * (.6 + e * .9);
+      c.globalAlpha = Math.max(0, (1 - f) * .95); c.beginPath(); c.arc(cx, cy, rr, 0, 7); c.fillStyle = q % 3 ? '#d4c2ee' : '#f1e8ff'; c.fill(); c.strokeStyle = 'rgba(36,22,58,.45)'; c.lineWidth = 2; c.stroke(); c.beginPath(); c.arc(cx - rr * .3, cy - rr * .3, rr * .45, 0, 7); c.fillStyle = 'rgba(255,255,255,.5)'; c.fill(); }
+    c.globalAlpha = 1;
+    for (let q = 0; q < 10; q++) { const a = r() * 6.283, sp = R * (.6 + r() * .9), px = x + Math.cos(a) * sp * e, h = Math.abs(Math.sin(f * Math.PI * (1.5 + r()))) * (30 + r() * 30) * (1 - f), py = y + Math.sin(a) * sp * .5 * e - h;
+      c.fillStyle = '#5b4a7a'; c.strokeStyle = '#24163a'; c.lineWidth = 1.5; c.beginPath(); c.rect(px - 2.5, py - 2.5, 5, 5); c.fill(); c.stroke(); }
+    return true; }
+  if (v.k === 'up') { const D = 1.0, f = v.t / D; if (f >= 1) return false; const e = 1 - Math.pow(1 - f, 2), a = 1 - f;
+    c.save(); c.globalCompositeOperation = 'lighter';
+    c.beginPath(); c.ellipse(x, y, R * (.5 + e * .8), R * .5 * (.5 + e * .8), 0, 0, 7); c.strokeStyle = v.col; c.globalAlpha = a; c.lineWidth = 6 * a + 1; c.stroke();
+    glow(c, x, y - 30, 70, v.col, a * .5); c.restore(); c.globalAlpha = 1;
+    // rising chevrons
+    for (let q = 0; q < 3; q++) { const ff = Math.max(0, Math.min(1, (v.t - q * .12) / .7)); if (ff <= 0 || ff >= 1) continue; const cy = y - 40 - ff * 70 - q * 4, al = ff < .2 ? ff / .2 : 1 - (ff - .2) / .8, w = 14 + q * 2;
+      c.globalAlpha = al; c.beginPath(); c.moveTo(x - w, cy + 8); c.lineTo(x, cy - 4); c.lineTo(x + w, cy + 8); c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = '#24163a'; c.lineWidth = 10; c.stroke(); c.strokeStyle = v.col; c.lineWidth = 5; c.stroke(); }
+    c.globalAlpha = 1;
+    // spiral sparkles
+    for (let q = 0; q < 12; q++) { const ph = q / 12 * 6.283 + v.t * 5, rad = R * (.4 + .5 * e), sx = x + Math.cos(ph) * rad, sy = y - 10 - e * 80 * (.5 + (q % 4) / 6) + Math.sin(ph) * rad * .5, sz = (3 + (q % 3) * 1.5) * a;
+      if (sz < .5) continue; c.beginPath(); for (let k = 0; k < 8; k++) { const an = k * Math.PI / 4, rr = k % 2 ? sz * .35 : sz; c.lineTo(sx + Math.cos(an) * rr, sy + Math.sin(an) * rr); } c.closePath(); c.fillStyle = q % 2 ? '#fff' : v.col; c.fill(); }
+    return true; }
+  // level-up: rotating god rays, rising rings, confetti
+  const D = 2.2, f = v.t / D; if (f >= 1) return false; const a = f < .15 ? f / .15 : 1 - (f - .15) / .85, e = 1 - Math.pow(1 - Math.min(1, f * 2), 3);
+  c.save(); c.globalCompositeOperation = 'lighter'; c.translate(x, y - 40); c.rotate(t * .6); c.scale(1, .8);
+  for (let q = 0; q < 12; q++) { c.rotate(6.283 / 12); c.beginPath(); c.moveTo(0, 0); c.lineTo(-14 * e, -R * 2.2 * e); c.lineTo(14 * e, -R * 2.2 * e); c.closePath(); c.fillStyle = `rgba(255,226,120,${.22 * a})`; c.fill(); }
+  c.restore(); c.save(); c.globalCompositeOperation = 'lighter'; glow(c, x, y - 40, R * 2, '#fff0a0', a * .8);
+  for (let q = 0; q < 3; q++) { const ff = (f * 2 - q * .2); if (ff <= 0 || ff >= 1) continue; const yy = y - ff * 110; c.beginPath(); c.ellipse(x, yy, R * (.7 + ff * .3), R * .35 * (.7 + ff * .3), 0, 0, 7); c.strokeStyle = `rgba(255,222,90,${1 - ff})`; c.lineWidth = 4; c.stroke(); }
+  c.restore();
+  const cols = ['#ff5b8a', '#ffd23f', '#5cf2ff', '#7affd1', '#b08cff'];
+  for (let q = 0; q < 26; q++) { const an = r() * 6.283, vv = 120 + r() * 160, tt = v.t, px = x + Math.cos(an) * vv * .6 * Math.min(1, tt * 1.6), py = y - 60 - Math.abs(Math.sin(an)) * vv * Math.min(1, tt * 1.6) + 140 * tt * tt * .5, rot = tt * 8 + q;
+    c.save(); c.translate(px, py); c.rotate(rot); c.globalAlpha = Math.max(0, 1 - f); c.fillStyle = cols[q % 5]; c.fillRect(-4, -2.5 * Math.abs(Math.cos(rot)), 8, 5 * Math.abs(Math.cos(rot)) + 1); c.restore(); }
+  c.globalAlpha = 1; return true;
+}

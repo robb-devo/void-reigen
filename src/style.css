@@ -459,3 +459,11 @@ body.placing .toast{bottom:calc(var(--sb) + 104px)}
 .wbhero{width:120px!important;height:110px!important;margin-top:-6px!important}.wbhero img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 6px 0 #0006)}
 .achs .ach.got b{color:#4a2600!important}.achs .ach.got small{color:#7a4a10!important;opacity:1}
 .bsheet .btn:disabled,.bsheet .buy:disabled{filter:none!important;background:linear-gradient(#5d5184,#43386a)!important;color:#c9c0ee!important;box-shadow:0 4px 0 #1a1030,inset 0 2px 0 #ffffff1c!important}
+.lvban{position:fixed;left:0;right:0;top:calc(var(--st,0px) + 188px);z-index:70;display:grid;place-items:center;pointer-events:none;animation:lvban 2.3s cubic-bezier(.3,1.5,.5,1) both}
+.lvban .ribbon{font-size:19px!important;margin:0!important;max-width:calc(100% - 70px);text-align:center;overflow:hidden}
+.lvban .ribbon::selection{background:none}
+.lvban .ribbon>*{position:relative}
+.lvban .lvrays{position:absolute;width:300px;height:300px;left:50%;top:50%;margin:-150px 0 0 -150px;border-radius:50%;background:repeating-conic-gradient(#ffe07a40 0 9deg,transparent 9deg 22deg);-webkit-mask:radial-gradient(circle,#000 20%,transparent 66%);mask:radial-gradient(circle,#000 20%,transparent 66%);animation:spin 9s linear infinite}
+@keyframes lvban{0%{transform:scale(.3);opacity:0}12%{transform:scale(1.08);opacity:1}20%{transform:scale(1)}85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translateY(-24px) scale(.95)}}
+.lvban .ribbon.gold{background:linear-gradient(105deg,#fff0a0 0%,#ffc93d 40%,#fff6c8 50%,#ffc93d 60%,#f29a17 100%);background-size:300% 100%;animation:shine 1.6s .3s ease-in-out both}
+@keyframes shine{from{background-position:100% 0}to{background-position:0 0}}

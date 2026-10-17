@@ -51,10 +51,12 @@ let tab = 'base';
 const cache = new WeakMap<HTMLElement, string>();
 function setT(el: HTMLElement | null, v: string, html = false) { if (!el || cache.get(el) === v) return; cache.set(el, v); html ? (el.innerHTML = v) : (el.textContent = v); }
 const center = (el: Element | null): [number, number] => { const r = (el && el.getClientRects().length ? el : document.getElementById('cash')!).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+function lvlOf(sl: Slot) { const s = st(); return sl.kind === 'mine' ? s.mines[sl.idx].n : sl.kind === 'mach' ? s.mach[sl.idx] : sl.kind === 'gen' ? s.gen : 0; }
 function bump(el: HTMLElement) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 function shakeEl(el: HTMLElement) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
 function deny(el?: HTMLElement | null) { sfx.no(); buzz([15, 30, 15]); if (el) shakeEl(el); }
-function celebrate(msg: string, x = innerWidth / 2, y = 170) { sfx.fanfare(); buzz([25, 40, 60]); shakeEl(app); burst(x, y, 40); toast(msg); }
+function celebrate(msg: string, x = innerWidth / 2, y = 170) { sfx.fanfare(); buzz([25, 40, 60]); shakeEl(app); burst(x, y, 40); banner(msg); }
+function banner(msg: string) { document.querySelectorAll('.lvban').forEach(e => e.remove()); const el = document.createElement('div'); el.className = 'lvban'; el.innerHTML = `<i class="lvrays"></i><div class="h ribbon gold">${msg}</div>`; document.body.appendChild(el); setTimeout(() => el.remove(), 2300); }
 const multLabel = () => `Buy ×${G.BUY[st().mult] === -1 ? 'MAX' : G.BUY[st().mult]}`;
 function multBtn() { return `<button class="mult" data-mult>${multLabel()}</button>`; }
 document.addEventListener('click', e => { const t = (e.target as HTMLElement).closest('[data-mult]'); if (t) { st().mult = (st().mult + 1) % 4; sfx.tap(); buzz(8); document.querySelectorAll('[data-mult]').forEach(b => b.textContent = multLabel()); } });
@@ -159,8 +161,8 @@ function confirmPlace(ev: MouseEvent) {
   }
   bv.endPlace(); setPos(sl.key, p.gx, p.gy); document.body.classList.remove('placing'); updatePlacebar();
   const [x, y] = bv.slotScreen(sl.key);
-  if (p.mode === 'new') { bv.construct(sl.key); sfx.place(); buzz([20, 20, 40]); burst(x, y + 30, 18); setTimeout(() => { celebrate(sl.kind === 'mach' && MACHINES[sl.idx].id === 'fab' ? 'Shipyard unlocked!' : `${slotName(sl)} built!`, x, y); spotlight(); }, 900); }
-  else { bv.drop(sl.key); setTimeout(() => { bv?.puff(sl.key); sfx.place(); buzz(14); }, 250); burst(x, y + 30, 10, 0, '#5cf2ff'); }
+  if (p.mode === 'new') { bv.construct(sl.key); bv.vfx(sl.key, 'dust'); bv.shake = Math.max(bv.shake, .1); sfx.place(); buzz([20, 20, 40]); burst(x, y + 30, 18); setTimeout(() => { celebrate(sl.kind === 'mach' && MACHINES[sl.idx].id === 'fab' ? 'Shipyard unlocked!' : `${slotName(sl)} built!`, x, y); spotlight(); }, 900); }
+  else { bv.drop(sl.key); setTimeout(() => { bv?.vfx(sl.key, 'dust'); if (bv) bv.shake = Math.max(bv.shake, .08); sfx.place(); buzz(14); }, 250); burst(x, y + 30, 10, 0, '#5cf2ff'); }
   void ev; G.save();
 }
 
@@ -324,13 +326,14 @@ function sheetAct(a: string, ev: MouseEvent, b: HTMLElement) {
   if (a.startsWith('sell:')) { const r = a.slice(5) as Res; if (G.sellable(r) < 1) { toast('Nothing spare – your factory needs it'); return deny(b); } const v2 = G.sell(r); sfx.coin(); buzz(10); popup(ev.clientX, ev.clientY - 20, '+$' + fmt(v2)); fly(ev.clientX, ev.clientY, ...center(cashEl), 6, 1, '#ffc94a', () => bump(cashEl)); return; }
   if (a === 'tog') { s.on[sl.idx] = !s.on[sl.idx]; sfx.tap(); buzz(8); return; }
   if (a === 'buy') {
-    const t0 = tier(sl), wasPlot = visible(sl) === 'plot';
+    const t0 = tier(sl), wasPlot = visible(sl) === 'plot', l0 = lvlOf(sl);
     if (sl.kind === 'mine') { buyMine(sl.idx, ev); }
     else if (sl.kind === 'mach') { const j = sl.idx, k = G.machK(j), c = G.machCostK(j, k); if (s.cash < c) return deny(b); const lb = Math.floor(s.mach[j] / 10), first = !s.mach[j]; s.cash -= c; s.mach[j] += k; sfx.buy(); sfx.clank(); buzz(14); burst(ev.clientX, ev.clientY, 16, 0, RES[MACHINES[j].out].color); if (first) celebrate(MACHINES[j].id === 'fab' ? 'Shipyard unlocked!' : `${MACHINES[j].name} built!`); else if (Math.floor(s.mach[j] / 10) > lb) celebrate(`${MACHINES[j].name} Lv ${s.mach[j]}: output ×2!`); }
     else if (sl.kind === 'hq') { let v = 0; for (const r of RES_ORDER) if (G.sellable(r) >= 1) v += G.sell(r); if (v <= 0) { toast('Nothing spare – your factory needs it all'); return deny(b); } sfx.coin(); buzz(14); popup(ev.clientX, ev.clientY - 20, '+$' + fmt(v)); fly(ev.clientX, ev.clientY, ...center(cashEl), 10, 1, '#ffc94a', () => bump(cashEl)); }
     else if (sl.kind === 'gen') { const k = G.genK(), c = G.genCost(k); if (s.cash < c) return deny(b); s.cash -= c; s.gen += k; sfx.buy(); buzz(14); burst(ev.clientX, ev.clientY, 14, 0, '#ffe066'); }
-    bv?.puff(sl.key); bump(b); 
-    if (tier(sl) > t0 && !wasPlot) { const [x, y] = bv!.slotScreen(sl.key); celebrate(`${slotName(sl)} evolved: ${TIER_NAMES[tier(sl)]}!`, x, y); bv!.puff(sl.key, '#ffe98a'); }
+    const l1 = lvlOf(sl), up = !wasPlot && (tier(sl) > t0 || Math.floor(l1 / 10) > Math.floor(l0 / 10));
+    if (l1 > l0) bv?.vfx(sl.key, up ? 'lvl' : 'up', sl.kind === 'mach' ? RES[MACHINES[sl.idx].out].color : sl.kind === 'gen' ? '#ffe066' : '#7affd1'); bump(b);
+    if (tier(sl) > t0 && !wasPlot) { const [x, y] = bv!.slotScreen(sl.key); celebrate(`${slotName(sl)} evolved: ${TIER_NAMES[tier(sl)]}!`, x, y); }
     openSheet(sheetKey!); spotlight();
   }
 }
