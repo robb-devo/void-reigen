@@ -85,8 +85,44 @@ export function drawBuilding(c: C, mode: 0 | 1, kind: Kind, id: string, hue: num
   const hw = s * TW / 2 * 0.86, hh = s * TH / 2 * 0.86;
   if (S()) pad(c, x, y, hw, hh, hue, tier);
   const gy = y - 7, P: Arg = { c, id, hue, tier, x, y: gy, hw, hh, t, on: active, ac: accent };
-  (DRAW[id] || DRAW[kind] || DRAW.hq)(P);
+  kit(P, true); (DRAW[id] || DRAW[kind] || DRAW.hq)(P); kit(P, false);
 }
+// ---- Tier kit: every tier adds/replaces real structures around the core so silhouettes read at a glance ----
+// 0 Prototype: crates, cable spool, cone, leaning tarp pole   1 Outpost: radio mast + rope fence
+// 2 Industrial: stone walls + annex with chimney               3 Advanced: steel walls, corner turrets, radar annex, pylon
+// 4 Ascended: gold-capped walls, obelisks, waving banners, floating crystal spire
+function wall(c: C, x0: number, y0: number, x1: number, y1: number, h: number, face: string, cap: string, seg = 13) {
+  poly(c, [x0, y0, x1, y1, x1, y1 - h, x0, y0 - h], face);
+  const L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.round(L / seg));
+  c.strokeStyle = 'rgba(0,0,0,.28)'; c.lineWidth = 1.5; for (let k = 1; k < n; k++) { const f = k / n, px = x0 + (x1 - x0) * f, py = y0 + (y1 - y0) * f; c.beginPath(); c.moveTo(px, py - 1); c.lineTo(px, py - h + 1); c.stroke(); }
+  c.lineCap = 'round'; c.beginPath(); c.moveTo(x0, y0 - h); c.lineTo(x1, y1 - h); c.strokeStyle = INK; c.lineWidth = 8; c.stroke(); c.strokeStyle = cap; c.lineWidth = 4.5; c.stroke();
+}
+function crate(c: C, x: number, y: number, r: number) { box(c, x, y, r, r / 2, r * 1.2, 30, 55, 52); c.strokeStyle = 'rgba(60,30,10,.5)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x - r, y - r * 1.2); c.lineTo(x, y + r / 2); c.moveTo(x + r, y - r * 1.2); c.lineTo(x, y + r / 2); c.stroke(); }
+function flag(c: C, x: number, y: number, h: number, col: string, t: number) {
+  if (S()) { c.strokeStyle = INK; c.lineWidth = 3.5; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - h); c.stroke(); c.strokeStyle = '#ffd23f'; c.lineWidth = 1.5; c.stroke(); c.beginPath(); c.arc(x, y - h - 2, 2.8, 0, 7); c.fillStyle = '#ffd23f'; c.fill(); c.strokeStyle = INK; c.stroke(); return; }
+  const w = Math.sin(t * 5) * 3, w2 = Math.sin(t * 5 + 1.4) * 3; c.beginPath(); c.moveTo(x, y - h + 1); c.quadraticCurveTo(x + 9, y - h + 1 + w, x + 18, y - h + 3 + w2); c.lineTo(x + 16, y - h + 9 + w2); c.lineTo(x + 18, y - h + 15 + w2); c.quadraticCurveTo(x + 9, y - h + 13 + w, x, y - h + 13); c.closePath(); c.fillStyle = col; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+}
+function kit(p: Arg, back: boolean) {
+  const { c, x, y, hw, hh, tier, t, ac } = p, L = [x - hw * .94, y], F = [x, y + hh * .94], Rr = [x + hw * .94, y], B = [x, y - hh * .94];
+  const lerp = (a: number[], b: number[], f: number) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+  const style = tier === 2 ? ['#8c86a8', '#c9c3e0', 9] : tier === 3 ? ['#4f7fb0', '#bfe6ff', 11] : ['#4a2f6e', '#ffd23f', 13];
+  if (back) {
+    if (tier === 0 && S()) { const px = x - hw * .55, py = y - hh * .35; c.strokeStyle = INK; c.lineWidth = 4; c.beginPath(); c.moveTo(px, py); c.lineTo(px + 8, py - 46); c.stroke(); c.strokeStyle = '#c98a4a'; c.lineWidth = 2; c.stroke(); poly(c, [px + 8, py - 44, px + 30, py - 10, px + 4, py - 6], '#ff9f43'); }
+    if (tier === 1 || tier === 2) { const px = x - hw * .5, py = y - hh * .5, h = 58 + tier * 8; if (S()) { c.strokeStyle = INK; c.lineWidth = 4; c.beginPath(); c.moveTo(px, py); c.lineTo(px, py - h); c.stroke(); c.strokeStyle = '#d8d0f0'; c.lineWidth = 2; c.stroke(); for (let k = 1; k <= 3; k++) { const yy = py - h * k / 4; c.strokeStyle = INK; c.lineWidth = 3; c.beginPath(); c.moveTo(px - 7 + k, yy); c.lineTo(px + 7 - k, yy); c.stroke(); } } lamp(c, px, py - h - 3, '#ff5b5b', t, 2); }
+    if (tier >= 2) { if (S()) { wall(c, L[0], L[1], B[0], B[1], +style[2], style[0] as string, style[1] as string); wall(c, B[0], B[1], Rr[0], Rr[1], +style[2], style[0] as string, style[1] as string); } }
+    if (tier === 2 || tier === 3) { const ax = x + hw * .55, ay = y - hh * .38; if (S()) { const top = box(c, ax, ay, hw * .26, hw * .13, 20 + tier * 4, 240, 22, 50, { panels: 1 }); if (tier === 2) cyl(c, ax + 4, top + 2, 4.5, 22, 15, 30, 42, '#1d1530', 1); else { c.save(); c.translate(ax, top - 8); c.rotate(-.5); c.beginPath(); c.ellipse(0, 0, 13, 6, 0, 0, 7); c.fillStyle = '#e8f4ff'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke(); c.restore(); c.strokeStyle = INK; c.lineWidth = 3; c.beginPath(); c.moveTo(ax, top); c.lineTo(ax, top - 8); c.stroke(); } } if (tier === 2 && A() && p.on) steam(c, ax + 4, top0(ay, tier) - 22, t, 'rgba(110,100,130,.55)', 3, 26); if (tier === 3) lamp(c, ax + 6, top0(ay, tier) - 14, '#5cf2ff', t, 1); }
+    if (tier === 3) { const px = x - hw * .55, py = y - hh * .45, h = 74; if (S()) { poly(c, [px - 5, py, px + 5, py, px + 2, py - h, px - 2, py - h], '#3a5f8c'); for (let k = 1; k < 4; k++) { c.beginPath(); c.ellipse(px, py - h * k / 4, 7 - k, 3, 0, 0, 7); c.fillStyle = '#9fd8ff'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(); } } else { glow(c, px, py - h, 16, '#5cf2ff', .5 + Math.sin(t * 6) * .3); } }
+    if (tier === 4) { const px = x, py = y - hh * .7, h = 82; if (S()) { poly(c, [px - 7, py, px + 7, py, px + 3, py - h, px - 3, py - h], lg(c, px - 7, 0, px + 7, 0, '#ffe98a', '#c08a1e')); c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(px - 3, py - 4); c.lineTo(px - 1, py - h + 4); c.stroke(); } else { const b = Math.sin(t * 2) * 4, cy = py - h - 16 + b; glow(c, px, cy, 26, ac, .7); poly(c, [px, cy - 12, px + 7, cy, px, cy + 12, px - 7, cy], ac); poly(c, [px, cy - 12, px + 7, cy, px, cy + 2], 'rgba(255,255,255,.55)', null); } }
+  } else {
+    if (tier === 0 && S()) { const [cx, cy] = lerp(L, F, .55); crate(c, cx, cy - 2, 7); crate(c, cx + 12, cy + 3, 5.5); const [sx, sy] = lerp(F, Rr, .45); cyl(c, sx, sy - 2, 6, 7, 30, 40, 40, '#e0b070', 0); c.beginPath(); c.arc(sx, sy - 9, 2, 0, 7); c.fillStyle = INK; c.fill(); const [qx, qy] = lerp(F, Rr, .78); cone(c, qx, qy, 5, 13, '#ff8a2e'); poly(c, [qx - 3, qy - 6, qx + 3, qy - 6, qx + 2.4, qy - 8, qx - 2.4, qy - 8], '#fff', null); }
+    if (tier === 1 && S()) { const posts: number[][] = []; for (const [a, b] of [[L, F], [Rr, F]] as number[][][]) for (let k = 0; k <= 3; k++) posts.push(lerp(a, b, k * .26)); c.strokeStyle = '#f3e3b0'; c.lineWidth = 1.5; for (const [a, b] of [[L, F], [Rr, F]] as number[][][]) { const p0 = lerp(a, b, 0), p1 = lerp(a, b, .78); c.beginPath(); c.moveTo(p0[0], p0[1] - 8); c.lineTo(p1[0], p1[1] - 8); c.stroke(); } for (const [px, py] of posts) { c.strokeStyle = INK; c.lineWidth = 4.5; c.beginPath(); c.moveTo(px, py); c.lineTo(px, py - 11); c.stroke(); c.strokeStyle = '#ffd23f'; c.lineWidth = 2; c.stroke(); } }
+    if (tier >= 2 && S()) { const h = +style[2]; for (const a of [L, Rr]) { const e = lerp(a, F, .74); wall(c, a[0], a[1], e[0], e[1], h, style[0] as string, style[1] as string); } }
+    if (tier === 2 && S()) for (const a of [L, Rr]) { const e = lerp(a, F, .74); box(c, e[0], e[1] + 2, 5, 2.5, 15, 250, 15, 60); }
+    if (tier === 3) for (const a of [L, Rr]) { if (S()) { cyl(c, a[0], a[1] + 2, 7, 20, 210, 45, 50, undefined, 1); dome(c, a[0], a[1] - 18, 6, '#9fd8ff'); } else lamp(c, a[0], a[1] - 27, '#5cf2ff', t, a[0]); }
+    if (tier === 4) for (const a of [L, Rr]) { if (S()) poly(c, [a[0] - 6, a[1] + 2, a[0] + 6, a[1] + 2, a[0] + 3, a[1] - 26, a[0], a[1] - 32, a[0] - 3, a[1] - 26], lg(c, a[0] - 6, 0, a[0] + 6, 0, '#7a4fb0', '#3a2060')); flag(c, a[0], a[1] - 30, 22, ac, t + a[0]); if (A()) glow(c, a[0], a[1] - 32, 12, '#ffd23f', .6); }
+  }
+}
+const top0 = (ay: number, tier: number) => ay - (20 + tier * 4);
 type Arg = { c: C; id: string; hue: number; tier: number; x: number; y: number; hw: number; hh: number; t: number; on: boolean; ac: string };
 const DRAW: Record<string, (p: Arg) => void> = {};
 

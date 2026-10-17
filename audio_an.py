@@ -18,7 +18,7 @@ for f in sorted(glob.glob('audio/*.f32')):
     k=kw(seg); blk=4410; ms=[np.mean(k[i:i+blk]**2) for i in range(0,max(1,len(k)-blk),blk)] or [np.mean(k**2)]
     lufs=-0.691+10*np.log10(max(max(ms),1e-12))  # short-term max (100ms blocks)
     peak=20*np.log10(max(np.max(np.abs(x)),1e-9)); clip=int(np.sum(np.abs(x)>=0.999))
-    S=np.abs(np.fft.rfft(seg*np.hanning(len(seg))))**2; fr=np.fft.rfftfreq(len(seg),1/44100)
+    pz=np.concatenate([np.zeros(2205),seg,np.zeros(2205)]); S=np.abs(np.fft.rfft(pz))**2; fr=np.fft.rfftfreq(len(pz),1/44100)  # zero-padded, unwindowed: onset transients count
     cen=np.sum(fr*S)/np.sum(S); lo=np.sum(S[fr<250])/np.sum(S); hi=np.sum(S[fr>5000])/np.sum(S)
     rows.append((n,dur,peak,lufs,clip,cen,lo,hi))
 print(f"{'sfx':8} {'dur':>5} {'peak':>6} {'LUmax':>6} {'clip':>4} {'centroid':>8} {'<250':>5} {'>5k':>5}")

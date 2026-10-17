@@ -20,7 +20,7 @@ export type State = {
   v: number; cash: number; life: number; total: number; dm: number; warps: number;
   mines: Mine[]; tech: string[]; res: Bag; made: Bag; mach: number[]; on: boolean[]; gen: number;
   ships: Record<string, number>; conquered: string[]; missions: Mission[]; fupg: Record<string, number>; uid: number;
-  ach: string[]; goal: number; sold: number; lost: number; wins: number; w: number[]; auto: boolean;
+  ach: string[]; goal: number; gv: number; sold: number; lost: number; wins: number; w: number[]; auto: boolean;
   mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[]; fstock: Bag; lift: number; lifted: number; liftOn: boolean;
 };
 export const KEY = 'starforge.v2';
@@ -28,13 +28,13 @@ export const fresh = (keep?: Partial<State>): State => ({
   v: 2, cash: 5, life: 0, total: 0, dm: 0, warps: 0,
   mines: MINES.map((_, i) => ({ n: i === 0 ? 1 : 0, p: 0, m: false, run: false })),
   tech: [], res: bag(), made: bag(), mach: MACHINES.map(() => 0), on: MACHINES.map(() => true), gen: 1,
-  ships: {}, conquered: [], missions: [], fupg: {}, uid: 1, ach: [], goal: 0, sold: 0, lost: 0, wins: 0, w: MACHINES.map(() => 50), auto: false,
+  ships: {}, conquered: [], missions: [], fupg: {}, uid: 1, ach: [], goal: 0, gv: 3, sold: 0, lost: 0, wins: 0, w: MACHINES.map(() => 50), auto: false,
   mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], fstock: bag(), lift: 1, lifted: 0, liftOn: true, ...keep,
 });
 export let S: State = fresh();
 export let clock = () => Date.now();
 export function setClock(f: () => number) { clock = f; }
-export function load() { try { const r = localStorage.getItem(KEY); if (r) { const o = JSON.parse(r); const f = fresh(); S = { ...f, ...o, res: { ...f.res, ...o.res }, made: { ...f.made, ...o.made }, fstock: { ...f.fstock, ...(o.fstock || {}) } }; if (!o.fstock && o.ships && Object.keys(o.ships).length) for (const r of FLEET_RES) { S.fstock[r] = S.res[r] * .5; S.res[r] *= .5; } if (!Array.isArray(S.skills)) S.skills = []; if (typeof S.xp !== 'number') S.xp = 0; while (S.mach.length < MACHINES.length) { S.mach.push(0); S.on.push(true); } while (S.w.length < MACHINES.length) S.w.push(50); while (S.mines.length < MINES.length) S.mines.push({ n: 0, p: 0, m: false, run: false }); } } catch { S = fresh(); } }
+export function load() { try { const r = localStorage.getItem(KEY); if (r) { const o = JSON.parse(r); const f = fresh(); S = { ...f, ...o, res: { ...f.res, ...o.res }, made: { ...f.made, ...o.made }, fstock: { ...f.fstock, ...(o.fstock || {}) } }; if ((o.gv ?? 1) < 3) { const g = o.goal | 0; S.goal = g <= 13 ? g : g <= 16 ? g + 1 : g === 17 ? 20 : g <= 19 ? 21 : g === 20 ? 22 : g + 4; S.gv = 3; } if (!o.fstock && o.ships && Object.keys(o.ships).length) for (const r of FLEET_RES) { S.fstock[r] = S.res[r] * .5; S.res[r] *= .5; } if (!Array.isArray(S.skills)) S.skills = []; if (typeof S.xp !== 'number') S.xp = 0; while (S.mach.length < MACHINES.length) { S.mach.push(0); S.on.push(true); } while (S.w.length < MACHINES.length) S.w.push(50); while (S.mines.length < MINES.length) S.mines.push({ n: 0, p: 0, m: false, run: false }); } } catch { S = fresh(); } }
 export function migrateSeen(raw: string | null) { if (!raw) return; try { const o = JSON.parse(raw); if (!o.seen && (o.life > 0 || o.warps)) { S.seen = ['intro', 'factory', 'power', 'lab', 'export', 'foreman', 'tiers']; if (fleetOpen()) S.seen.push('fleet'); if (warpOpen() || o.warps) S.seen.push('warp'); } } catch {} }
 export function save() { S.last = clock(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
 export function setS(n: State) { S = n; }

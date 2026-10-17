@@ -39,11 +39,12 @@ const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
 const st2 = (base: number, k: number) => base * Math.pow(2, PENTA[Math.min(PENTA.length - 1, k)] / 12);
 let trim = 1;
 // loudness trims from the offline analysis (audio_an.py): keeps every SFX in its category's LU window
-export const TRIM: Record<string, number> = {blip: 16, build: 1.549, buy: 2.917, claim: 1.641, clank: 3.83, coin: 3.548, drill: 6.457, fanfare: 2.318, land: 1.273, launch: 5.433, lode: 1.659, no: 7.079, rank: 1.84, select: 2.917, tap: 5.433, warp: 1.758};
+export const TRIM: Record<string, number> = {blip: 16, build: 1.549, buy: 2.917, claim: 1.641, clank: 3.874, coin: 3.548, drill: 6.457, fanfare: 2.318, land: 1.273, launch: 5.433, lode: 1.659, no: 7.079, rank: 1.84, select: 2.917, tap: 4.571, warp: 1.758};
 let lastCoin = 0, combo = 0, comboT = 0, lastFan = 0, lastBlip = 0;
 const raw = {
-  tap: () => { click(0, .1); pop(620, 0, .16); },
-  select: () => { click(0, .1); pop(440, 0, .24); pop(880, .045, .12); },
+  // bright 'tick' transient (4-11 kHz) on top of a higher-pitched body: reads crisp on phone speakers
+  tap: () => { click(0, .13); pop(760, 0, .15); v({ f: 5300, to: 4100, d: .03, type: 'sine', vol: .1, att: .0008 }); noise(.016, 1, 9000, 0, 'ui', 1.2); },
+  select: () => { click(0, .12); pop(560, 0, .2); pop(1120, .042, .12); v({ f: 6272, d: .05, type: 'sine', vol: .04, at: .042, att: .001 }); noise(.014, .45, 9500, .042, 'ui', 1.4); },
   drill: () => { pop(300, 0, .28, 'world'); noise(.07, .07, 1800, 0, 'world', 1.2); v({ f: 90, to: 60, d: .12, type: 'square', vol: .03, bus: 'world' }); },
   coin: () => { const n = performance.now(); if (n - lastCoin < 70) return; combo = n - comboT < 700 ? Math.min(combo + 1, 10) : 0; comboT = n; lastCoin = n; chime(st2(1046, combo), 0, .1); },
   buy: () => { pop(500, 0, .3); chime(1318, .04, .08); },
