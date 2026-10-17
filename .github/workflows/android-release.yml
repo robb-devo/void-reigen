@@ -1,0 +1,55 @@
+name: Android release APK
+on:
+  push: { tags: ['v*'] }
+  workflow_dispatch:
+    inputs:
+      version: { description: 'Version tag (e.g. v1.0.0)', required: true, default: 'v1.0.0' }
+permissions: { contents: write }
+concurrency: { group: android-release, cancel-in-progress: false }
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.version || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21, cache: gradle }
+      - name: Web build + Capacitor sync
+        run: npm ci && npx vite build && npx cap sync android
+      - name: Decode keystore
+        env: { KS_B64: '${{ secrets.ANDROID_KEYSTORE_B64 }}' }
+        run: |
+          test -n "$KS_B64" || { echo "missing ANDROID_KEYSTORE_B64 secret"; exit 1; }
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          export VERSION_NAME="${TAG#v}"
+          chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+      - name: Verify signature
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -f "$APK"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK" | grep -E "Signer #1 certificate (DN|SHA-256)"
+          cp "$APK" "VoidReigen-$TAG.apk"
+      - name: Publish GitHub Release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "VoidReigen-$TAG.apk" --clobber
+          else
+            gh release create "$TAG" "VoidReigen-$TAG.apk" --target "$GITHUB_SHA" --title "Void Reigen $TAG" \
+              --notes "Android APK for Void Reigen (idle space mining). Download VoidReigen-$TAG.apk on your phone, allow installing unknown apps for your browser/file manager, and open it. Web version: https://robb-devo.github.io/void-reigen/"
+          fi
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
