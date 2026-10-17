@@ -1,0 +1,9 @@
+// fps with a blurred full-screen modal (daily crate) open over the base: A=4181 vs B=4182, interleaved
+import { chromium } from 'playwright';
+const b=await chromium.launch({args:['--use-gl=swiftshader','--enable-unsafe-swiftshader']});
+const z={ore:0,quartz:0,ingot:0,glass:0,part:0,alloy:0,chip:0,hull:0,exotic:0}; const M=a=>a.map(([n,m])=>({n,p:0,m:!!m,run:!!m}));
+const seed={v:2,gv:3,goal:14,cash:9000,life:9e4,seen:['intro','factory','power','lab','export','foreman','tiers','fleet','warp','skills','rock2'],mines:M([[50,1],[1,0],[18,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]]),tech:['t0_0'],res:{...z,ore:5e3},made:{...z},mach:[1,1,1,0,0,0,0],gen:3,last:Date.now()};
+const R={4181:[],4182:[]};
+for (let i=0;i<3;i++) for (const port of [4181,4182]) { const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'}); await ctx.addInitScript(s=>localStorage.setItem('starforge.v2',s),JSON.stringify(seed)); const p=await ctx.newPage(); if(process.env.NOBLUR&&port===4182) await p.addInitScript(()=>addEventListener("DOMContentLoaded",()=>{const s=document.createElement("style"); s.textContent=".modal{backdrop-filter:none!important}"; document.head.appendChild(s)})); await p.goto(`http://localhost:${port}/`); await p.waitForTimeout(3000);
+  const open=!!await p.$('#dopen'); const f=await p.evaluate(()=>new Promise(r=>{let n=0;const t0=performance.now();const f=()=>{n++; if(performance.now()-t0<3000) requestAnimationFrame(f); else r(n/3)}; requestAnimationFrame(f)})); R[port].push(f); if(!open) console.log('no modal!'); await ctx.close(); }
+const av=a=>(a.reduce((x,y)=>x+y,0)/a.length).toFixed(1); console.log('modal open: A fps',av(R[4181]),'B fps',av(R[4182]),'load',(await import('os')).loadavg()[0].toFixed(1)); await b.close();
