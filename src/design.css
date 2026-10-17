@@ -84,3 +84,13 @@ body.vex .toast,body.fg-sheet .toast,body.fg-modal .toast{display:none}
 #rush svg.ic{width:14px;height:14px}
 #rush i{display:block;width:38px;height:5px;border-radius:3px;background:rgba(42,22,6,.3);overflow:hidden}#rush u{display:block;height:100%;background:#2a1606;width:100%}
 body.fg-modal #rush{opacity:0}
+/* daily crate */
+.dcrate{text-align:center}.dcrate small{color:var(--gold,#ffd23f);font-weight:800;letter-spacing:.08em}
+.dcrate .cwrap{height:130px;display:grid;place-items:center}
+.crate{width:130px;overflow:visible}.crate .clid{transform-origin:60px 40px;transition:transform .45s cubic-bezier(.3,1.8,.5,1)}
+.crate.shake{animation:cshake .26s ease-in-out 2}@keyframes cshake{25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}
+.crate.pop .clid{transform:translate(0,-34px) rotate(-18deg)}.crate.pop{filter:drop-shadow(0 0 18px #ffd23f)}
+.pips{display:flex;justify-content:center;gap:6px;margin:10px 0 6px}.pip{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:800 12px Fredoka;background:#3a2a5a;color:#b9a8e0;border:3px solid var(--ink)}
+.pip.big{width:32px;height:32px}.pip.got{background:#5cff9d;color:#14301e}.pip.got svg.ic{width:13px;height:13px}.pip.now{background:#ffd23f;color:#2a1606;transform:scale(1.15)}
+.dcrate .amt{font:800 30px Fredoka;color:#ffd23f;text-shadow:var(--tx);animation:amtin .4s cubic-bezier(.3,1.8,.5,1)}@keyframes amtin{from{transform:scale(.3);opacity:0}}
+.dsub{font-size:12px;opacity:.75;margin:6px 0 10px}

@@ -603,3 +603,28 @@ const fgModal = () => !!document.querySelector('.modal, .tree');
 setGate(fgModal);
 setToastGate(() => fgModal() || talking() || !!document.querySelector('#sheet.open'));
 setInterval(() => { const b = document.body, sheet = !!document.querySelector('#sheet.open'); b.classList.toggle('fg-sheet', sheet); b.classList.toggle('fg-modal', fgModal()); }, 120);
+
+// ---------- daily supply crate (first-session hook + reason to return) ----------
+// Offered once per calendar day from goal 6 on, only when nothing else is in the foreground and the player isn't mid-chain.
+const CRATE = `<svg viewBox="0 0 120 110" class="crate"><ellipse cx="60" cy="100" rx="44" ry="8" fill="rgba(0,0,0,.35)"/>
+<g class="cbody"><path d="M18 46h84v46a6 6 0 0 1-6 6H24a6 6 0 0 1-6-6z" fill="#b8641e" stroke="#24163a" stroke-width="4"/><path d="M18 60h84M18 78h84" stroke="#8a4512" stroke-width="3"/><rect x="50" y="46" width="20" height="52" fill="#ffd23f" stroke="#24163a" stroke-width="4"/></g>
+<g class="clid"><path d="M12 30h96v18H12z" fill="#d97a2b" stroke="#24163a" stroke-width="4" stroke-linejoin="round"/><rect x="48" y="26" width="24" height="26" rx="4" fill="#ffd23f" stroke="#24163a" stroke-width="4"/><circle cx="60" cy="39" r="4" fill="#24163a"/></g></svg>`;
+let crateOpen = false;
+function dailyCheck() {
+  const s = st(); if (crateOpen || !G.dailyReady() || s.goal < 6 || tab !== 'base' || document.hidden || talking() || document.querySelector('.modal, .tree') || performance.now() - rushT < 3000 || bv?.travelT !== -1) return;
+  crateOpen = true; const n = G.dailyNext();
+  const pips = Array.from({ length: 7 }, (_, k) => `<span class="pip ${k + 1 < n.streak ? 'got' : k + 1 === n.streak ? 'now' : ''} ${k === 6 ? 'big' : ''}">${k + 1 < n.streak ? I.check : k + 1}</span>`).join('');
+  const m = modal(`<div class="dcrate"><small>DAILY SUPPLY CRATE</small><h2 class="h">Day ${n.streak} of 7</h2><div class="cwrap">${CRATE}</div><div class="pips">${pips}</div><div class="amt" hidden>+$${fmt(n.cash)}</div><p class="dsub">Come back tomorrow – the crate grows every day of your streak.</p><button class="btn gold big" id="dopen">Open crate</button></div>`);
+  m.classList.add('daily'); m.addEventListener('click', e => { if (e.target === m) e.stopImmediatePropagation(); }, true); // no dismiss-by-backdrop before opening
+  sfx.select();
+  const btn = $('#dopen', m) as HTMLButtonElement; let opened = false;
+  btn.addEventListener('click', ev => {
+    if (!opened) { opened = true; btn.disabled = true; const c = $('.crate', m); c.classList.add('shake'); sfx.clank(); buzz(15);
+      setTimeout(() => { sfx.clank(); buzz(15); }, 260);
+      setTimeout(() => { c.classList.remove('shake'); c.classList.add('pop'); const r = G.claimDaily(); G.save(); sfx.claim(); buzz([30, 40, 80]); const [cx, cy] = center(c); burst(cx, cy, 40, 0, '#ffd23f'); burst(cx, cy, 20, 1);
+        ($('.amt', m) as HTMLElement).hidden = false; btn.textContent = 'Collect'; btn.disabled = false; xp(n.xp, cx, cy); void r; }, 620);
+      return; }
+    m.remove(); crateOpen = false; sfx.fanfare(); fly(ev.clientX, ev.clientY, ...center(cashEl), 20, 1, '#ffc94a', () => bump(cashEl));
+  });
+}
+setInterval(dailyCheck, 1000);
