@@ -77,7 +77,7 @@ export class BaseView {
   pad(): [number, number] { return this.rock ? iso(0, 0) : iso(6, 3); }
   private ptrs = new Map<number, { x: number; y: number }>(); private moved = 0; private pinch0 = 0; private z0 = 1; private craters: number[][] = [];
   constructor(parent: HTMLElement) {
-    this.cv = document.createElement('canvas'); this.cv.id = 'base'; parent.appendChild(this.cv); this.c = this.cv.getContext('2d')!;
+    this.cv = document.createElement('canvas'); this.cv.id = 'base'; parent.appendChild(this.cv); { const v = document.createElement('div'); v.className = 'bvig'; parent.appendChild(v); } this.c = this.cv.getContext('2d')!;
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     for (let k = 0; k < 26; k++) { const a = rnd() * 7, r = 3 + rnd() * 7.5; this.craters.push([Math.cos(a) * r, Math.sin(a) * r, .5 + rnd() * 1.3]); }
     this.resize(); new ResizeObserver(() => this.resize()).observe(parent);
@@ -250,12 +250,10 @@ export class BaseView {
       c.beginPath(); c.ellipse(x, y, sl.s * TW / 2 * (1 + b / 60), sl.s * TH / 2 * (1 + b / 60), 0, 0, 7); c.strokeStyle = 'rgba(255,210,63,.8)'; c.lineWidth = 3; c.stroke(); } }
     // ambient lighting: cool vignette + warm key light (screen space)
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    if (!this.vig || this.vig.width !== this.cv.width) { const v = document.createElement('canvas'); v.width = this.cv.width; v.height = this.cv.height; const g = v.getContext('2d')!; const W = v.width, H = v.height; let gr = g.createRadialGradient(W * .5, H * .45, H * .2, W * .5, H * .5, H * .75); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(8,2,30,.55)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); gr = g.createRadialGradient(W * .15, H * .1, 0, W * .15, H * .1, H * .6); gr.addColorStop(0, 'rgba(255,190,120,.16)'); gr.addColorStop(1, 'rgba(255,190,120,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); this.vig = v; }
+    // (vignette + warm key light live in a static CSS layer .bvig: no full-screen blit per frame)
     if (this.travelT >= 0) { const f = Math.sin(Math.min(1, this.travelT / 1.32) * Math.PI); c.strokeStyle = `rgba(200,230,255,${.5 * f})`; c.lineWidth = 2; let sd = 3; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647; for (let k = 0; k < 40; k++) { const yy = r() * this.h, xx = ((r() * this.w * 2 - this.travelT * 2600 * (this.travelTo ? 1 : -1)) % (this.w * 1.2) + this.w * 1.2) % (this.w * 1.2) - this.w * .1, L = 60 + r() * 140; c.beginPath(); c.moveTo(xx, yy); c.lineTo(xx + L * f, yy); c.stroke(); } }
-    c.drawImage(this.vig, 0, 0, this.w, this.h);
     c.setTransform(1, 0, 0, 1, 0, 0);
   }
-  private vig: HTMLCanvasElement | null = null;
   private groundCached() {
     const c = this.c, k = this.z * this.dpr, W = 1700, H = 1000;
     if (!this.gcache || Math.abs(this.gz - this.z) > .001) {
