@@ -316,10 +316,19 @@ export class BaseView {
     this.camT = [this.ox + sx + tx, this.oy + sy, this.z * tz]; this.groundLayer(...this.camT);
     // conveyors
     const L = this.links();
-    for (const [a, b, r, on] of L) this.belt(a, b, RES[r].color, on);
+    // conveyors are cut into short pieces and depth-sorted with the buildings, so a belt passing in front of a pad stays visible
+    const bq = this.rock ? [] : this.beltQueue(L);
     this.drawWorkers(dt);
     // buildings back-to-front
     guideKey = this.guide; const order = SLOTS.filter(sl => onMap(sl) && sl.key !== moveKey).sort((a, b) => a.gx + a.gy - (b.gx + b.gy));
+    // belts sit in the lanes between pads: pieces tucked behind a building's body are drawn under the buildings, the rest on top
+    // (a lane is exactly where two platforms meet, so plain depth sorting would hide most of it)
+    const hid = (x: number, y: number) => order.some(o => { const dx = x - o.gx, dy = y - o.gy; return (Math.abs(dx) < 1.05 && Math.abs(dy) < 1.05) || (Math.abs(dx) <= 2.1 && Math.abs(dy) <= 2.1 && dx + dy < -.9 && Math.abs(dx - dy) < 1.6); });
+    const pre: (() => void)[] = [], post: (() => void)[] = [];
+    for (const bl of bq) { let run: typeof bl.pcs = [], cur: boolean | null = null; const flush = () => { if (run.length) { const r2 = run, on = bl.on; (cur ? pre : post).push(() => this.beltRun(r2, on)); } run = []; };
+      for (const pc of bl.pcs) { const h = hid(pc.x, pc.y); if (h !== cur) { flush(); cur = h; } run.push(pc); } flush();
+      for (const it of bl.items) (hid(it.x, it.y) ? pre : post).push(() => this.beltItem(it.sx, it.sy, bl.col)); }
+    for (const f of pre) f();
     this.drawMeteors(false);
     const dec = this.decor(); let di = 0; const dings: number[][] = [];
     for (const sl of order) {
@@ -340,6 +349,7 @@ export class BaseView {
       if (pk) c.restore();
       if (scl !== 1) c.restore();
     }
+    for (const f of post) f();
     while (di < dec.length) this.prop(dec[di++], t);
     this.drawMeteors(true);
     this.drawWreck(); this.drawTrader();
@@ -537,19 +547,27 @@ export class BaseView {
     if (!r) { const obst = SLOTS.filter(s => s !== a && s !== b && onMap(s) && s.key !== moveKey).map(s => [s.gx, s.gy] as Pt); r = route([a.gx, a.gy], [b.gx, b.gy], obst, MAIN_R); if (this.routes.size > 200) this.routes.clear(); this.routes.set(k, r); }
     return r;
   }
-  private belt(a: Slot, b: Slot, col: string, on: boolean) {
-    const c = this.c, P = this.routeOf(a, b).map(p => iso(p[0], p[1]));
-    c.lineCap = 'round'; c.lineJoin = 'round';
-    const path = () => { c.beginPath(); c.moveTo(P[0][0], P[0][1]); for (let i = 1; i < P.length; i++) c.lineTo(P[i][0], P[i][1]); };
-    path(); c.strokeStyle = '#24163a'; c.lineWidth = 15; c.stroke(); path(); c.strokeStyle = '#4a4470'; c.lineWidth = 10; c.stroke();
-    path(); c.setLineDash([4, 8]); c.lineDashOffset = on ? -this.t * 30 : 0; c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 8; c.stroke(); c.setLineDash([]);
-    if (!on) return;
-    const L = polyLen(P);
-    for (let d = (this.t * 40) % 34; d < L; d += 34) {
-      const [x, y] = along(P, d);
-      c.fillStyle = col; c.strokeStyle = '#24163a'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x, y - 7); c.lineTo(x + 6, y - 4); c.lineTo(x, y - 1); c.lineTo(x - 6, y - 4); c.closePath(); c.fill(); c.stroke();
+  /** belt geometry: per link a list of half-tile pieces (grid + screen coords) and moving goods */
+  private beltQueue(L: [Slot, Slot, Res, boolean][]) {
+    const out: { pcs: { x: number; y: number; A: [number, number]; B: [number, number]; off: number }[]; items: { x: number; y: number; sx: number; sy: number }[]; col: string; on: boolean }[] = [], t = this.t;
+    for (const [a, b, r, on] of L) {
+      const G2 = this.routeOf(a, b), pcs: typeof out[0]['pcs'] = []; let acc = 0;
+      for (let i = 1; i < G2.length; i++) { const [x0, y0] = G2[i - 1], [x1, y1] = G2[i], n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / .5));
+        for (let k = 0; k < n; k++) { const ga: Pt = [x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n], gb: Pt = [x0 + (x1 - x0) * (k + 1) / n, y0 + (y1 - y0) * (k + 1) / n], A = iso(...ga), B = iso(...gb); pcs.push({ x: (ga[0] + gb[0]) / 2, y: (ga[1] + gb[1]) / 2, A, B, off: acc }); acc += Math.hypot(B[0] - A[0], B[1] - A[1]); } }
+      const items: typeof out[0]['items'] = [];
+      if (on) { const P = G2.map(p => iso(p[0], p[1])), Ls = polyLen(P), Lg = polyLen(G2); for (let d = (t * 40) % 34; d < Ls; d += 34) { const [sx, sy] = along(P, d), gp = along(G2, d / Ls * Lg); items.push({ x: gp[0], y: gp[1], sx, sy }); } }
+      out.push({ pcs, items, col: RES[r].color, on });
     }
+    return out;
   }
+  /** draw consecutive belt pieces as one continuous conveyor run */
+  private beltRun(run: { A: [number, number]; B: [number, number]; off: number }[], on: boolean) {
+    if (!run.length) return; const c = this.c;
+    const path = () => { c.beginPath(); c.moveTo(run[0].A[0], run[0].A[1]); for (const p of run) c.lineTo(p.B[0], p.B[1]); };
+    c.lineCap = 'round'; c.lineJoin = 'round'; path(); c.strokeStyle = '#24163a'; c.lineWidth = 17; c.stroke(); path(); c.strokeStyle = '#a9a3cf'; c.lineWidth = 13; c.stroke(); path(); c.strokeStyle = '#3a3262'; c.lineWidth = 8; c.stroke();
+    c.lineCap = 'butt'; path(); c.setLineDash([3, 7]); c.lineDashOffset = (on ? -this.t * 40 : 0) + run[0].off; c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 7; c.stroke(); c.setLineDash([]); c.lineCap = 'round';
+  }
+  private beltItem(x: number, y: number, col: string) { const c = this.c; c.fillStyle = col; c.strokeStyle = '#24163a'; c.lineWidth = 2; c.beginPath(); c.moveTo(x, y - 10); c.lineTo(x + 8, y - 5.5); c.lineTo(x, y - 1); c.lineTo(x - 8, y - 5.5); c.closePath(); c.fill(); c.stroke(); c.fillStyle = 'rgba(255,255,255,.55)'; c.beginPath(); c.moveTo(x, y - 9); c.lineTo(x + 4, y - 6.5); c.lineTo(x, y - 5); c.lineTo(x - 4, y - 6.5); c.closePath(); c.fill(); }
   private label(sl: Slot) {
     const v = visible(sl); if (v === 'hidden' || sl.kind === 'hq') return;
     const c = this.c, [x, y0] = iso(sl.gx, sl.gy), y = y0 + sl.s * TH / 2 + 14, S = G.S;

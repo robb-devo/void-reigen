@@ -1,0 +1,1 @@
+export default async function(p, errs){ await p.evaluate(()=>{ window.__night=0; const b=window.bv; b.cam={x:b.w/2, y:b.h*.5, z:1.5}; }); await p.waitForTimeout(1500); await p.screenshot({path:'shots/s11-belts.png'}); console.log(errs); }

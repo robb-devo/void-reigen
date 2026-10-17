@@ -397,7 +397,7 @@ main{min-width:0;max-width:100%;overflow-x:hidden}
 @keyframes bdgpop{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 .buildbtn.coach{outline:none;animation:coachb 1s ease-in-out infinite!important}
 @keyframes coachb{0%,100%{box-shadow:0 5px 0 #120a24,0 0 0 0 #ffd23f}50%{box-shadow:0 5px 0 #120a24,0 0 0 10px #ffd23f66;transform:scale(1.08)}}
-body.fg-sheet .buildbtn,body.fg-modal .buildbtn,body.vex .buildbtn,body.placing .buildbtn{transform:scale(0);opacity:0;pointer-events:none}
+body.fg-sheet .buildbtn,body.fg-modal .buildbtn,body.placing .buildbtn{transform:scale(0);opacity:0;pointer-events:none}
 body.placing #goal,body.placing .rockbtn,body.placing #bhint{opacity:0;pointer-events:none}
 .mvbtn{margin-left:auto;align-self:flex-start;display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 8px;border-radius:14px;border:2.5px solid #120a24;background:linear-gradient(#4b3c86,#33276a);box-shadow:0 3px 0 #120a24;color:#dff;font:700 11px Fredoka;margin-right:30px}
 .mvbtn svg{width:22px;height:22px}.mvbtn:active{transform:translateY(2px);box-shadow:0 1px 0 #120a24}
