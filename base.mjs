@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 const URL='http://localhost:4173/', OUT='shots'; const errs=[];
 const b=await chromium.launch({args:['--use-gl=swiftshader','--enable-unsafe-swiftshader']});
 let prevCtx=null; async function page(seed){ if(prevCtx) await prevCtx.close(); const ctx=prevCtx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+  const d=new Date(), TODAY=d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); if(seed&&!seed.daily) seed={...seed,daily:{day:TODAY,streak:1}}; // crate already claimed today: keeps art shots deterministic
   if(seed) await ctx.addInitScript(s=>{if(!sessionStorage.seed){sessionStorage.seed=1;localStorage.setItem('starforge.v2',s)}},JSON.stringify(seed));
   const p=await ctx.newPage(); p.on('console',m=>m.type()==='error'&&errs.push(m.text())); p.on('pageerror',e=>errs.push(e.message)); await p.goto(URL); await p.waitForTimeout(1200); await p.$eval('#col',e=>e.click()).catch(()=>{}); await p.waitForTimeout(300); return p; }
 const F={force:true}, z={ore:0,quartz:0,ingot:0,glass:0,part:0,alloy:0,chip:0,hull:0,exotic:0};
