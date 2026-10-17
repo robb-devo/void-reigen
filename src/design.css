@@ -95,3 +95,22 @@ body.fg-modal #rush{opacity:0}
 .dcrate .amt{font:800 30px Fredoka;color:#ffd23f;text-shadow:var(--tx);animation:amtin .4s cubic-bezier(.3,1.8,.5,1)}@keyframes amtin{from{transform:scale(.3);opacity:0}}
 .dsub{font-size:12px;opacity:.75;margin:6px 0 10px}
 body.rushing #rate{opacity:0}
+/* timed boost pill (trader deals): sits under the rate/rush line while active */
+#boost{position:fixed;left:50%;top:calc(var(--st) + 112px);transform:translate(-50%,-6px) scale(.8);z-index:6;display:flex;align-items:center;gap:6px;padding:3px 10px 3px 6px;border-radius:999px;background:linear-gradient(#5cff9d,#1fc46a);color:#0e2a18;border:3px solid var(--ink);box-shadow:0 3px 0 var(--ink);font:800 12px Fredoka,sans-serif;opacity:0;pointer-events:none;transition:opacity .2s,transform .25s cubic-bezier(.3,1.8,.5,1)}
+#boost.on{opacity:1;transform:translate(-50%,0)}#boost svg,#boost img{width:16px;height:16px}#boost span{font-variant-numeric:tabular-nums;min-width:30px}
+#boost i{display:block;width:34px;height:5px;border-radius:3px;background:rgba(14,42,24,.3);overflow:hidden}#boost u{display:block;height:100%;background:#0e2a18;transform-origin:left;transition:transform .25s linear}
+body.fg-modal #boost,body.fg-sheet #boost{opacity:0}
+/* trader modal */
+.trader .thd{display:flex;align-items:center;gap:10px;text-align:left}.trader .thd small{color:#5cf2ff;font-weight:800;letter-spacing:.08em}.trader .thd .h{margin:0}
+.trader .tav{width:52px;height:52px;border-radius:16px;background:linear-gradient(#ffb46a,#e0702a);border:3px solid var(--ink);display:grid;place-items:center;flex:none;box-shadow:0 3px 0 var(--ink)}.trader .tav svg,.trader .tav img{width:40px;height:40px}
+.trader .tclk{margin-left:auto;font:800 15px Fredoka;padding:4px 10px;border-radius:999px;background:#1d1438;border:3px solid var(--ink);color:#5cff9d;font-variant-numeric:tabular-nums}.trader .tclk.late{color:#ff6b6b;animation:tpulse .6s ease-in-out infinite alternate}@keyframes tpulse{to{transform:scale(1.08)}}
+.trader .tsub{font-size:12px;opacity:.75;margin:8px 0 10px;font-style:italic}
+.offers{display:grid;gap:10px;margin-bottom:12px}
+.offer{position:relative;display:flex;align-items:center;gap:8px;padding:12px 10px 10px;border-radius:18px;background:linear-gradient(#3b2d72,#2b2058);border:3px solid var(--ink);box-shadow:0 3px 0 var(--ink);transition:transform .2s,opacity .3s}
+.offer .otag{position:absolute;top:-10px;left:12px;font:800 10px Fredoka;letter-spacing:.06em;font-style:normal;padding:1px 8px;border-radius:999px;background:#ffd23f;color:#2a1606;border:2px solid var(--ink)}
+.offer .orow{flex:1;display:flex;align-items:center;gap:4px;min-width:0}.offer .arr svg{width:16px;height:16px}
+.tg{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 2px;border-radius:12px;background:rgba(10,4,32,.35)}.tg svg,.tg img{width:26px;height:26px}.tg b{font:800 14px Fredoka;color:var(--c)}.tg small{font-size:10px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tg.boost{background:rgba(92,255,157,.12);box-shadow:inset 0 0 0 2px rgba(92,255,157,.35)}
+.offer .btn{flex:none;min-width:86px;padding:10px 8px}
+.offer.done{opacity:.6}.offer.done .otag{background:#5cff9d}
+.offer.stamp{animation:ostamp .45s cubic-bezier(.3,1.8,.5,1)}@keyframes ostamp{30%{transform:scale(1.06) rotate(-1.5deg)}}

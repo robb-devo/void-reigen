@@ -409,3 +409,53 @@ export function scaffold(c: C, x: number, y: number, s: number, f: number, t: nu
   for (let k = 0; k < 4; k++) { const a = t * 6 + k * 1.7, r = (t * 40 + k * 13) % 30; c.globalAlpha = .6 * (1 - r / 30); c.beginPath(); c.arc(x + Math.cos(a) * (hw + r), y + Math.sin(a) * (hh + r / 2), 5 + r / 4, 0, 7); c.fillStyle = '#d8c8f0'; c.fill(); }
   c.globalAlpha = 1;
 }
+
+// ---------- random-event art ----------
+/** Visiting trader: a chunky cargo hauler. alt = height above its landing spot, legs/ramp 0..1. */
+export function traderShip(c: C, x: number, y: number, alt: number, t: number, flame: number, legs: number, ramp: number) {
+  const by = y - alt - 16, sh = Math.max(.2, 1 - alt / 420);
+  c.beginPath(); c.ellipse(x, y + 2, 50 * sh, 24 * sh, 0, 0, 7); c.fillStyle = `rgba(20,8,40,${.12 + .3 * sh})`; c.fill();
+  if (alt < 60 && flame > 0) { const k = 1 - alt / 60; c.beginPath(); c.ellipse(x, y + 2, 60 * k + 20, 30 * k + 10, 0, 0, 7); c.fillStyle = `rgba(255,200,120,${.18 * k * flame})`; c.fill(); }
+  // landing legs (struts + pads), drawn under the hull
+  if (legs > 0) for (const [cx, cy] of [[-30, -6], [30, -6], [-30, 8], [30, 8]]) { const px = x + cx * 1.25, py = by + cy + 8 + 14 * legs; c.strokeStyle = INK; c.lineWidth = 5; c.beginPath(); c.moveTo(x + cx * .8, by + cy); c.lineTo(px, py); c.stroke(); c.strokeStyle = '#b9c2dd'; c.lineWidth = 2.5; c.stroke(); c.beginPath(); c.ellipse(px, py, 6, 3, 0, 0, 7); c.fillStyle = '#8a93b5'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(); }
+  // engines
+  for (const s of [-1, 1]) { const ex = x + s * 18, ey = by + 6; if (flame > 0) { glow(c, ex, ey + 12, 26, '#ffb23f', .5 + flame * .4); const fl = 14 + flame * (18 + Math.sin(t * 40 + s) * 5); poly(c, [ex - 7, ey, ex, ey + fl, ex + 7, ey], '#ffe27a', null); poly(c, [ex - 3.5, ey, ex, ey + fl * .6, ex + 3.5, ey], '#fff', null); } cyl(c, ex, ey + 2, 7, 6, 230, 15, 40); }
+  // hull: warm orange hauler with a teal stripe
+  const top = box(c, x, by, 42, 21, 20, 28, 72, 60, { panels: 3, rivets: true });
+  poly(c, [x - 42, by - 9, x, by + 12, x, by + 5, x - 42, by - 16], 'rgba(64,224,208,.85)', null); poly(c, [x + 42, by - 9, x, by + 12, x, by + 5, x + 42, by - 16], 'rgba(30,160,150,.85)', null);
+  // cockpit glass on the nose
+  poly(c, [x - 12, by + 9, x, by + 15, x + 12, by + 9, x + 12, by + 3, x, by + 9, x - 12, by + 3], '#7ae8ff', INK, 2);
+  // cargo containers on the deck (back to front)
+  box(c, x - 4, top - 8, 14, 7, 13, 190, 60, 52, { panels: 2 }); box(c, x + 16, top + 1, 12, 6, 11, 330, 65, 58, { panels: 1 }); box(c, x - 18, top + 2, 11, 5.5, 10, 48, 85, 60, { panels: 1 }); box(c, x + 2, top + 9, 10, 5, 9, 140, 55, 55);
+  // mast + pennant
+  const mx = x + 30, my = by - 22; c.strokeStyle = INK; c.lineWidth = 3; c.beginPath(); c.moveTo(mx, my); c.lineTo(mx, my - 30); c.stroke(); const wv = Math.sin(t * 6) * 3; poly(c, [mx, my - 30, mx + 18, my - 26 + wv, mx, my - 21], '#ffd23f', INK, 2);
+  lampRaw(c, x - 42, by - 20, '#ff5b5b', t * 2); lampRaw(c, x + 42, by - 20, '#5cff8a', t * 2 + 1.5);
+  // boarding ramp, folding down from the left face
+  if (ramp > 0) { const rx = x - 24, ry = by + 6, ex = rx - 6 - 16 * ramp, ey = ry + 6 + 12 * ramp; poly(c, [rx - 7, ry - 3, rx + 7, ry + 4, ex + 7, ey + 4, ex - 7, ey - 3], '#c9cfe6', INK, 2); c.strokeStyle = 'rgba(36,22,58,.35)'; c.lineWidth = 1.5; for (let k = 1; k < 4; k++) { const f = k / 4; c.beginPath(); c.moveTo(rx - 7 + (ex - rx) * f, ry - 3 + (ey - ry) * f); c.lineTo(rx + 7 + (ex - rx) * f, ry + 4 + (ey - ry) * f); c.stroke(); } }
+}
+/** Derelict wreck stuck in the ice; dmg 0..1 strips plates off as it's salvaged. */
+export function wreck(c: C, x: number, y: number, t: number, dmg: number) {
+  c.beginPath(); c.ellipse(x, y + 4, 52, 22, 0, 0, 7); c.fillStyle = 'rgba(20,8,40,.35)'; c.fill();
+  c.beginPath(); c.ellipse(x, y + 2, 46, 18, 0, 0, 7); c.fillStyle = '#e8f4ff'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2.5; c.stroke(); // snow crater rim
+  c.beginPath(); c.ellipse(x + 2, y + 2, 34, 12, 0, 0, 7); c.fillStyle = '#9fb3cc'; c.fill();
+  // broken wing lying beside it
+  if (dmg < .45) poly(c, [x + 18, y + 6, x + 52, y - 4, x + 58, y + 6, x + 30, y + 16], '#6d7690', INK, 2.5);
+  c.save(); c.translate(x - 4, y - 6); c.rotate(-.42);
+  // hull capsule
+  c.beginPath(); c.moveTo(-40, 0); c.quadraticCurveTo(-40, -22, -10, -24); c.lineTo(30, -20); c.quadraticCurveTo(46, -10, 34, 6); c.lineTo(-30, 10); c.quadraticCurveTo(-42, 8, -40, 0); c.closePath();
+  c.fillStyle = lg(c, 0, -24, 0, 10, '#8f9ab8', '#454c66'); c.fill(); c.strokeStyle = INK; c.lineWidth = 3; c.stroke();
+  // rust + scorch patches
+  c.fillStyle = 'rgba(200,110,50,.55)'; c.beginPath(); c.ellipse(-18, -6, 9, 5, .3, 0, 7); c.fill(); c.beginPath(); c.ellipse(16, 0, 7, 4, -.2, 0, 7); c.fill(); c.fillStyle = 'rgba(20,10,30,.45)'; c.beginPath(); c.ellipse(26, -10, 8, 6, 0, 0, 7); c.fill();
+  // hull plates (fall away with damage) / exposed ribs underneath
+  const plates = Math.round(4 * (1 - dmg)); c.strokeStyle = INK; c.lineWidth = 2;
+  for (let k = 0; k < 4; k++) { const px = -30 + k * 15; if (k < plates) { c.fillStyle = k % 2 ? '#a7b1cc' : '#7f89a6'; c.fillRect(px, -18, 12, 9); c.strokeRect(px, -18, 12, 9); } else { c.strokeStyle = '#ffb347'; c.lineWidth = 2; for (let q = 0; q < 3; q++) { c.beginPath(); c.moveTo(px + q * 4, -18); c.lineTo(px + q * 4 + 1, -9); c.stroke(); } c.strokeStyle = INK; } }
+  // cracked viewport, flickering
+  const fl = Math.sin(t * 13) > .2 ? 1 : .35; c.beginPath(); c.arc(-28, -8, 6, 0, 7); c.fillStyle = `rgba(122,232,255,${.5 + .5 * fl})`; c.fill(); c.stroke(); c.beginPath(); c.moveTo(-31, -12); c.lineTo(-27, -8); c.lineTo(-30, -4); c.stroke();
+  // tail fin
+  poly(c, [28, -20, 40, -38, 44, -36, 38, -14], '#6d7690', INK, 2.5);
+  c.restore();
+  // distress beacon
+  const on = Math.sin(t * 5) > 0; glow(c, x + 26, y - 40, 22, '#ff3b3b', on ? .8 : .15); c.beginPath(); c.arc(x + 26, y - 40, 3.5, 0, 7); c.fillStyle = on ? '#ff6b6b' : '#7a2a2a'; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+  // ice shards stuck around it
+  for (const [dx, dy, h] of [[-38, 6, 16], [-30, 12, 10], [36, 12, 12]]) poly(c, [x + dx - 4, y + dy, x + dx, y + dy - h, x + dx + 4, y + dy], '#d8f0ff', INK, 2);
+}

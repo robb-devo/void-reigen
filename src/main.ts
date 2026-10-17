@@ -5,6 +5,7 @@ import { MINES, MACHINES, TECH, SHIPS, PLANETS, RUNS, RES, RES_ORDER, GEN, FLEET
 const mk = (id: string) => (id === 'hull' ? 'hullworks' : id);
 import * as G from './game/state';
 import { GOALS, goalReward, ACHS } from './game/progress';
+import * as EV from './game/events';
 import { art, ri } from './game/art';
 import { BaseView, SLOTS, Slot, level, tier, nextTierAt, visible, cost as slotCost, slotByKey } from './base/view';
 import { setBusy } from './base/render';
@@ -146,7 +147,7 @@ function updateMine() {
 let ySeg = 0;
 let bv: BaseView | null = null; let bwrap: HTMLElement | null = null; let sheetKey: string | null = null; let lastDrone = 0;
 function renderBase() {
-  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); { const nb = SLOTS.filter(x => visible(x) === 'built').length; bv.z = nb <= 4 ? 1.08 : nb <= 9 ? 1 : Math.max(.62, Math.min(.95, 1 - nb * .03)); } bv.onTap = baseTap; bv.onMeteor = meteorHit; bv.onImpact = () => { sfx.land2(); buzz(12); }; bv.onProp = (k, r) => { (r ? [sfx.pMetal, sfx.pBarrel, sfx.pRadar, sfx.pMetal] : [sfx.pLamp, sfx.pCrystal, sfx.pFlag, sfx.pBarrel])[k](); buzz(8); }; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`);
+  if (!bwrap) { bwrap = document.createElement('div'); bwrap.className = 'basewrap'; main.innerHTML = ''; main.appendChild(bwrap); bv = new BaseView(bwrap); { const nb = SLOTS.filter(x => visible(x) === 'built').length; bv.z = nb <= 4 ? 1.08 : nb <= 9 ? 1 : Math.max(.62, Math.min(.95, 1 - nb * .03)); } bv.onTap = baseTap; bv.onMeteor = meteorHit; bv.onTrader = openTrader; bv.onTraderLand = traderLanded; bv.wreckHits = EV.WRECK_HITS; bv.onWreck = wreckHit; bv.onImpact = () => { sfx.land2(); buzz(12); }; bv.onProp = (k, r) => { (r ? [sfx.pMetal, sfx.pBarrel, sfx.pRadar, sfx.pMetal] : [sfx.pLamp, sfx.pCrystal, sfx.pFlag, sfx.pBarrel])[k](); buzz(8); }; (window as any).bv = bv; (window as any).G = G; bwrap.insertAdjacentHTML('beforeend', `<div class="bhint" id="bhint">Pinch to zoom · drag to pan</div><div class="bsheet" id="sheet"></div>`);
     bv.onConstruct = () => sfx.build();
     bv.onTravel = () => { sfx.land(); };
     const sh = $('#sheet'); let y0 = -1; sh.addEventListener('pointerdown', e => { y0 = e.clientY; }); sh.addEventListener('pointerup', e => { if (y0 < 0) return; const dy = e.clientY - y0; y0 = -1; if (dy < -30) { sh.classList.remove('compact'); sfx.select(); } else if (dy > 40) { if (sh.classList.contains('compact')) closeSheet(); else sh.classList.add('compact'); sfx.select(); } }); }
@@ -586,7 +587,7 @@ const rockBtn = $('#rockbtn');
 function rockHud() { const show = !!bv && tab === 'base' && G.fleetOpen() && bv.travelT < 0; rockBtn.style.display = show ? '' : 'none'; if (!bv) return; rockBtn.innerHTML = bv.rock ? `${art('drill')}<span>Mining<br>Rock</span>` : `${art('cruiser')}<span>Fleet<br>Rock</span>`; }
 rockBtn.addEventListener('click', () => { if (!bv) return; closeSheet(); sfx.launch(); buzz([20, 30]); bv.travel(bv.rock ? 0 : 1); });
 setInterval(() => { if (bv && !bv.rock && tab === 'base' && G.fleetOpen() && st().liftOn && Math.random() < .25) { const j = MACHINES.findIndex((d, j) => st().mach[j] > 0 && G.FLEET_RES.includes(d.out) && G.liftRate(d.out) > 0 && Math.random() < .5); if (j >= 0) bv.drone('f' + j, 'lift', RES[MACHINES[j].out].color); } }, 300);
-setInterval(() => { rockHud(); cmdHud(); if (bv) { rockBtn.classList.remove('pulse'); const sl = wantGuide ? slotByKey(wantGuide) : null; if (!sl) bv.guide = null; else if ((sl.rock || 0) === bv.rock) bv.guide = wantGuide; else if (!bv.rock) bv.guide = 'lift'; else { bv.guide = null; rockBtn.classList.add('pulse'); } } }, 300);
+setInterval(() => { rockHud(); cmdHud(); if (bv) { rockBtn.classList.remove('pulse'); const sl = wantGuide ? slotByKey(wantGuide) : null; if (!sl) bv.guide = null; else if ((sl.rock || 0) === bv.rock) bv.guide = wantGuide; else if (!bv.rock) bv.guide = 'lift'; else { bv.guide = null; rockBtn.classList.add('pulse'); } } if (bv?.wreckE && bv.rock === 0 && bv.travelT < 0) rockBtn.classList.add('pulse'); }, 300);
 
 // subtle day/night dial: sun ↔ moon on a little arc, shows the Night Shift bonus when it applies
 const dnEl = $('#dn'); let dnLast = '';
@@ -629,20 +630,79 @@ function dailyCheck() {
 }
 setInterval(dailyCheck, 1000);
 
-// ---------- meteor shower: a mid-game random event ----------
-// From goal 12, every 4–7 minutes of foreground play on the mining rock, 5–7 meteors streak in and land glowing.
-// Tapping one cracks it: ~8s of income + a pile of the best ore. They cool off after 16s, so it's a short, optional burst.
-let nextShower = performance.now() + (3 + Math.random() * 2) * 60e3;
+// ---------- random events director (mining rock): meteor showers and the visiting trader take turns ----------
+// From goal 12, an event every 4–7 minutes of foreground play. Meteors first; from goal 16 the trader alternates in.
+let nextShower = performance.now() + (3 + Math.random() * 2) * 60e3, lastEv: 'meteor' | 'trader' = 'trader';
 function meteorHit(x: number, y: number) {
   const s = st(), cash = Math.max(60, G.perSec() * 8), mi = Math.max(0, s.mines.map((m, i) => m.n ? i : -1).reduce((a, b) => Math.max(a, b), 0)), r = MINES[mi].res, ore = Math.max(5, G.orePerCycle(mi) * 4);
   G.earn(cash); s.res[r] += ore; s.meteors++; sfx.drill(); sfx.coin(); buzz([15, 20, 30]); burst(x, y, 22, 0, '#ffb347'); popup(x, y - 40, '+$' + fmt(cash), '#ffd23f');
-  fly(x, y, ...center(cashEl), 6, 1, '#ffc94a', () => bump(cashEl)); fly(x, y, ...center(resEl(r)), 3, 2, RES[r].color, () => bump(resEl(r)));
+  fly(x, y, ...center(cashEl), 6, 1, '#ffc94a', () => bump(cashEl)); const re = document.querySelector<HTMLElement>(`.rc[data-r="${r}"]`); if (re) fly(x, y, ...center(re), 3, 2, RES[r].color, () => bump(re));
 }
+const traderOK = () => st().goal >= 16 && RES_ORDER.filter(r => st().res[r] >= 10).length >= 2;
 setInterval(() => {
   const s = st(), now = performance.now(); if (document.hidden || tab !== 'base' || !bv || bv.rock || bv.travelT !== -1 || s.goal < 12) { nextShower = Math.max(nextShower, now + 20e3); return; }
-  if (now < nextShower || bv.meteors.length) return;
+  if (now < nextShower || bv.meteors.length || bv.trader) return;
   if (talking() || document.querySelector('.modal, .tree')) { nextShower = now + 8e3; return; }
-  nextShower = now + (4 + Math.random() * 3) * 60e3; bv.shower(5 + Math.floor(Math.random() * 3)); sfx.launch();
+  nextShower = now + (4 + Math.random() * 3) * 60e3;
+  if (lastEv === 'meteor' && traderOK() && traderArrive()) return;
+  lastEv = 'meteor'; bv.shower(5 + Math.floor(Math.random() * 3)); sfx.launch();
   if (!seen('meteor')) intro('meteor', [{ h: 'METEOR SHOWER', t: 'Incoming rocks! Meteors are packed with <b>ore and cash</b> – <b>tap them</b> before they cool off.' }]); else toast(`${I.boom} Meteor shower! Tap the glowing rocks`);
 }, 1000);
 (window as any).__shower = (n = 6) => bv?.shower(n);
+
+// ---------- the visiting trader ----------
+// A cargo hauler lands for 2 minutes with three one-off deals: a swap aimed at what you're short of, a ×2 income
+// boost paid in goods, and a rotating third slot (ore surge or rare cargo for cash). Taking all three sends it off early.
+const TRADER_STAY = 120; let offers: EV.Offer[] = [], traderEnd = 0, traderMod: HTMLElement | null = null;
+function traderArrive() { if (!bv || !bv.traderCome()) return false; lastEv = 'trader'; offers = EV.traderOffers(); traderEnd = 0; sfx.launch(); buzz(10);
+  if (seen('trader')) toast(`${art('cruiser')} A trader is landing – tap the ship to deal`); return true; }
+function traderLanded() { sfx.land2(); sfx.clank(); buzz([20, 30]); traderEnd = performance.now() + TRADER_STAY * 1e3;
+  if (!seen('trader')) intro('trader', [{ h: 'VOID TRADER', t: 'A trader just docked! Tap the ship for <b>one-time deals</b> – goods you\'re short of and <b>income boosts</b>. It leaves in 2 minutes.' }]); }
+function traderLeave() { if (!bv?.trader) return; traderMod?.remove(); traderMod = null; bv.traderGo(); setTimeout(() => { sfx.launch(); if (bv) bv.shake = Math.max(bv.shake, .1); }, 350); }
+const goodHTML = (r: Res, n: number) => `<span class="tg" style="--c:${RES[r].color}">${ri(r)}<b>${fmt(n)}</b><small>${RES[r].name}</small></span>`;
+const offerSide = (o: EV.Offer, give: boolean) => { if (give) return o.give.r ? goodHTML(o.give.r, o.give.n) : `<span class="tg" style="--c:#ffd23f">${I.coin}<b>$${fmt(o.give.cash!)}</b><small>Cash</small></span>`;
+  if (o.get.r) return goodHTML(o.get.r, o.get.n!); const b = o.get.boost!; return `<span class="tg boost" style="--c:${b.kind === 'cash' ? '#ffd23f' : '#ff9f43'}">${b.kind === 'cash' ? I.coin : ri('ore')}<b>×${b.m} ${b.kind === 'cash' ? 'income' : 'ore'}</b><small>${fmtT(b.secs)} boost</small></span>`; };
+function openTrader() {
+  if (!bv?.trader || bv.trader.st !== 1 || traderMod) return; sfx.select(); buzz(8);
+  const m = modal(`<div class="trader"><div class="thd"><span class="tav">${art('cruiser')}</span><div><small>VOID TRADER</small><h2 class="h">Kessa's Hauler</h2></div><span class="tclk" id="tclk"></span></div><p class="tsub">"Fresh cargo, fair-ish prices. One deal each, Commander."</p><div class="offers"></div><button class="btn big ghost" data-x>Maybe later</button></div>`);
+  m.classList.add('trade'); traderMod = m; const box = $('.offers', m);
+  const draw = () => { box.innerHTML = offers.map((o, i) => `<div class="offer ${o.done ? 'done' : ''}" data-i="${i}"><em class="otag">${o.tag}</em><div class="orow">${offerSide(o, true)}<span class="arr">${I.bolt}</span>${offerSide(o, false)}</div><button class="btn ${o.done ? '' : 'gold'}" data-take="${i}" ${o.done || !EV.canTake(o) ? 'disabled' : ''}>${o.done ? `Deal ${I.check}` : EV.canTake(o) ? 'Trade' : 'Not enough'}</button></div>`).join('');
+    box.querySelectorAll<HTMLButtonElement>('[data-take]').forEach(b => b.addEventListener('click', ev => { const o = offers[+b.dataset.take!]; if (!EV.takeOffer(o)) { sfx.no(); return; }
+      const e = ev as MouseEvent, card = b.closest('.offer') as HTMLElement; sfx.claim(); sfx.coin(); buzz([20, 30, 50]); burst(e.clientX, e.clientY, 24, 0, '#ffd23f'); xp(5, e.clientX, e.clientY); G.save(); boostHud();
+      if (o.get.r) { const re = document.querySelector<HTMLElement>(`.rc[data-r="${o.get.r}"]`); if (re) fly(e.clientX, e.clientY, ...center(re), 6, 2, RES[o.get.r].color, () => bump(re)); }
+      draw(); (box.querySelector(`[data-i="${offers.indexOf(o)}"]`) as HTMLElement)?.classList.add('stamp'); void card;
+      if (offers.every(x => x.done)) setTimeout(() => { toast(`${art('cruiser')} "Pleasure doing business!"`); traderLeave(); }, 900); })); };
+  draw(); $('[data-x]', m).addEventListener('click', () => { sfx.tap(); m.remove(); traderMod = null; });
+  const obs = new MutationObserver(() => { if (!m.isConnected) { traderMod = null; obs.disconnect(); } }); obs.observe(document.body, { childList: true });
+}
+setInterval(() => { const tr = bv?.trader; if (!tr || tr.st !== 1 || !traderEnd) return; const left = Math.max(0, (traderEnd - performance.now()) / 1e3); tr.left = left / TRADER_STAY;
+  const ck = traderMod?.querySelector('#tclk'); if (ck) { ck.textContent = fmtT(left); ck.classList.toggle('late', left < 30); }
+  if (traderMod) traderMod.querySelectorAll<HTMLButtonElement>('[data-take]').forEach(b => { const o = offers[+b.dataset.take!]; if (!o.done) { const ok = EV.canTake(o); b.disabled = !ok; b.textContent = ok ? 'Trade' : 'Not enough'; } });
+  if (left <= 0) { toast(`${art('cruiser')} The trader lifted off`); traderLeave(); } }, 250);
+(window as any).__trader = () => traderArrive();
+
+// ---------- timed boost HUD ----------
+const boostEl = document.createElement('div'); boostEl.id = 'boost'; document.body.appendChild(boostEl); let boostKey = '';
+function boostHud() { const b = st().boost; if (!b || b.left <= 0) { if (boostKey) { boostEl.classList.remove('on'); boostKey = ''; } return; }
+  const k = b.kind + b.m; if (k !== boostKey) { boostKey = k; boostEl.innerHTML = `${b.kind === 'cash' ? I.coin : ri('ore')}<b>×${b.m} ${b.kind === 'cash' ? 'INCOME' : 'ORE'}</b><span></span><i><u></u></i>`; boostEl.classList.add('on'); bump(boostEl); }
+  (boostEl.querySelector('span') as HTMLElement).textContent = fmtT(b.left); (boostEl.querySelector('u') as HTMLElement).style.transform = `scaleX(${b.left / b.dur})`; }
+setInterval(boostHud, 250);
+
+// ---------- derelict wrecks (fleet rock) ----------
+// Once the fleet rock is open: every 5–8 minutes a wreck crashes into the ice. Five taps strip it for cash and fleet goods.
+// If you're on the mining rock it's waiting for you when you arrive (the rock button pulses). It sinks after 4 minutes.
+let nextWreck = performance.now() + (2 + Math.random() * 2) * 60e3, wreckBorn = 0;
+function wreckHit(final: boolean, x: number, y: number) {
+  const l = EV.takeWreck(final); buzz(final ? [30, 40, 90] : 12); popup(x, y - 40, '+$' + fmt(l.cash), '#ffd23f'); fly(x, y, ...center(cashEl), final ? 12 : 3, 1, '#ffc94a', () => bump(cashEl));
+  if (!final) { sfx.pMetal(); sfx.clank(); burst(x, y, 10, 0, '#ffb347'); return; }
+  sfx.drill(); sfx.fanfare(); burst(x, y, 36, 0, '#7ae8ff'); burst(x, y, 18, 1); xp(8, x, y); l.goods.forEach(([r, n], k) => setTimeout(() => popup(x, y - 80 - k * 26, `+${fmt(n)} ${RES[r].name}`, RES[r].color), 200 + k * 180)); G.save();
+}
+setInterval(() => { if (!bv) return; const now = performance.now();
+  if (bv.wreckE && bv.wreckE.st === 1 && now - wreckBorn > 240e3) { bv.wreckE = null; if (bv.rock === 1) toast('The wreck sank into the ice'); }
+  if (document.hidden || tab !== 'base' || !G.fleetOpen() || !seen('rock2') || bv.travelT !== -1) { nextWreck = Math.max(nextWreck, now + 15e3); return; }
+  if (now < nextWreck || bv.wreckE) return; if (talking() || document.querySelector('.modal, .tree')) { nextWreck = now + 8e3; return; }
+  nextWreck = now + (5 + Math.random() * 3) * 60e3; wreckBorn = now; const here = bv.rock === 1; bv.wreckCome(!here);
+  if (here) { if (!seen('wreck')) intro('wreck', [{ h: 'DERELICT', t: 'A derelict just crashed into the ice! <b>Tap it 5 times</b> to strip it for cash and fleet goods.' }]); else toast(`${I.boom} A derelict crashed – tap it to salvage!`); }
+  else toast(`${art('cruiser')} Derelict spotted on the Fleet Rock!`);
+}, 1000);
+(window as any).__wreck = () => { if (bv) { bv.wreckE = null; wreckBorn = performance.now(); bv.wreckCome(bv.rock !== 1); } };
