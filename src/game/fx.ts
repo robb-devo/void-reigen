@@ -41,7 +41,7 @@ let trim = 1;
 /** pentatonic step for the tap sound: rises with the tap combo */
 let tapStep = 0; export const setTapStep = (k: number) => { tapStep = Math.max(0, Math.min(10, k)); };
 // loudness trims from the offline analysis (audio_an.py): keeps every SFX in its category's LU window
-export const TRIM: Record<string, number> = {blip: 16, build: 1.549, buy: 2.917, claim: 1.641, clank: 4.297, coin: 3.548, drill: 6.457, fanfare: 2.318, land: 1.244, launch: 5.433, lode: 1.659, no: 7.079, pBarrel: 4.027, pCrystal: 1.531, pFlag: 3.63, pLamp: 4.169, pMetal: 6.761, pRadar: 7.161, rank: 1.84, select: 2.884, tap: 4.467, warp: 1.758};
+export const TRIM: Record<string, number> = {blip: 15.817, build: 1.549, buy: 2.917, claim: 1.641, clank: 3.413, coin: 3.548, drill: 6.457, fanfare: 2.318, land: 1.288, land2: 3.236, launch: 5.433, lode: 1.659, no: 7.079, pBarrel: 3.981, pCrystal: 1.531, pFlag: 3.715, pLamp: 4.169, pMetal: 6.761, pRadar: 7.585, rank: 1.84, rushUp: 3.388, select: 2.884, tap: 4.467, warp: 1.758};
 let lastCoin = 0, combo = 0, comboT = 0, lastFan = 0, lastBlip = 0;
 const raw = {
   // bright 'tick' transient (4-11 kHz) on top of a higher-pitched body: reads crisp on phone speakers
