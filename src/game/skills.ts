@@ -7,7 +7,7 @@ export const BRANCHES = [
   { name: 'Fleet', color: '#ff7bd5', art: 'cruiser' },
   { name: 'Logistics', color: '#5cff9d', art: 'p1' },
 ];
-export const LEVEL_GATE = [2, 4, 7, 10];
+export const LEVEL_GATE = [2, 4, 7, 10, 14, 18];
 export const SKILLS: Skill[] = [
   { id: 'mHand', br: 0, tier: 0, name: 'Hand Crank', art: 'drill', desc: 'Tapping a running mine shoves it 35% closer to payout' },
   { id: 'mVein', br: 0, tier: 1, name: 'Rich Veins', art: 'iron', desc: 'Mines dig double ore' },
@@ -24,6 +24,14 @@ export const SKILLS: Skill[] = [
   { id: 'lTrade', br: 3, tier: 0, name: 'Trade Contacts', art: 'chip', desc: 'Exports sell for 50% more' },
   { id: 'lAuto', br: 3, tier: 1, name: 'Auto-Export', art: 'alloy', desc: 'Unlock auto-selling of surplus goods at HQ' },
   { id: 'lCold', br: 3, tier: 2, name: 'Cold Storage', art: 'ice', desc: 'Offline earnings cap +8 hours' },
+  { id: 'mBulk', br: 0, tier: 4, name: 'Bulk Contracts', art: 'moon', desc: 'All mines cost 25% less' },
+  { id: 'mSplit', br: 0, tier: 5, name: 'Rock Splitter', art: 'planet', desc: 'Mines earn ×3' },
+  { id: 'iSwap', br: 1, tier: 4, name: 'Hot Swap', art: 'forge', desc: 'Factory upgrades cost 30% less' },
+  { id: 'iCore', br: 1, tier: 5, name: 'Fusion Core', art: 'quantum', desc: 'Generators produce double power' },
+  { id: 'fVet', br: 2, tier: 4, name: 'Veteran Pilots', art: 'titan', desc: 'Missions sent with 2× the power never fail' },
+  { id: 'fLoot', br: 2, tier: 5, name: 'Plunder', art: 'r3', desc: 'Salvage runs bring back double loot' },
+  { id: 'lBelt', br: 3, tier: 4, name: 'Express Lift', art: 'hull', desc: 'The Cargo Lift hauls twice as fast' },
+  { id: 'lBroker', br: 3, tier: 5, name: 'Dark Broker', art: 'hole', desc: 'Warping pays 15% more Dark Matter' },
   { id: 'lDrop', br: 3, tier: 3, name: 'Supply Drops', art: 'p1', desc: 'Every finished mission also brings back 2 min of income' },
 ];
 export const xpFor = (lv: number) => Math.round(40 * Math.pow(lv, 1.5)); // xp needed to go lv → lv+1

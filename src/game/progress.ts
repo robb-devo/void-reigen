@@ -57,7 +57,7 @@ export const GOALS: Goal[] = [
   { text: 'Conquer Nyx Throne', done: () => S.conquered.includes('p6'), reward: 5e12, tab: 'base', focus: '@yard' },
   { text: 'Conquer Abyssal Reach', done: () => S.conquered.includes('p7'), reward: 2e13, tab: 'base', focus: '@yard' },
   { text: 'Conquer Chronos Belt', done: () => S.conquered.includes('p8'), reward: 1e14, tab: 'base', focus: '@yard' },
-  { text: 'Earn $6Qi this sector', done: () => S.life >= 6e18, prog: () => [S.life, 6e18], reward: 1e15, tab: 'base', focus: '@hq' },
+  { text: 'Earn $4Qi this sector', done: () => S.life >= 4e18, prog: () => [S.life, 4e18], reward: 1e15, tab: 'base', focus: '@hq' },
   { text: 'Warp again for more Dark Matter', done: () => false, reward: 0, tab: 'base', focus: '@gate' },
 ];
 export const SECTOR_GOAL_START = GOALS.findIndex(g => g.text.startsWith('New sector'));

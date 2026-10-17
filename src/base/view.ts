@@ -1,7 +1,7 @@
 // Base view: camera (pan / pinch / wheel zoom), layout, conveyors, drones, labels, hit-testing.
 import { MINES, MACHINES, RES, Res } from '../game/data';
 import * as G from '../game/state';
-import { drawBuilding, drawPlot, iso, TW, TH, Kind, hsl, scaffold, ship, glow, INK } from './render';
+import { drawBuilding, drawPlot, iso, TW, TH, Kind, hsl, scaffold, ship, glow, INK, box } from './render';
 
 export type Slot = { key: string; kind: Kind; idx: number; gx: number; gy: number; s: number; rock?: number };
 export const ALL_SLOTS: Slot[] = [
@@ -22,10 +22,10 @@ export const ALL_SLOTS: Slot[] = [
 const tierOf = (n: number, steps: number[]) => Math.max(0, steps.filter(v => n >= v).length - 1);
 export let SLOTS: Slot[] = ALL_SLOTS.filter(s => !s.rock);
 export const slotByKey = (k: string) => ALL_SLOTS.find(s => s.key === k);
-export const TIER_STEPS: Record<string, number[]> = { mine: [1, 25, 100, 300, 1000], mach: [1, 10, 25, 50, 100], gen: [1, 5, 15, 30, 60], lab: [0, 3, 10, 25, 50], hangar: [1, 5, 15, 40, 100] };
+export const TIER_STEPS: Record<string, number[]> = { mine: [1, 25, 100, 300, 1000], mach: [1, 10, 25, 50, 100], gen: [1, 5, 15, 30, 60], lab: [0, 3, 10, 25, 50], hangar: [1, 5, 15, 40, 100], yard: [1, 3, 6, 10, 15], lift: [1, 3, 6, 10, 15] };
 export function level(sl: Slot): number {
   const S = G.S;
-  switch (sl.kind) { case 'mine': return S.mines[sl.idx].n; case 'mach': return S.mach[sl.idx]; case 'gen': return S.gen; case 'yard': return G.fleetOpen() ? 1 + Object.values(S.fupg).reduce((a, b) => a + b, 0) : 0; case 'hangar': return Object.values(S.ships).reduce((a, b) => a + b, 0); case 'dock': return G.docks(); case 'turret': return 1 + G.fu('armor'); case 'fuel': return 1 + G.fu('engines'); case 'lift': return G.fleetOpen() ? 1 + Math.floor(S.conquered.length / 2) : 0; case 'gate': return G.warpOpen() ? S.warps + 1 : S.warps; case 'lab': return S.tech.length; default: return G.sector(); }
+  switch (sl.kind) { case 'mine': return S.mines[sl.idx].n; case 'mach': return S.mach[sl.idx]; case 'gen': return S.gen; case 'yard': return G.fleetOpen() ? 1 + Object.values(S.fupg).reduce((a, b) => a + b, 0) + Math.floor(Object.values(S.ships).reduce((a, b) => a + b, 0) / 5) : 0; case 'hangar': return Object.values(S.ships).reduce((a, b) => a + b, 0); case 'dock': return G.docks(); case 'turret': return 1 + G.fu('armor'); case 'fuel': return 1 + G.fu('engines'); case 'lift': return G.fleetOpen() ? S.lift : 0; case 'gate': return G.warpOpen() ? S.warps + 1 : S.warps; case 'lab': return S.tech.length; default: return G.sector(); }
 }
 export function tier(sl: Slot) { const n = level(sl); return sl.kind in TIER_STEPS ? tierOf(n, TIER_STEPS[sl.kind]) : Math.min(4, Math.max(0, n - 1)); }
 export function nextTierAt(sl: Slot): number | null { const st = TIER_STEPS[sl.kind]; if (!st) return null; const n = level(sl); return st.find(v => v > n) ?? null; }
@@ -47,12 +47,13 @@ export function cost(sl: Slot): number | null {
   if (sl.kind === 'mine') return G.costN(sl.idx, G.S.mines[sl.idx].n ? G.buyK(sl.idx) : 1);
   if (sl.kind === 'mach') return G.machCostK(sl.idx, G.machK(sl.idx));
   if (sl.kind === 'gen') return G.genCost(G.genK());
+  if (sl.kind === 'lift') return G.fleetOpen() ? G.liftCost() : null;
   return null;
 }
 const accentOf = (sl: Slot) => sl.kind === 'mine' ? RES[MINES[sl.idx].res].color : sl.kind === 'mach' ? RES[MACHINES[sl.idx].out].color : '#ffe066';
 const hueOf = (sl: Slot) => sl.kind === 'mine' ? MINES[sl.idx].hue : sl.kind === 'mach' ? [20, 195, 215, 0, 140, 250, 290][sl.idx] : 210;
 export const idOf = (sl: Slot) => sl.kind === 'mine' ? MINES[sl.idx].id : sl.kind === 'mach' ? MACHINES[sl.idx].id : sl.kind;
-const activeOf = (sl: Slot) => sl.kind === 'mine' ? (G.S.mines[sl.idx].m || G.S.mines[sl.idx].run) : sl.kind === 'mach' ? G.machStats[sl.idx].eff > 0.01 : sl.kind === 'gen' ? G.powerDemand() > 0 : sl.kind === 'gate' ? G.warpOpen() : sl.kind === 'yard' ? G.fleetOpen() : sl.kind === 'lab' ? G.S.tech.length > 0 : true;
+const activeOf = (sl: Slot) => sl.kind === 'mine' ? (G.S.mines[sl.idx].m || G.S.mines[sl.idx].run) : sl.kind === 'mach' ? G.machStats[sl.idx].eff > 0.01 : sl.kind === 'gen' ? G.powerDemand() > 0 : sl.kind === 'gate' ? G.warpOpen() : sl.kind === 'yard' ? G.fleetOpen() : sl.kind === 'lift' ? G.fleetOpen() && G.S.liftOn : sl.kind === 'lab' ? G.S.tech.length > 0 : true;
 
 type Drone = { a: [number, number]; b: [number, number]; t: number; col: string; done?: () => void };
 type Puff = { x: number; y: number; t: number; c: string };
@@ -65,7 +66,7 @@ export class BaseView {
   onTap: (sl: Slot | null, x: number, y: number) => void = () => {};
   onConstruct: () => void = () => {};
   private lastTier = new Map<string, number>(); private workers: { a: number; b: number; f: number; sp: number; c: string }[] = [];
-  night = 0; rock = 0; travelT = -1; private travelTo = 0; onTravel: (r: number) => void = () => {};
+  night = 0; private pods: { t: number; x: number }[] = []; private podT = 1; rock = 0; travelT = -1; private travelTo = 0; onTravel: (r: number) => void = () => {};
   /** fly the camera between asteroids */
   travel(r: number) { if (this.travelT >= 0 || r === this.rock) return; this.travelTo = r; this.travelT = 0; this.cam = null; }
   setRock(r: number) { this.rock = r; SLOTS = ALL_SLOTS.filter(s => (s.rock || 0) === r); this.workers = []; this.drones = []; this.gcache = null; this.sel = null; this.cam = null; this.ox = this.w / 2; this.oy = this.h * .52; if (r) { this.zMain = this.z; this.z = Math.max(this.z, .95); } else this.z = this.zMain || this.z; this.onTravel(r); }
@@ -178,6 +179,9 @@ export class BaseView {
       if (d.t >= 1) { d.done?.(); return false; } return true;
     });
     this.puffs = this.puffs.filter(p => { p.t += dt; if (p.t < 0) return true; const f = p.t / .8; c.globalAlpha = Math.max(0, 1 - f); c.beginPath(); c.arc(p.x, p.y - f * 30, 6 + f * 14, 0, 7); c.fillStyle = p.c; c.fill(); c.globalAlpha = 1; return f < 1; });
+    // cargo pods arriving from the lift on the fleet rock
+    if (this.rock && G.fleetOpen() && G.S.liftOn) { this.podT -= dt; if (this.podT <= 0) { this.podT = 2.2 + Math.random() * 1.5; this.pods.push({ t: 0, x: (Math.random() - .5) * 60 }); } }
+    this.pods = this.pods.filter(pd => { pd.t += dt; const [hx, hy] = iso(-3, 0), f = Math.min(1, pd.t / 1.2), e = f * f, py = hy - 30 - 520 * (1 - e), px = hx + 40 + pd.x * (1 - e); if (f < 1) { glow(c, px, py + 10, 16, '#7ae8ff', .6); box(c, px, py, 8, 4, 10, 30, 90, 58); } else if (pd.t < 1.25) { this.puff('hangar', 'rgba(200,240,255,.8)'); } return pd.t < 1.3; });
     // ships
     this.ships = this.ships.filter(s => { s.t += dt; if (s.t < 0) return true; if (s.dir > 0) { s.vy -= dt * 900; s.y += s.vy * dt; ship(c, s.x, s.y, s.sc, 1); if (s.t < .4) for (let k = 0; k < 2; k++) this.puffs.push({ x: s.x + (Math.random() - .5) * 40, y: s.y + 10, t: 0, c: 'rgba(230,220,255,.8)' }); return s.y > -1200; } const ty = this.pad()[1] - 14, f = Math.min(1, s.t / 1.6), e = 1 - Math.pow(1 - f, 3); const yy = ty - 700 * (1 - e); ship(c, s.x, yy, s.sc, 1 - e * .8); return f < 1; });
     // warp sequence

@@ -3,7 +3,7 @@ import { MINES, MACHINES, TECH, SHIPS, PLANETS, RUNS, RES_ORDER, FLEET_UPG, Res 
 import * as G from '../src/game/state';
 import { GOALS, goalReward, ACHS } from '../src/game/progress';
 import { XP, SKILLS } from '../src/game/skills';
-const SKILL_ORDER = (process.env.SKILLS || 'iOver,mHand,lTrade,mVein,iNight,fEsc,lAuto,mAuto,iLean,fBurn,fLife,lCold,iGrid,mLode,fDock,lDrop').split(',');
+const SKILL_ORDER = (process.env.SKILLS || 'iOver,mHand,lTrade,mVein,iNight,fEsc,lAuto,mAuto,iLean,fBurn,fLife,lCold,iGrid,mLode,fDock,lDrop,mBulk,iSwap,lBelt,fVet,mSplit,iCore,lBroker,fLoot').split(',');
 let T = 0; G.setClock(() => T * 1000); G.setS(G.fresh()); G.S.last = 0;
 const S = () => G.S;
 const SRC = { goal: 0, sell: 0 };
@@ -33,8 +33,9 @@ function step() {
   if (Math.floor(T) % 10 === 0) for (const r of RES_ORDER) { const keep = reserveFor(r) * 1.2; const consumed = MACHINES.some((m, j) => s.mach[j] && m.inp[r]); if (!consumed && s.res[r] > keep + 1) { SRC.sell += (s.res[r] - keep) * G.price(r); s.cash += (s.res[r] - keep) * G.price(r); s.life += (s.res[r] - keep) * G.price(r); s.res[r] = keep; s.sold++; } }
   // fleet
   if (G.fleetOpen()) {
-    for (const sh of [...SHIPS].filter(G.avail).reverse()) { const c = G.shipCost(sh.id); const ok = (Object.keys(c) as Res[]).every(r => s.res[r] >= c[r]! * 1.5); if (ok) { G.pay(c); s.ships[sh.id] = (s.ships[sh.id] || 0) + 1; log(`ship ${sh.name}`, false); } }
-    for (const u of FLEET_UPG) if (G.fu(u.id) < u.max && s.res[u.res] >= G.fuCost(u.id) * 1.5) { s.res[u.res] -= G.fuCost(u.id); s.fupg[u.id] = G.fu(u.id) + 1; log(`fleet ${u.name}`); }
+    while (s.cash >= G.liftCost() * 3 && s.lift < 15) { s.cash -= G.liftCost(); s.lift++; log(`lift Lv ${s.lift}`, false); }
+    for (const sh of [...SHIPS].filter(G.avail).reverse()) { const c = G.shipCost(sh.id); const ok = (Object.keys(c) as Res[]).every(r => s.fstock[r] >= c[r]! * 1.5); if (ok) { G.pay(c); s.ships[sh.id] = (s.ships[sh.id] || 0) + 1; log(`ship ${sh.name}`, false); } }
+    for (const u of FLEET_UPG) if (G.fu(u.id) < u.max && s.fstock[u.res] >= G.fuCost(u.id) * 1.5) { s.fstock[u.res] -= G.fuCost(u.id); s.fupg[u.id] = G.fu(u.id) + 1; log(`fleet ${u.name}`); }
     const next = PLANETS.find(p => G.avail(p) && !s.conquered.includes(p.id));
     if (next && G.idlePower() >= next.need * 1.4) { if (G.launch('planet', next.id, 1.4)) log(`launch invade ${next.name}`, false); }
     for (const r of [...RUNS].reverse()) if (G.idlePower() >= r.need * 1.4 && s.missions.length < G.docks()) G.launch('run', r.id, 1.4);

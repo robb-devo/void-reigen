@@ -20,7 +20,7 @@ export type State = {
   mines: Mine[]; tech: string[]; res: Bag; made: Bag; mach: number[]; on: boolean[]; gen: number;
   ships: Record<string, number>; conquered: string[]; missions: Mission[]; fupg: Record<string, number>; uid: number;
   ach: string[]; goal: number; sold: number; lost: number; wins: number; w: number[]; auto: boolean;
-  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[];
+  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[]; fstock: Bag; lift: number; lifted: number; liftOn: boolean;
 };
 export const KEY = 'starforge.v2';
 export const fresh = (keep?: Partial<State>): State => ({
@@ -28,19 +28,19 @@ export const fresh = (keep?: Partial<State>): State => ({
   mines: MINES.map((_, i) => ({ n: i === 0 ? 1 : 0, p: 0, m: false, run: false })),
   tech: [], res: bag(), made: bag(), mach: MACHINES.map(() => 0), on: MACHINES.map(() => true), gen: 1,
   ships: {}, conquered: [], missions: [], fupg: {}, uid: 1, ach: [], goal: 0, sold: 0, lost: 0, wins: 0, w: MACHINES.map(() => 50), auto: false,
-  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], ...keep,
+  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], fstock: bag(), lift: 1, lifted: 0, liftOn: true, ...keep,
 });
 export let S: State = fresh();
 export let clock = () => Date.now();
 export function setClock(f: () => number) { clock = f; }
-export function load() { try { const r = localStorage.getItem(KEY); if (r) { const o = JSON.parse(r); const f = fresh(); S = { ...f, ...o, res: { ...f.res, ...o.res }, made: { ...f.made, ...o.made } }; while (S.mach.length < MACHINES.length) { S.mach.push(0); S.on.push(true); } while (S.w.length < MACHINES.length) S.w.push(50); while (S.mines.length < MINES.length) S.mines.push({ n: 0, p: 0, m: false, run: false }); } } catch { S = fresh(); } }
+export function load() { try { const r = localStorage.getItem(KEY); if (r) { const o = JSON.parse(r); const f = fresh(); S = { ...f, ...o, res: { ...f.res, ...o.res }, made: { ...f.made, ...o.made }, fstock: { ...f.fstock, ...(o.fstock || {}) } }; if (!o.fstock && o.ships && Object.keys(o.ships).length) for (const r of FLEET_RES) { S.fstock[r] = S.res[r] * .5; S.res[r] *= .5; } if (!Array.isArray(S.skills)) S.skills = []; if (typeof S.xp !== 'number') S.xp = 0; while (S.mach.length < MACHINES.length) { S.mach.push(0); S.on.push(true); } while (S.w.length < MACHINES.length) S.w.push(50); while (S.mines.length < MINES.length) S.mines.push({ n: 0, p: 0, m: false, run: false }); } } catch { S = fresh(); } }
 export function migrateSeen(raw: string | null) { if (!raw) return; try { const o = JSON.parse(raw); if (!o.seen && (o.life > 0 || o.warps)) { S.seen = ['intro', 'factory', 'power', 'lab', 'export', 'foreman', 'tiers']; if (fleetOpen()) S.seen.push('fleet'); if (warpOpen() || o.warps) S.seen.push('warp'); } } catch {} }
 export function save() { S.last = clock(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
 export function setS(n: State) { S = n; }
 
 // ---------- mines ----------
 export const BUY = [1, 10, 100, -1];
-export const costN = (i: number, k: number) => { const d = MINES[i], o = S.mines[i].n; return d.cost * Math.pow(d.g, o) * (Math.pow(d.g, k) - 1) / (d.g - 1); };
+export const costN = (i: number, k: number) => { const d = MINES[i], o = S.mines[i].n; return (sk('mBulk') ? .75 : 1) * d.cost * Math.pow(d.g, o) * (Math.pow(d.g, k) - 1) / (d.g - 1); };
 export const maxBuy = (i: number) => { const d = MINES[i], o = S.mines[i].n; return Math.max(0, Math.floor(Math.log(S.cash * (d.g - 1) / (d.cost * Math.pow(d.g, o)) + 1) / Math.log(d.g))); };
 export const buyK = (i: number) => { const m = BUY[S.mult]; return m === -1 ? Math.max(1, maxBuy(i)) : m; };
 export const msIdx = (n: number) => MILESTONES.filter(x => n >= x).length;
@@ -52,28 +52,28 @@ export const achMul = () => 1 + S.ach.length * 0.02;
 export const dmMul = () => 1 + 0.1 * Math.pow(S.dm, 0.75);
 export const globalMul = () => dmMul() * planetMul() * achMul();
 export const revMul = (i: number) => { let m = globalMul() * Math.pow(2, Math.max(0, msIdx(S.mines[i].n) - 6)); for (const t of TECH) if ((t.tgt === i || t.tgt === -1) && S.tech.includes(t.id)) m *= t.x; return m; };
-export const revenue = (i: number) => MINES[i].rev * S.mines[i].n * revMul(i);
+export const revenue = (i: number) => MINES[i].rev * S.mines[i].n * revMul(i) * (sk('mSplit') ? 3 : 1);
 export const oreMul = () => (1 + S.conquered.length * 0.5) * (1 + S.dm * 0.01);
 export const orePerCycle = (i: number) => MINES[i].ore * S.mines[i].n * oreMul() * (sk('mVein') ? 2 : 1);
 export const perSec = () => MINES.reduce((a, _, i) => a + (S.mines[i].m && S.mines[i].n ? revenue(i) / cycle(i) : 0), 0);
 export const resPerSec = (r: Res) => MINES.reduce((a, d, i) => a + (d.res === r && S.mines[i].m && S.mines[i].n ? orePerCycle(i) / cycle(i) : 0), 0);
 export const prodRate = (r: Res) => resPerSec(r) + MACHINES.reduce((a, d, j) => a + (d.out === r && S.on[j] ? machRate(j) * powerEff() : 0), 0);
 export const allTime = () => S.total + S.life;
-export const dmGain = () => Math.max(0, Math.floor(50 * Math.pow(allTime() / 1e14, 0.3)) - S.dm);
+export const dmGain = () => Math.max(0, Math.floor(50 * Math.pow(allTime() / 1e14, 0.3) * (sk('lBroker') ? 1.15 : 1)) - S.dm);
 export const dmNext = () => 1e14 * Math.pow((S.dm + dmGain() + 1) / 50, 1 / 0.3);
 export const warpNeed = () => GATES.warp * Math.pow(3, S.warps);
 export const warpOpen = () => S.life >= warpNeed();
 export function earn(v: number) { S.cash += v; S.life += v; }
 
 // ---------- factory ----------
-export const machCost = (j: number) => MACHINES[j].cost * Math.pow(MACHINES[j].g, S.mach[j]);
+export const machCost = (j: number) => (sk('iSwap') ? .7 : 1) * MACHINES[j].cost * Math.pow(MACHINES[j].g, S.mach[j]);
 export const machCostK = (j: number, k: number) => { const g = MACHINES[j].g; return machCost(j) * (Math.pow(g, k) - 1) / (g - 1); };
 export const machK = (j: number) => { if (!S.mach[j]) return 1; const m = BUY[S.mult]; if (m !== -1) return m; const g = MACHINES[j].g; return Math.max(1, Math.floor(Math.log(S.cash * (g - 1) / machCost(j) + 1) / Math.log(g))); };
 export const machRate = (j: number) => MACHINES[j].rate * S.mach[j] * Math.pow(2, Math.floor(S.mach[j] / 10)) * (1 + S.dm * 0.01) * (sk('iOver') ? 1.5 : 1) * (sk('iNight') ? 1 + nightness() : 1);
 export const machUnlocked = (j: number) => S.mach[j] > 0 || allTime() >= MACHINES[j].unlock;
 export const genCost = (k = 1) => GEN.cost * Math.pow(GEN.g, S.gen) * (Math.pow(GEN.g, k) - 1) / (GEN.g - 1);
 export const genK = () => { const m = BUY[S.mult]; if (m !== -1) return m; return Math.max(1, Math.floor(Math.log(S.cash * (GEN.g - 1) / genCost() + 1) / Math.log(GEN.g))); };
-export const powerSupply = () => GEN.power * S.gen * Math.pow(2, Math.floor(S.gen / 10));
+export const powerSupply = () => GEN.power * S.gen * Math.pow(2, Math.floor(S.gen / 10)) * (sk('iCore') ? 2 : 1);
 export const powerDemand = () => MACHINES.reduce((a, d, j) => a + (S.on[j] ? d.power * S.mach[j] : 0), 0);
 export const powerEff = () => { const d = powerDemand(); const e = d ? Math.min(1, powerSupply() / d) : 1; return sk('iGrid') ? Math.max(.75, e) : e; };
 export const autoOK = () => S.warps >= 2 || sk("lAuto");
@@ -118,14 +118,14 @@ export function factoryTick(dt: number) {
 }
 export const sharedInputs = (j: number) => (Object.keys(MACHINES[j].inp) as Res[]).filter(r => MACHINES.some((d, k) => k !== j && d.inp[r] && S.mach[k] > 0 && avail(d)));
 /** Goods worth keeping for upcoming research, ships and fleet upgrades. */
-export function reserveFor(r: Res) {
+export function reserveFor(r: Res, fleet = false) {
   let need = 0; for (const t of TECH.filter(t => techAvail(t) && !S.tech.includes(t.id)).slice(0, 4)) if (t.res === r) need = Math.max(need, t.amt);
-  if (fleetOpen()) { for (const sh of SHIPS) if (avail(sh)) { const c = shipCost(sh.id)[r]; if (c) need = Math.max(need, c * 3); } for (const u of FLEET_UPG) if (u.res === r && fu(u.id) < u.max) need = Math.max(need, fuCost(u.id)); }
+  if (fleet && fleetOpen()) { for (const sh of SHIPS) if (avail(sh)) { const c = shipCost(sh.id)[r]; if (c) need = Math.max(need, c * 3); } for (const u of FLEET_UPG) if (u.res === r && fu(u.id) < u.max) need = Math.max(need, fuCost(u.id)); }
   return need;
 }
 export function autoSellTick(dt: number) {
   if (!S.auto || !autoOK()) return;
-  for (const r of RES_ORDER) { const used = MACHINES.some((d, j) => d.inp[r] && S.mach[j] && S.on[j]); if (used) continue; const keep = reserveFor(r) * 1.2; if (S.res[r] > keep + 1) { const q = (S.res[r] - keep) * Math.min(1, dt * 0.2); S.res[r] -= q; earn(q * price(r)); } }
+  for (const r of RES_ORDER) { const used = MACHINES.some((d, j) => d.inp[r] && S.mach[j] && S.on[j]); if (used || (fleetOpen() && S.liftOn && FLEET_RES.includes(r))) continue; const keep = reserveFor(r) * 1.2; if (S.res[r] > keep + 1) { const q = (S.res[r] - keep) * Math.min(1, dt * 0.2); S.res[r] -= q; earn(q * price(r)); } }
 }
 
 // ---------- fleet ----------
@@ -138,10 +138,18 @@ export const totalPower = () => SHIPS.reduce((a, s) => a + (S.ships[s.id] || 0) 
 export const fu = (id: string) => S.fupg[id] || 0;
 export const docks = () => 1 + fu('docks') + (S.warps >= 3 ? 1 : 0) + (sk('fDock') ? 1 : 0);
 export const fuCost = (id: string) => { const u = FLEET_UPG.find(x => x.id === id)!; return Math.ceil(u.base * Math.pow(3, fu(id))); };
-export const canAfford = (c: Partial<Record<Res, number>>) => (Object.keys(c) as Res[]).every(r => S.res[r] >= (c[r] || 0));
-export const pay = (c: Partial<Record<Res, number>>) => { for (const r in c) S.res[r as Res] -= c[r as Res]!; };
+// Fleet goods live on the fleet rock: they only get there via the Cargo Lift.
+export const FLEET_RES: Res[] = ['part', 'alloy', 'chip', 'hull', 'exotic'];
+export const canAfford = (c: Partial<Record<Res, number>>) => (Object.keys(c) as Res[]).every(r => S.fstock[r] >= (c[r] || 0));
+export const pay = (c: Partial<Record<Res, number>>) => { for (const r in c) S.fstock[r as Res] -= c[r as Res]!; };
+/** share of spare stock the lift hauls up per second */
+export const liftFrac = () => Math.min(.3, .02 * S.lift * (sk('lBelt') ? 2 : 1));
+export const liftCost = () => 2e5 * Math.pow(5, S.lift - 1);
+const spare = (r: Res) => { const use = MACHINES.reduce((a, d, j) => a + (d.inp[r] && S.mach[j] && S.on[j] && avail(d) ? machRate(j) * d.inp[r]! * 30 : 0), 0); return Math.max(0, S.res[r] - use - reserveFor(r)); };
+export const liftRate = (r: Res) => fleetOpen() && S.liftOn ? spare(r) * liftFrac() : 0;
+export function liftTick(dt: number) { if (!fleetOpen() || !S.liftOn) return; for (const r of FLEET_RES) { const sp = spare(r), q = Math.min(sp, sp * liftFrac() * dt + .05 * dt); if (q > 0) { S.res[r] -= q; S.fstock[r] += q; S.lifted += q; } } }
 export const shipCost = (id: string) => { const d = SHIPS.find(s => s.id === id)!, f = Math.pow(1.08, S.ships[id] || 0); const c: Partial<Record<Res, number>> = {}; for (const r in d.cost) c[r as Res] = Math.ceil(d.cost[r as Res]! * f); return c; };
-export const chanceFor = (sent: number, need: number) => sent < need ? 0 : Math.min(sk('fEsc') ? .99 : 0.97, 0.3 + 0.5 * sent / need + (sk('fEsc') ? .1 : 0));
+export const chanceFor = (sent: number, need: number) => sent < need ? 0 : sk('fVet') && sent >= need * 2 ? 1 : Math.min(sk('fEsc') ? .99 : 0.97, 0.3 + 0.5 * sent / need + (sk('fEsc') ? .1 : 0));
 /** Pick idle ships to reach `want` power, big ships first, minimal overshoot. */
 export function pickShips(want: number) {
   const pick: Record<string, number> = {}; let rem = want;
@@ -175,7 +183,7 @@ export function resolveMissions(rng = Math.random): Outcome[] {
     if (ok) {
       S.wins++;
       if (m.kind === 'planet') { if (!S.conquered.includes(m.target)) S.conquered.push(m.target); }
-      else { const r = RUNS.find(x => x.id === m.target)!; loot = {}; const f = (1 + S.conquered.length * 0.5) * Math.min(2, m.power / r.need); for (const k in r.loot) { const v = r.loot[k as Res]! * f + prodRate(k as Res) * r.time * 1.5 * Math.min(2, m.power / r.need); loot[k as Res] = v; S.res[k as Res] += v; } }
+      else { const r = RUNS.find(x => x.id === m.target)!; loot = {}; const f = (sk('fLoot') ? 2 : 1) * (1 + S.conquered.length * 0.5) * Math.min(2, m.power / r.need); for (const k in r.loot) { const v = r.loot[k as Res]! * f + prodRate(k as Res) * r.time * 1.5 * Math.min(2, m.power / r.need); loot[k as Res] = v; S.res[k as Res] += v; } }
     }
     if (sk('lDrop')) earn(perSec() * 120);
     out.push({ m, ok, lost, loot });
@@ -198,7 +206,7 @@ export function tick(dt: number, autoTap = false): MineEvent[] {
       ev.push({ i, v, ore, ct, lode });
     }
   }
-  factoryTick(dt); autoSellTick(dt); S.played += dt;
+  factoryTick(dt); liftTick(dt); autoSellTick(dt); S.played += dt;
   return ev;
 }
 export function simulateOffline(secs: number) {
@@ -215,7 +223,7 @@ export const offlineCap = () => ((S.warps >= 4 ? 24 : 8) + (sk('lCold') ? 8 : 0)
 /** Warp: reset the sector, keep meta-progress, apply perks. */
 export function doWarp() {
   const o = S, g = dmGain(), w = o.warps + 1;
-  const n = fresh({ dm: o.dm + g, total: o.total + o.life, warps: w, mute: o.mute, taps: o.taps, ach: o.ach, sold: o.sold, played: o.played, lost: o.lost, wins: o.wins, auto: o.auto, w: o.w, mult: o.mult, seen: o.seen, xp: o.xp, skills: o.skills });
+  const n = fresh({ dm: o.dm + g, total: o.total + o.life, warps: w, mute: o.mute, taps: o.taps, ach: o.ach, sold: o.sold, played: o.played, lost: o.lost, wins: o.wins, auto: o.auto, w: o.w, mult: o.mult, seen: o.seen, xp: o.xp, skills: o.skills, lifted: o.lifted, liftOn: o.liftOn });
   n.goal = GOAL_SECTOR;
   if (w >= 1) { n.mines[0].m = true; n.mines[1].m = true; n.mines[1].n = 1; n.cash = 1e4; }
   if (w >= 2) n.mach = o.mach.map(l => Math.floor(l * 0.25));
