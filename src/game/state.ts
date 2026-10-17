@@ -21,7 +21,7 @@ export type State = {
   mines: Mine[]; tech: string[]; res: Bag; made: Bag; mach: number[]; on: boolean[]; gen: number;
   ships: Record<string, number>; conquered: string[]; missions: Mission[]; fupg: Record<string, number>; uid: number;
   ach: string[]; goal: number; gv: number; sold: number; lost: number; wins: number; w: number[]; auto: boolean;
-  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[]; fstock: Bag; lift: number; lifted: number; liftOn: boolean; daily: { day: number; streak: number; at?: number }; meteors: number; hw: number; boost: { kind: 'cash' | 'ore'; m: number; left: number; dur: number } | null; trades: number; wrecks: number;
+  mute: boolean; last: number; mult: number; taps: number; played: number; seen: string[]; xp: number; skills: string[]; fstock: Bag; lift: number; lifted: number; liftOn: boolean; daily: { day: number; streak: number; at?: number }; meteors: number; hw: number; boosts: Partial<Record<BoostKind, { m: number; left: number; dur: number }>>; trades: number; wrecks: number;
 };
 export const KEY = 'starforge.v2';
 export const fresh = (keep?: Partial<State>): State => ({
@@ -29,7 +29,7 @@ export const fresh = (keep?: Partial<State>): State => ({
   mines: MINES.map((_, i) => ({ n: i === 0 ? 1 : 0, p: 0, m: false, run: false })),
   tech: [], res: bag(), made: bag(), mach: MACHINES.map(() => 0), on: MACHINES.map(() => true), gen: 1,
   ships: {}, conquered: [], missions: [], fupg: {}, uid: 1, ach: [], goal: 0, gv: 3, sold: 0, lost: 0, wins: 0, w: MACHINES.map(() => 50), auto: false,
-  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], fstock: bag(), lift: 1, lifted: 0, liftOn: true, daily: { day: 0, streak: 0 }, meteors: 0, hw: 0, boost: null, trades: 0, wrecks: 0, ...keep,
+  mute: false, last: Date.now(), mult: 0, taps: 0, played: 0, seen: [], xp: 0, skills: [], fstock: bag(), lift: 1, lifted: 0, liftOn: true, daily: { day: 0, streak: 0 }, meteors: 0, hw: 0, boosts: {}, trades: 0, wrecks: 0, ...keep,
 });
 export let S: State = fresh();
 export let clock = () => Date.now();
@@ -216,8 +216,10 @@ export const awaySecs = () => (Date.now() - Math.max(S.last, S.hw || 0)) / 1000;
 // ---------- timed boosts (trader deals) ----------
 // Counted in played seconds, not wall time: immune to clock changes and never applied to offline catch-up.
 let simming = false;
-export const boostM = (k: 'cash' | 'ore') => S.boost && S.boost.kind === k && S.boost.left > 0 ? S.boost.m : 1;
-export function addBoost(kind: 'cash' | 'ore', m: number, secs: number) { if (S.boost && S.boost.kind === kind && S.boost.m === m && S.boost.left > 0) { S.boost.left += secs; S.boost.dur = S.boost.left; } else S.boost = { kind, m, left: secs, dur: secs }; }
+export type BoostKind = 'cash' | 'ore';
+export const boostM = (k: BoostKind) => { const b = S.boosts?.[k]; return b && b.left > 0 ? b.m : 1; };
+/** Income and ore boosts stack with each other; the same boost again extends it, a stronger one replaces it. */
+export function addBoost(kind: BoostKind, m: number, secs: number) { S.boosts ||= {}; const b = S.boosts[kind]; if (b && b.left > 0 && b.m === m) { b.left += secs; b.dur = b.left; } else if (!b || b.left <= 0 || m > b.m) S.boosts[kind] = { m, left: secs, dur: secs }; }
 export function tick(dt: number, autoTap = false): MineEvent[] {
   const ev: MineEvent[] = [];
   for (let i = 0; i < MINES.length; i++) {
@@ -232,13 +234,13 @@ export function tick(dt: number, autoTap = false): MineEvent[] {
     }
   }
   factoryTick(dt); liftTick(dt); autoSellTick(dt); S.played += dt;
-  if (S.boost && !simming) { S.boost.left -= dt; if (S.boost.left <= 0) S.boost = null; }
+  if (S.boosts && !simming) for (const k of Object.keys(S.boosts) as BoostKind[]) { const b = S.boosts[k]!; b.left -= dt; if (b.left <= 0) delete S.boosts[k]; }
   return ev;
 }
 export function simulateOffline(secs: number) {
   const before = { ...S.res }, cash0 = S.cash; const steps = Math.min(600, Math.max(20, Math.floor(secs / 5))), dt = secs / steps;
   const saved = S.mines.map(m => m.run); S.mines.forEach(m => { if (!m.m) m.run = false; });
-  const bo = S.boost; S.boost = null; simming = true; for (let k = 0; k < steps; k++) tick(dt); simming = false; S.boost = bo;
+  const bo = S.boosts; S.boosts = {}; simming = true; for (let k = 0; k < steps; k++) tick(dt); simming = false; S.boosts = bo;
   S.mines.forEach((m, i) => { if (!m.m) m.run = saved[i] && false; });
   const delta = {} as Bag; for (const r of RES_ORDER) delta[r] = S.res[r] - before[r];
   return { cash: S.cash - cash0, delta };

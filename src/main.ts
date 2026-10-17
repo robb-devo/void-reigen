@@ -684,9 +684,10 @@ setInterval(() => { const tr = bv?.trader; if (!tr || tr.st !== 1 || !traderEnd)
 
 // ---------- timed boost HUD ----------
 const boostEl = document.createElement('div'); boostEl.id = 'boost'; document.body.appendChild(boostEl); let boostKey = '';
-function boostHud() { const b = st().boost; document.body.classList.toggle('boosted', !!b && b.left > 0); if (!b || b.left <= 0) { if (boostKey) { boostEl.classList.remove('on'); boostKey = ''; } return; }
-  const k = b.kind + b.m; if (k !== boostKey) { boostKey = k; boostEl.innerHTML = `${b.kind === 'cash' ? I.coin : ri('ore')}<b>×${b.m} ${b.kind === 'cash' ? 'INCOME' : 'ORE'}</b><span></span><i><u></u></i>`; boostEl.classList.add('on'); bump(boostEl); }
-  (boostEl.querySelector('span') as HTMLElement).textContent = fmtT(b.left); (boostEl.querySelector('u') as HTMLElement).style.transform = `scaleX(${b.left / b.dur})`; }
+function boostHud() { const bs = st().boosts || {}, ks = (['cash', 'ore'] as const).filter(k => (bs[k]?.left || 0) > 0); document.body.classList.toggle('boosted', ks.length > 0);
+  if (!ks.length) { if (boostKey) { boostEl.classList.remove('on'); boostKey = ''; } return; }
+  const k = ks.map(x => x + bs[x]!.m).join(); if (k !== boostKey) { boostKey = k; boostEl.innerHTML = ks.map(x => `<span class="bseg">${x === 'cash' ? I.coin : ri('ore')}<b>×${bs[x]!.m} ${x === 'cash' ? 'INCOME' : 'ORE'}</b><span data-t></span><i><u></u></i></span>`).join(''); boostEl.classList.add('on'); bump(boostEl); }
+  boostEl.querySelectorAll<HTMLElement>('.bseg').forEach((el, n) => { const b = bs[ks[n]]!; (el.querySelector('[data-t]') as HTMLElement).textContent = fmtT(b.left); (el.querySelector('u') as HTMLElement).style.transform = `scaleX(${b.left / b.dur})`; }); }
 setInterval(boostHud, 250);
 
 // ---------- derelict wrecks (fleet rock) ----------

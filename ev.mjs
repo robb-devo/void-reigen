@@ -22,7 +22,7 @@ const offers=await p.evaluate(()=>[...document.querySelectorAll('.offer')].map(o
 console.log('offers', JSON.stringify(offers)); const r0=await p.evaluate(()=>({...window.G.S.res}));
 for (const i of [0,1]) { await p.click(`[data-take="${i}"]`,{force:true}); await p.waitForTimeout(500); }
 await p.screenshot({path:`shots/t-deals-${N}.png`}); const r1=await p.evaluate(()=>({...window.G.S.res}));
-console.log('res delta', JSON.stringify(Object.fromEntries(Object.keys(r0).map(k=>[k,Math.round(r1[k]-r0[k])]).filter(([,v])=>v))), 'boost', JSON.stringify(await p.evaluate(()=>window.G.S.boost)), 'trades', await p.evaluate(()=>window.G.S.trades));
+console.log('res delta', JSON.stringify(Object.fromEntries(Object.keys(r0).map(k=>[k,Math.round(r1[k]-r0[k])]).filter(([,v])=>v))), 'boost', JSON.stringify(await p.evaluate(()=>window.G.S.boosts)), 'trades', await p.evaluate(()=>window.G.S.trades));
 await p.click('.trader [data-x]',{force:true}); await p.waitForTimeout(500); await p.screenshot({path:`shots/t-boost-${N}.png`});
 console.log('boost pill', await p.evaluate(()=>document.querySelector('#boost.on')?.textContent));
 const ps0=await p.evaluate(()=>{const c=window.G.S.cash; return new Promise(r=>setTimeout(()=>r(window.G.S.cash-c),3000))}); console.log('cash in 3s with boost', Math.round(ps0), 'perSec', Math.round(await p.evaluate(()=>window.G.perSec())));

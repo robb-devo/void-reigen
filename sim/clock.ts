@@ -21,5 +21,5 @@ G.setS(G.fresh()); NOW = new Date(2026, 9, 20, 23, 59).getTime(); G.S.hw = NOW; 
 G.setS(G.fresh()); NOW = new Date(2026, 9, 21, 12).getTime(); G.claimDaily(); G.save(); NOW += 30 * D; G.claimDaily(); G.save(); NOW -= 30 * D; G.clockGuard();
 ok(!G.dailyReady() && G.S.daily.streak === 0 && G.S.hw === NOW, 'far-future clock fixed: guard resets hw, no crate today'); NOW += D; ok(G.dailyReady() && G.dailyNext().streak === 1, 'next day: fresh streak');
 // boosts tick on played time only
-G.setS(G.fresh()); G.addBoost('cash', 2, 60); G.tick(10); ok(Math.abs(G.S.boost!.left - 50) < 1e-6, 'boost ticks with play'); G.simulateOffline(3600); ok(Math.abs(G.S.boost!.left - 50) < 1e-6, 'boost not consumed/applied offline'); G.tick(51); ok(G.S.boost === null, 'boost expires');
+G.setS(G.fresh()); G.addBoost('cash', 2, 60); G.addBoost('ore', 3, 30); G.tick(10); ok(Math.abs(G.S.boosts.cash!.left - 50) < 1e-6 && G.boostM('ore') === 3, 'boosts stack and tick with play'); G.simulateOffline(3600); ok(Math.abs(G.S.boosts.cash!.left - 50) < 1e-6, 'boost not consumed/applied offline'); G.tick(21); ok(!G.S.boosts.ore && G.boostM('cash') === 2, 'ore boost expires first'); G.tick(30); ok(!G.S.boosts.cash, 'income boost expires');
 Date.now = real; console.log(fails ? `${fails} FAILED` : 'all clock tests pass'); process.exit(fails ? 1 : 0);

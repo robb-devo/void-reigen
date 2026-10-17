@@ -97,7 +97,7 @@ body.fg-modal #rush{opacity:0}
 body.rushing #rate{opacity:0}
 /* timed boost pill (trader deals): takes the rate line's place while active; a live tap rush wins the slot */
 #boost{position:fixed;left:50%;top:calc(var(--st) + 86px);transform:translate(-50%,-6px) scale(.8);z-index:6;display:flex;align-items:center;gap:6px;padding:3px 10px 3px 6px;border-radius:999px;background:linear-gradient(#5cff9d,#1fc46a);color:#0e2a18;border:3px solid var(--ink);box-shadow:0 3px 0 var(--ink);font:800 12px Fredoka,sans-serif;opacity:0;pointer-events:none;transition:opacity .2s,transform .25s cubic-bezier(.3,1.8,.5,1)}
-#boost.on{opacity:1;transform:translate(-50%,0)}#boost svg,#boost img{width:16px;height:16px}#boost span{font-variant-numeric:tabular-nums;min-width:30px}
+#boost.on{opacity:1;transform:translate(-50%,0)}#boost svg,#boost img{width:16px;height:16px}#boost .bseg{display:flex;align-items:center;gap:5px}#boost .bseg+.bseg{padding-left:8px;border-left:2px solid rgba(14,42,24,.35)}#boost [data-t]{font-variant-numeric:tabular-nums;min-width:30px}
 #boost i{display:block;width:34px;height:5px;border-radius:3px;background:rgba(14,42,24,.3);overflow:hidden}#boost u{display:block;height:100%;background:#0e2a18;transform-origin:left;transition:transform .25s linear}
 body.fg-modal #boost,body.rushing #boost{opacity:0}body.boosted:not(.rushing) #rate{opacity:0}
 /* trader modal */
