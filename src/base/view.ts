@@ -99,6 +99,7 @@ export class BaseView {
   zoomAt(nz: number, cx: number, cy: number) { nz = Math.max(.45, Math.min(1.8, nz)); const r = this.cv.getBoundingClientRect(), lx = cx - r.left, ly = cy - r.top; this.ox = lx - (lx - this.ox) * nz / this.z; this.oy = ly - (ly - this.oy) * nz / this.z; this.z = nz; }
   clamp() { const lx = 330 * this.z, ly = 200 * this.z; this.ox = Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.ox)); this.oy = Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.oy)); }
   resize() { const host = this.cv.parentElement!.parentElement || this.cv.parentElement!; const r = host.getBoundingClientRect(); if (!r.width) return; const first = !this.w; this.w = r.width; this.h = r.height; this.cv.width = this.w * this.dpr; this.cv.height = this.h * this.dpr; this.cv.style.width = this.w + 'px'; this.cv.style.height = this.h + 'px'; this.gcv.width = this.cv.width; this.gcv.height = this.cv.height; this.gcv.style.width = this.w + 'px'; this.gcv.style.height = this.h + 'px'; this.gkey = ''; if (first || !this.ox) { this.ox = this.w / 2; this.oy = this.h * FRAME_Y; } this.gcache = null; }
+  private camT: [number, number, number] = [0, 0, 1]; private nl: HTMLCanvasElement | null = null; private nlKey = '';
   private gcache: HTMLCanvasElement | null = null; private gz = 0; private gcv!: HTMLCanvasElement; private gkey = ''; private ggen = 0;
   /** world → client(page) coords */
   screen(gx: number, gy: number): [number, number] { const [x, y] = iso(gx, gy); const r = this.cv.getBoundingClientRect(); return [r.left + this.ox + x * this.z, r.top + this.oy + y * this.z]; }
@@ -243,7 +244,7 @@ export class BaseView {
     let tx = 0, tz = 1;
     if (this.travelT >= 0) { this.travelT += dt; const T = this.travelT, D = .55; if (T < D) { const f = T / D, e = f * f * f; tx = (this.travelTo ? -1 : 1) * e * this.w * 1.6; tz = 1 - e * .35; } else { if (this.rock !== this.travelTo) this.setRock(this.travelTo); const f = Math.min(1, (T - D) / (D * 1.4)), e = 1 - Math.pow(1 - f, 3); tx = (this.travelTo ? 1 : -1) * (1 - e) * this.w * 1.6; tz = .65 + e * .35; if (f >= 1) this.travelT = -1; } }
     c.translate(this.ox + sx + tx, this.oy + sy); c.scale(this.z * tz, this.z * tz);
-    this.groundLayer(this.ox + sx + tx, this.oy + sy, this.z * tz);
+    this.camT = [this.ox + sx + tx, this.oy + sy, this.z * tz]; this.groundLayer(...this.camT);
     // conveyors
     const L = this.links();
     for (const [a, b, r, on] of L) this.belt(a, b, RES[r].color, on);
@@ -301,10 +302,17 @@ export class BaseView {
       c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = `rgba(10,4,48,${.52 * this.night})`; c.fillRect(0, 0, this.cv.width, this.cv.height); c.restore();
       c.globalCompositeOperation = 'lighter';
       { const g0 = this.guide ? slotByKey(this.guide) : null; if (g0 && (g0.rock || 0) === this.rock) { const [x, y] = iso(g0.gx, g0.gy); glow(c, x, y - 30, 110, '#fff4d0', this.night * .32); } } // keep the goal target readable after dark
+      // static night glows (props, buildings, belts) are baked into one layer, re-baked only when the camera, night level or activity changes
+      { const [cx0, cy0, cz0] = this.camT, nk = `${cx0.toFixed(1)},${cy0.toFixed(1)},${cz0.toFixed(3)},${Math.round(this.night * 40)},${this.rock},${order.map(sl => visible(sl) === 'built' ? (activeOf(sl) ? 'a' : 'i') + tier(sl) : '-').join('')},${L.map(l => l[3] ? 1 : 0).join('')}`;
+        if (!this.nl || this.nl.width !== this.cv.width || this.nl.height !== this.cv.height) { this.nl = document.createElement('canvas'); this.nl.width = this.cv.width; this.nl.height = this.cv.height; this.nlKey = ''; }
+        if (nk !== this.nlKey) { this.nlKey = nk; const main = c, g = this.nl.getContext('2d')!; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, this.nl.width, this.nl.height); g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); g.translate(cx0, cy0); g.scale(cz0, cz0); g.globalCompositeOperation = 'lighter';
+          { const c = g; void main;
       for (const d of dec) if (d[2] === 0) { const [x, y] = iso(d[0], d[1]), ice = this.rock === 1, col = ice ? '#dff2ff' : '#ffcf6a'; glow(c, x, y - (ice ? 32 : 28), ice ? 30 : 26, col, this.night * .55); glow(c, x + (ice ? 14 : 0), y + (ice ? 8 : 2), ice ? 38 : 26, col, this.night * (ice ? .3 : .2)); }
       for (const sl of order) { if (visible(sl) !== 'built') continue; const [x, y] = iso(sl.gx, sl.gy), on = activeOf(sl); glow(c, x, y - 4, 90, on ? accentOf(sl) : '#5a6aff', this.night * (on ? .3 : .12)); glow(c, x - 10, y - 30 - tier(sl) * 6, 26, '#ffe9a0', this.night * .38); glow(c, x + 14, y - 12, 14, '#ffd28a', this.night * .32); }
-      { const [hx, hy] = iso(0, 0), ang = this.t * .35, len = 520; c.save(); c.translate(hx + 8, hy - 70); c.rotate(ang); const g = c.createLinearGradient(0, 0, len, 0); g.addColorStop(0, `rgba(255,240,190,${.28 * this.night})`); g.addColorStop(1, 'rgba(255,240,190,0)'); c.fillStyle = g; c.beginPath(); c.moveTo(0, 0); c.lineTo(len, -70); c.lineTo(len, 70); c.closePath(); c.fill(); c.restore(); }
       for (const [a, b, r, on] of L) if (on) { const [x1, y1] = iso(b.gx, a.gy); glow(c, x1, y1, 26, RES[r].color, this.night * .3); }
+          } }
+        c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(this.nl, 0, 0); c.restore(); }
+      { const [hx, hy] = iso(0, 0), ang = this.t * .35, len = 520; c.save(); c.translate(hx + 8, hy - 70); c.rotate(ang); const g = c.createLinearGradient(0, 0, len, 0); g.addColorStop(0, `rgba(255,240,190,${.28 * this.night})`); g.addColorStop(1, 'rgba(255,240,190,0)'); c.fillStyle = g; c.beginPath(); c.moveTo(0, 0); c.lineTo(len, -70); c.lineTo(len, 70); c.closePath(); c.fill(); c.restore(); }
       c.globalCompositeOperation = 'source-over';
     }
     if (this.warpT < 0) for (const sl of order) this.label(sl);
