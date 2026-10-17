@@ -4,6 +4,8 @@ import * as G from '../game/state';
 import { outlinedText } from '../design';
 import { drawBuilding, drawPlot, iso, TW, TH, Kind, hsl, scaffold, ship, glow, INK, box } from './render';
 
+/** Vertical framing: the playfield visible between the HUD (cash + goal bar, ~top 24%) and the bottom hint sits centred at ~57%. */
+const FRAME_Y = .57;
 export type Slot = { key: string; kind: Kind; idx: number; gx: number; gy: number; s: number; rock?: number };
 export const ALL_SLOTS: Slot[] = [
   { key: 'hq', kind: 'hq', idx: 0, gx: 0, gy: 0, s: 2 },
@@ -95,12 +97,12 @@ export class BaseView {
   private pdist() { const [a, b] = [...this.ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; }
   zoomAt(nz: number, cx: number, cy: number) { nz = Math.max(.45, Math.min(1.8, nz)); const r = this.cv.getBoundingClientRect(), lx = cx - r.left, ly = cy - r.top; this.ox = lx - (lx - this.ox) * nz / this.z; this.oy = ly - (ly - this.oy) * nz / this.z; this.z = nz; }
   clamp() { const lx = 330 * this.z, ly = 200 * this.z; this.ox = Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.ox)); this.oy = Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.oy)); }
-  resize() { const host = this.cv.parentElement!.parentElement || this.cv.parentElement!; const r = host.getBoundingClientRect(); if (!r.width) return; const first = !this.w; this.w = r.width; this.h = r.height; this.cv.width = this.w * this.dpr; this.cv.height = this.h * this.dpr; this.cv.style.width = this.w + 'px'; this.cv.style.height = this.h + 'px'; if (first || !this.ox) { this.ox = this.w / 2; this.oy = this.h * .5; } this.gcache = null; }
+  resize() { const host = this.cv.parentElement!.parentElement || this.cv.parentElement!; const r = host.getBoundingClientRect(); if (!r.width) return; const first = !this.w; this.w = r.width; this.h = r.height; this.cv.width = this.w * this.dpr; this.cv.height = this.h * this.dpr; this.cv.style.width = this.w + 'px'; this.cv.style.height = this.h + 'px'; if (first || !this.ox) { this.ox = this.w / 2; this.oy = this.h * FRAME_Y; } this.gcache = null; }
   private gcache: HTMLCanvasElement | null = null; private gz = 0;
   /** world → client(page) coords */
   screen(gx: number, gy: number): [number, number] { const [x, y] = iso(gx, gy); const r = this.cv.getBoundingClientRect(); return [r.left + this.ox + x * this.z, r.top + this.oy + y * this.z]; }
   slotScreen(key: string): [number, number] { const sl = SLOTS.find(s => s.key === key)!; const [x, y] = this.screen(sl.gx, sl.gy); return [x, y - 40 * this.z]; }
-  focus(key: string, z = this.z, yf = .45, with2?: string) { if (!with2 && !this.rock && G.S.warps === 0 && G.S.goal < 14 && key !== 'm0' && key !== 'hq') with2 = 'm0'; const sl = SLOTS.find(s => s.key === key); if (!sl) return; let [x, y] = iso(sl.gx, sl.gy); const s2 = with2 && SLOTS.find(s => s.key === with2); if (s2) { const [x2, y2] = iso(s2.gx, s2.gy); x = (x + x2) / 2; y = (y + y2) / 2; } const lx = 330 * z, ly = 200 * z; this.cam = { x: Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.w / 2 - x * z)), y: Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.h * yf - y * z)), z }; }
+  focus(key: string, z = this.z, yf = FRAME_Y, with2?: string) { if (!with2 && !this.rock && G.S.warps === 0 && G.S.goal < 14 && key !== 'm0' && key !== 'hq') with2 = 'm0'; const sl = SLOTS.find(s => s.key === key); if (!sl) return; let [x, y] = iso(sl.gx, sl.gy); const s2 = with2 && SLOTS.find(s => s.key === with2); if (s2) { const [x2, y2] = iso(s2.gx, s2.gy); x = (x + x2) / 2; y = (y + y2) / 2; } const lx = 330 * z, ly = 200 * z; this.cam = { x: Math.max(this.w / 2 - lx, Math.min(this.w / 2 + lx, this.w / 2 - x * z)), y: Math.max(this.h / 2 - ly, Math.min(this.h / 2 + ly, this.h * yf - y * z)), z }; }
   construct(key: string) { this.cons.set(key, this.t); }
   private portraits = new Map<string, string>();
   /** Building portrait for panels — the real in-world art at its current tier. */
