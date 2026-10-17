@@ -80,7 +80,7 @@ function spotlight() {
   document.querySelectorAll('.coach').forEach(e => e.classList.remove('coach'));
   const g = GOALS[st().goal]; if (bv) bv.guide = null; wantGuide = null;
   if (!g || g.done() || g.tab !== tab || !g.focus) return;
-  if (g.focus.startsWith('@')) { if (bv) { const k = g.focus.slice(1); bv.guide = k; wantGuide = k; if (guided !== st().goal) { guided = st().goal; if (st().warps === 0 && st().goal < 14 && k !== 'm0') bv.focus(k, bv.z, .45, 'm0'); else bv.focus(k); } } return; }
+  if (g.focus.startsWith('@')) { if (bv) { const k = g.text.startsWith('Earn') ? bestUpgrade() : g.focus.slice(1); bv.guide = k; wantGuide = k; if (guided !== st().goal) { guided = st().goal; if (st().warps === 0 && st().goal < 14 && k !== 'm0') bv.focus(k, bv.z, .45, 'm0'); else bv.focus(k); } } return; }
   if (st().goal > 12) return;
   document.querySelector(g.focus)?.classList.add('coach');
 }
@@ -170,6 +170,8 @@ function baseTap(sl: Slot | null, x: number, y: number) {
 const slotOf = (k: string) => slotByKey(k)!;
 const AUX: Record<string, number> = { hangar: 1, dock: 0, turret: 2, fuel: 2 };
 function closeSheet() { sheetKey = null; if (bv) bv.sel = null; $('#sheet')?.classList.remove('open'); }
+/** "Earn $X" goals point at the best-value mine upgrade (income gained per $), not at HQ. */
+function bestUpgrade() { const s = st(); let bi = -1, bv2 = 0; MINES.forEach((_, i) => { const m = s.mines[i]; if (!m.n || !m.m) return; const v = G.revenue(i) / m.n / G.cycle(i) / G.costN(i, 1); if (v > bv2) { bv2 = v; bi = i; } }); return bi >= 0 ? 'm' + bi : 'hq'; }
 function slotArt(sl: Slot) { return sl.kind === 'mine' ? art(MINES[sl.idx].id) : sl.kind === 'mach' ? art(mk(MACHINES[sl.idx].id)) : sl.kind === 'gen' ? art('gen') : sl.kind === 'yard' ? art('cruiser') : sl.kind === 'lift' ? art('cruiser') : sl.kind === 'gate' ? art('hole') : sl.kind === 'lab' ? art('quantum') : art('p1'); }
 function slotName(sl: Slot) { return sl.kind === 'mine' ? MINES[sl.idx].name : sl.kind === 'mach' ? MACHINES[sl.idx].name : sl.kind === 'gen' ? GEN.name : sl.kind === 'yard' ? 'Shipyard' : sl.kind === 'lift' ? 'Cargo Lift' : sl.kind === 'hangar' ? 'Hangar' : sl.kind === 'dock' ? 'Launch Docks' : sl.kind === 'turret' ? 'Defense Battery' : sl.kind === 'fuel' ? 'Fuel Depot' : sl.kind === 'gate' ? 'Warp Gate' : sl.kind === 'lab' ? 'Research Lab' : 'Command HQ'; }
 function openSheet(key: string): void {
